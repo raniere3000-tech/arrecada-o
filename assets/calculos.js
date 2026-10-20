@@ -81,13 +81,35 @@
   }
 
   // ---------- agregação das linhas dos arquivos ----------
-  // Cada arquivo vira uma LeituraArquivo: somas por mês × dia útil × combinação (zona, subcategoria, perfil) × mês de
-  // vencimento, e os dias em que cada ligação pagou (para contar clientes distintos). O resultado (exporta) é pequeno,
-  // fica guardado no navegador e o Agregador junta os arquivos sem precisar relê-los.
+  // Pensado para pastas de vários GB: nada guarda texto por linha. A ligação vira número; cada combinação
+  // (zona, subcategoria, perfil) vira um índice; as chaves são números e o que um arquivo exporta são listas tipadas.
+  //  - V: somas por mês × dia útil × combinação × mês de vencimento (valor, contas, linhas)
+  //  - L: por mês, os dias úteis em que cada ligação pagou (máscara de bits), para contar clientes distintos
   const SEP = "\u0001";
+  const MAX_COMBOS = 65536, MAX_VENC = 1024, LIG_HASH = 1e11;
+  function chaveLig(t) {                                 // ligação → número (as que não são números: hash, acima de 1e11)
+    if (typeof t === "number" && Number.isInteger(t) && t >= 0 && t < LIG_HASH) return t;
+    const s = String(t == null ? "" : t).trim();
+    if (/^\d{1,11}(\.0+)?$/.test(s)) { const n = parseInt(s, 10); if (n < LIG_HASH) return n; }
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
+    return LIG_HASH + h;
+  }
+  function vencIdx(mes) {                                // "AAAA-MM" → 1..1023 (0 = sem vencimento ou fora da faixa)
+    if (!mes) return 0;
+    const i = (+mes.slice(0, 4) - 1990) * 12 + +mes.slice(5, 7);
+    return i > 0 && i < MAX_VENC ? i : 0;
+  }
+  function mesDoVenc(i) {
+    if (!i) return "";
+    return `${1990 + Math.floor((i - 1) / 12)}-${String(((i - 1) % 12) + 1).padStart(2, "0")}`;
+  }
+
   class LeituraArquivo {
     constructor(perfis) {
       this.perfis = perfis || null;                    // Map "ligação|contrato" → perfil (CLUSTER SALDO)
+      this.idxCk = new Map();
+      this.cks = [];
       this.meses = new Map();
       this.descartadas = { semCredito: 0, semValor: 0 };
       this.ultimaAtualizacao = "";
@@ -103,39 +125,43 @@
       if (!M) { M = { V: new Map(), L: new Map(), ultimoCredito: "", linhas: 0 }; this.meses.set(mes, M); }
       M.linhas++;
       if (credito > M.ultimoCredito) M.ultimoCredito = credito;
-      const lig = ligacao(r.lig);
-      const perfil = this.perfis ? (this.perfis.get(lig + "|" + ligacao(r.contrato)) || R.SEM_PERFIL) : R.SEM_PERFIL;
+      const perfil = this.perfis ? (this.perfis.get(ligacao(r.lig) + "|" + ligacao(r.contrato)) || R.SEM_PERFIL) : R.SEM_PERFIL;
       const ck = String(r.zona || "").trim() + SEP + String(r.util || "").trim() + SEP + perfil;
-      const venc = dataISO(r.vencimento).slice(0, 7);
-      const kv = ordem + SEP + ck + SEP + venc;
+      let c = this.idxCk.get(ck);
+      if (c === undefined) {
+        c = this.cks.length;
+        if (c >= MAX_COMBOS) throw new Error("combinações de zona × subcategoria × perfil demais num arquivo");
+        this.cks.push(ck); this.idxCk.set(ck, c);
+      }
+      const kv = (ordem * MAX_COMBOS + c) * MAX_VENC + vencIdx(dataISO(r.vencimento).slice(0, 7));
       let a = M.V.get(kv);
       if (!a) { a = [0, 0, 0]; M.V.set(kv, a); }
       a[0] += valor;
       if (R.TIPOS_CONTA.includes(String(r.tipo || "").trim())) a[1]++;
       a[2]++;
-      const kl = lig + SEP + ck;
+      const kl = chaveLig(r.lig) * MAX_COMBOS + c;
       M.L.set(kl, (M.L.get(kl) || 0) | (1 << ordem));
       if (r.atualizacao) {
         const at = String(r.atualizacao).trim(), comp = dataISO(at) + at.slice(10);
         if (comp > this.ultimaAtualizacao) this.ultimaAtualizacao = comp;
       }
     }
-    // { meses: { "AAAA-MM": { V: [[ordem, combo, venc, valor, contas, linhas]], L: [[ligação, combo, dias]], ultimoCredito, linhas } }, … }
     exporta() {
       const meses = {};
       for (const [mes, M] of this.meses) {
-        const V = [], L = [];
-        for (const [k, a] of M.V) {
-          const p = k.split(SEP);
-          V.push([+p[0], p[1] + SEP + p[2] + SEP + p[3], p[4], a[0], a[1], a[2]]);
-        }
-        for (const [k, mask] of M.L) { const p = k.indexOf(SEP); L.push([k.slice(0, p), k.slice(p + 1), mask]); }
+        const n = M.V.size, V = { k: new Float64Array(n), valor: new Float64Array(n), contas: new Uint32Array(n), linhas: new Uint32Array(n) };
+        let i = 0;
+        for (const [k, a] of M.V) { V.k[i] = k; V.valor[i] = a[0]; V.contas[i] = a[1]; V.linhas[i] = a[2]; i++; }
+        const L = { k: new Float64Array(M.L.size), m: new Uint32Array(M.L.size) };
+        i = 0;
+        for (const [k, m] of M.L) { L.k[i] = k; L.m[i] = m; i++; }
         meses[mes] = { V, L, ultimoCredito: M.ultimoCredito, linhas: M.linhas };
       }
-      return { meses, descartadas: this.descartadas, ultimaAtualizacao: this.ultimaAtualizacao };
+      return { combos: this.cks.slice(), meses, descartadas: this.descartadas, ultimaAtualizacao: this.ultimaAtualizacao };
     }
   }
 
+  // Junta o que os arquivos exportaram e monta as tabelas compactas que a página usa (colunas tipadas).
   class Agregador {
     constructor(opcoes = {}) {
       this.perfis = opcoes.perfis || null;
@@ -157,31 +183,31 @@
       if (sup === R.SEM_SUP) this.zonasSemSup.set(zona, 1);
       if (grupo === R.SEM_CLASSIFICACAO) this.subSemClasse.set(util, 1);
       i = this.combos.length;
+      if (i >= MAX_COMBOS) throw new Error("combinações de zona × subcategoria × perfil demais");
       this.combos.push({ zona, cidade, sup, util, grupo, detalhe, perfil });
       this.idxCombo.set(ck, i);
       return i;
     }
-    // Junta o que um arquivo exportou; aceitaMes(mes) = false pula o mês (ex.: mês que vem do arquivo diário).
-    // Devolve { linhas usadas, puladas, meses }.
+    // aceitaMes(mes) = false pula o mês (ex.: mês que vem do arquivo diário). Devolve { linhas usadas, puladas, meses }.
+    // As listas L não são copiadas aqui: ficam referenciadas e só são juntadas no resultado, um mês por vez.
     junta(exp, aceitaMes) {
       let usadas = 0, puladas = 0;
-      const meses = [];
+      const meses = [], mapa = Int32Array.from(exp.combos, (ck) => this.combo(ck));
       for (const [mes, X] of Object.entries(exp.meses)) {
         if (aceitaMes && !aceitaMes(mes)) { puladas += X.linhas; continue; }
         meses.push(mes);
         usadas += X.linhas;
         let M = this.meses.get(mes);
-        if (!M) { M = { V: new Map(), L: new Map(), ultimoCredito: "" }; this.meses.set(mes, M); }
+        if (!M) { M = { V: new Map(), partes: [], ultimoCredito: "" }; this.meses.set(mes, M); }
         if (X.ultimoCredito > M.ultimoCredito) M.ultimoCredito = X.ultimoCredito;
-        for (const [ordem, ck, venc, valor, contas, linhas] of X.V) {
-          const kv = ordem + "|" + this.combo(ck) + "|" + venc;
-          const a = M.V.get(kv);
-          if (a) { a[0] += valor; a[1] += contas; a[2] += linhas; } else M.V.set(kv, [valor, contas, linhas]);
+        const V = X.V;
+        for (let i = 0; i < V.k.length; i++) {
+          const k = V.k[i], vi = k % MAX_VENC, t = (k - vi) / MAX_VENC, c = t % MAX_COMBOS, ordem = (t - c) / MAX_COMBOS;
+          const nk = (ordem * MAX_COMBOS + mapa[c]) * MAX_VENC + vi;
+          const a = M.V.get(nk);
+          if (a) { a[0] += V.valor[i]; a[1] += V.contas[i]; a[2] += V.linhas[i]; } else M.V.set(nk, [V.valor[i], V.contas[i], V.linhas[i]]);
         }
-        for (const [lig, ck, mask] of X.L) {
-          const kl = lig + "|" + this.combo(ck);
-          M.L.set(kl, (M.L.get(kl) || 0) | mask);
-        }
+        M.partes.push({ L: X.L, mapa });
       }
       this.linhas += usadas;
       this.descartadas.semCredito += exp.descartadas.semCredito;
@@ -189,8 +215,7 @@
       if (exp.ultimaAtualizacao > this.ultimaAtualizacao) this.ultimaAtualizacao = exp.ultimaAtualizacao;
       return { linhas: usadas, puladas, meses: meses.sort() };
     }
-    // Atalho (testes): linha a linha, como um arquivo só
-    adiciona(r) {
+    adiciona(r) {                                      // atalho (testes): linha a linha, como um arquivo só
       if (!this.parcial) this.parcial = new LeituraArquivo(this.perfis);
       this.parcial.adiciona(r);
     }
@@ -199,44 +224,84 @@
     resultado(descontos) {
       if (this.parcial) { this.junta(this.parcial.exporta()); this.parcial = null; }
       const meses = [...this.meses.keys()].sort();
-      const V = [], CD = [], CF = [], descontoSemPagamento = {}, ultimoCredito = {};
+      const VD = colunas(["mi", "d", "c", "valor", "contas"]), VE = colunas(["mi", "d", "c", "v", "valor"]);
+      const CD = colunas(["mi", "c", "d", "n"]), CF = colunas(["mi", "c", "p", "z", "n", "desc"]);
+      const descontoSemPagamento = {}, ultimoCredito = {};
       meses.forEach((mes, mi) => {
         const M = this.meses.get(mes);
         ultimoCredito[mes] = M.ultimoCredito;
+        const semVenc = new Map();
         for (const [k, a] of M.V) {
-          const p1 = k.indexOf("|"), p2 = k.indexOf("|", p1 + 1);
-          V.push([mi, +k.slice(0, p1), +k.slice(p1 + 1, p2), k.slice(p2 + 1), a[0], a[1], a[2]]);
+          const vi = k % MAX_VENC, t = (k - vi) / MAX_VENC, c = t % MAX_COMBOS, d = (t - c) / MAX_COMBOS;
+          VE.add(mi, d, c, vi, a[0]);
+          const s = semVenc.get(t);
+          if (s) { s[0] += a[0]; s[1] += a[1]; } else semVenc.set(t, [a[0], a[1]]);
         }
-        const cd = new Map(), cf = new Map(), porLig = new Map();
-        for (const [k, mask] of M.L) {
-          const p = k.indexOf("|"), lig = k.slice(0, p), c = +k.slice(p + 1);
+        for (const [t, a] of semVenc) { const c = t % MAX_COMBOS; VD.add(mi, (t - c) / MAX_COMBOS, c, a[0], a[1]); }
+        M.V = null;
+        // dias em que cada (ligação, combinação) pagou: junta as partes do mês (arquivos R1, R4…)
+        let L;
+        if (M.partes.length === 1 && M.partes[0].mapa.every((g, i) => g === i)) L = null;
+        else {
+          L = new Map();
+          for (const { L: P, mapa } of M.partes) for (let i = 0; i < P.k.length; i++) {
+            const c = P.k[i] % MAX_COMBOS, nk = P.k[i] - c + mapa[c];
+            L.set(nk, (L.get(nk) || 0) | P.m[i]);
+          }
+        }
+        const cd = new Map(), cf = new Map(), dm = new Map(), escolha = new Map();
+        if (descontos && descontos.get(mes)) for (const [lig, v] of descontos.get(mes)) { const k = chaveLig(lig); dm.set(k, (dm.get(k) || 0) + v); }
+        const visita = (k, mask) => {
+          const c = k % MAX_COMBOS, lig = (k - c) / MAX_COMBOS;
           let primeiro = 0;
           for (let d = 1; d <= MAX_DIA; d++) if (mask & (1 << d)) { primeiro = d; break; }
-          const tem0 = mask & 1 ? 1 : 0;
+          const tem0 = mask & 1;
           for (let d = 0; d <= MAX_DIA; d++) if (mask & (1 << d)) { const kd = c * 32 + d; cd.set(kd, (cd.get(kd) || 0) + 1); }
-          const kf = c * 64 + primeiro * 2 + tem0;
-          const e = cf.get(kf);
+          const kf = c * 64 + primeiro * 2 + tem0, e = cf.get(kf);
           if (e) e[0]++; else cf.set(kf, [1, 0]);
-          const ordemEscolha = primeiro || 99;
-          const atual = porLig.get(lig);
-          if (!atual || ordemEscolha < atual[1]) porLig.set(lig, [kf, ordemEscolha]);
-        }
-        const dm = descontos && descontos.get(mes);
+          if (dm.has(lig)) {
+            const ordemEscolha = primeiro || 99, atual = escolha.get(lig);
+            if (!atual || ordemEscolha < atual[1]) escolha.set(lig, [kf, ordemEscolha]);
+          }
+        };
+        if (L) for (const [k, mask] of L) visita(k, mask);
+        else { const P = M.partes[0].L; for (let i = 0; i < P.k.length; i++) visita(P.k[i], P.m[i]); }
+        M.partes = null;
         let semPag = 0;
-        if (dm) for (const [lig, val] of dm) {
-          const x = porLig.get(lig);
-          if (x) cf.get(x[0])[1] += val; else semPag += val;
-        }
+        for (const [lig, v] of dm) { const x = escolha.get(lig); if (x) cf.get(x[0])[1] += v; else semPag += v; }
         if (semPag) descontoSemPagamento[mes] = semPag;
-        for (const [kd, n] of cd) CD.push([mi, Math.floor(kd / 32), kd % 32, n]);
-        for (const [kf, e] of cf) CF.push([mi, Math.floor(kf / 64), Math.floor((kf % 64) / 2), kf % 2, e[0], e[1]]);
+        for (const [kd, n] of cd) CD.add(mi, Math.floor(kd / 32), kd % 32, n);
+        for (const [kf, e] of cf) CF.add(mi, Math.floor(kf / 64), Math.floor((kf % 64) / 2), kf % 2, e[0], e[1]);
       });
+      this.meses = new Map();
       return {
-        meses, combos: this.combos, V, CD, CF, descontoSemPagamento, ultimoCredito,
+        meses, combos: this.combos, VD: VD.fim(TIPOS_VD), VE: VE.fim(TIPOS_VE), CD: CD.fim(TIPOS_CD), CF: CF.fim(TIPOS_CF),
+        descontoSemPagamento, ultimoCredito,
         linhas: this.linhas, descartadas: this.descartadas, ultimaAtualizacao: this.ultimaAtualizacao,
         zonasSemSup: [...this.zonasSemSup.keys()], subSemClasse: [...this.subSemClasse.keys()],
       };
     }
+  }
+  const TIPOS_VD = { mi: Uint8Array, d: Uint8Array, c: Uint16Array, valor: Float64Array, contas: Float64Array };
+  const TIPOS_VE = { mi: Uint8Array, d: Uint8Array, c: Uint16Array, v: Uint16Array, valor: Float64Array };
+  const TIPOS_CD = { mi: Uint8Array, c: Uint16Array, d: Uint8Array, n: Uint32Array };
+  const TIPOS_CF = { mi: Uint8Array, c: Uint16Array, p: Uint8Array, z: Uint8Array, n: Uint32Array, desc: Float64Array };
+  function colunas(nomes) {                              // tabela por colunas: add(...valores) e fim(tipos) → { tam, coluna: TypedArray }
+    const cols = nomes.map(() => []);
+    return {
+      add(...v) { for (let i = 0; i < cols.length; i++) cols[i].push(v[i]); },
+      fim(tipos) {
+        const t = { tam: cols[0].length };
+        nomes.forEach((nome, i) => { t[nome] = tipos[nome].from(cols[i]); cols[i] = null; });
+        return t;
+      },
+    };
+  }
+  // buffers das tabelas, para o worker transferir sem copiar
+  function buffers(dados) {
+    const out = [];
+    for (const t of [dados.VD, dados.VE, dados.CD, dados.CF]) for (const v of Object.values(t)) if (ArrayBuffer.isView(v)) out.push(v.buffer);
+    return out;
   }
 
   // ---------- consultas (página) ----------
@@ -251,19 +316,22 @@
   }
   // dia útil d entra no corte: 1..N, e o 0 (fins de semana e feriados do mês inteiro) só se incl0 — como o filtro do BI
   const noCorte = (d, N, incl0) => (d === 0 ? incl0 : d <= N);
+  const cfNoCorte = (CF, i, N, incl0) => (CF.p[i] >= 1 && CF.p[i] <= N) || (incl0 && CF.z[i] === 1);
+  const flagsMeses = (dados, mesesIdx) => { const q = new Uint8Array(dados.meses.length + 1); mesesIdx.forEach((m) => { if (m >= 0) q[m] = 1; }); return q; };
 
   // Por dia útil (0..23) de um mês: valor (sem desconto), contas, clientes distintos no dia
   function serieDoMes(dados, mi, marcas) {
     const s = { valor: new Float64Array(MAX_DIA + 1), contas: new Float64Array(MAX_DIA + 1), clientes: new Float64Array(MAX_DIA + 1) };
-    for (const r of dados.V) if (r[0] === mi && marcas[r[2]]) { s.valor[r[1]] += r[4]; s.contas[r[1]] += r[5]; }
-    for (const r of dados.CD) if (r[0] === mi && marcas[r[1]]) s.clientes[r[2]] += r[3];
+    const V = dados.VD, D = dados.CD;
+    for (let i = 0; i < V.tam; i++) if (V.mi[i] === mi && marcas[V.c[i]]) { s.valor[V.d[i]] += V.valor[i]; s.contas[V.d[i]] += V.contas[i]; }
+    for (let i = 0; i < D.tam; i++) if (D.mi[i] === mi && marcas[D.c[i]]) s.clientes[D.d[i]] += D.n[i];
     return s;
   }
 
-  // Tabela por grupo × mês até o dia útil N: { linhas: Map rótulo → Map mi → {valor, desconto, contas, clientes} }
+  // Tabela por grupo × mês até o dia útil N: Map rótulo → Map mi → {valor, desconto, contas, clientes}
   // `grupoDe(combo)` dá o rótulo da linha (ex.: c => c.cidade). O desconto entra no valor (Arrecadação = Val. Autenticado + desconto).
   function porGrupo(dados, mesesIdx, marcas, N, incl0, grupoDe) {
-    const quer = new Set(mesesIdx), linhas = new Map();
+    const quer = flagsMeses(dados, mesesIdx), linhas = new Map();
     const rotulos = dados.combos.map((c) => grupoDe(c));
     const cel = (rot, mi) => {
       let l = linhas.get(rot);
@@ -272,16 +340,16 @@
       if (!c) { c = { valor: 0, desconto: 0, contas: 0, clientes: 0 }; l.set(mi, c); }
       return c;
     };
-    for (const r of dados.V) {
-      if (!quer.has(r[0]) || !marcas[r[2]] || !noCorte(r[1], N, incl0)) continue;
-      const c = cel(rotulos[r[2]], r[0]);
-      c.valor += r[4]; c.contas += r[5];
+    const V = dados.VD, F = dados.CF;
+    for (let i = 0; i < V.tam; i++) {
+      if (!quer[V.mi[i]] || !marcas[V.c[i]] || !noCorte(V.d[i], N, incl0)) continue;
+      const c = cel(rotulos[V.c[i]], V.mi[i]);
+      c.valor += V.valor[i]; c.contas += V.contas[i];
     }
-    for (const r of dados.CF) {
-      if (!quer.has(r[0]) || !marcas[r[1]]) continue;
-      if (!((r[2] >= 1 && r[2] <= N) || (incl0 && r[3]))) continue;
-      const c = cel(rotulos[r[1]], r[0]);
-      c.clientes += r[4]; c.desconto -= r[5]; c.valor -= r[5];
+    for (let i = 0; i < F.tam; i++) {
+      if (!quer[F.mi[i]] || !marcas[F.c[i]] || !cfNoCorte(F, i, N, incl0)) continue;
+      const c = cel(rotulos[F.c[i]], F.mi[i]);
+      c.clientes += F.n[i]; c.desconto -= F.desc[i]; c.valor -= F.desc[i];
     }
     return linhas;
   }
@@ -289,20 +357,27 @@
     const l = porGrupo(dados, [mi], marcas, N, incl0, () => "T").get("T");
     return (l && l.get(mi)) || { valor: 0, desconto: 0, contas: 0, clientes: 0 };
   }
+  // Desconto abatido em cada mês (todas as combinações, mês inteiro)
+  function descontoPorMes(dados) {
+    const out = new Float64Array(dados.meses.length), F = dados.CF;
+    for (let i = 0; i < F.tam; i++) if (F.p[i] >= 1 || F.z[i]) out[F.mi[i]] += F.desc[i];
+    return out;
+  }
 
-  // Escada: mês de vencimento × mês de crédito (valor sem desconto) + o desconto de cada mês de crédito à parte
+  // Escada: mês de vencimento ("AAAA-MM"; "" = sem) × mês de crédito (valor sem desconto) + o desconto de cada mês à parte
   function escada(dados, mesesIdx, marcas, N, incl0) {
-    const quer = new Set(mesesIdx), linhas = new Map(), desconto = new Map();
-    for (const r of dados.V) {
-      if (!quer.has(r[0]) || !marcas[r[2]] || !noCorte(r[1], N, incl0)) continue;
-      let l = linhas.get(r[3]);
-      if (!l) { l = new Map(); linhas.set(r[3], l); }
-      l.set(r[0], (l.get(r[0]) || 0) + r[4]);
+    const quer = flagsMeses(dados, mesesIdx), linhas = new Map(), desconto = new Map();
+    const E = dados.VE, F = dados.CF;
+    for (let i = 0; i < E.tam; i++) {
+      if (!quer[E.mi[i]] || !marcas[E.c[i]] || !noCorte(E.d[i], N, incl0)) continue;
+      const v = mesDoVenc(E.v[i]);
+      let l = linhas.get(v);
+      if (!l) { l = new Map(); linhas.set(v, l); }
+      l.set(E.mi[i], (l.get(E.mi[i]) || 0) + E.valor[i]);
     }
-    for (const r of dados.CF) {
-      if (!quer.has(r[0]) || !marcas[r[1]] || !r[5]) continue;
-      if (!((r[2] >= 1 && r[2] <= N) || (incl0 && r[3]))) continue;
-      desconto.set(r[0], (desconto.get(r[0]) || 0) - r[5]);
+    for (let i = 0; i < F.tam; i++) {
+      if (!quer[F.mi[i]] || !marcas[F.c[i]] || !F.desc[i] || !cfNoCorte(F, i, N, incl0)) continue;
+      desconto.set(F.mi[i], (desconto.get(F.mi[i]) || 0) - F.desc[i]);
     }
     return { linhas, desconto };
   }
@@ -349,7 +424,8 @@
 
   return {
     MAX_DIA, MESES_CURTOS, chave, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
-    zonaInfo, subInfo, LeituraArquivo, Agregador, marcaCombos, serieDoMes, porGrupo, totalDoMes, escada,
+    zonaInfo, subInfo, chaveLig, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
+    descontoPorMes, escada,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
   };
 });

@@ -207,8 +207,7 @@
     if (!res.orcados.length) avisos.push("Nenhuma planilha de orçado com a linha ARRECADAÇÃO CRÉDITO: digite o orçado do mês no Resumo (Orçado do mês e curva).");
     if (d.zonasSemSup.length) avisos.push(`Zonas fora da relação de cidades (aparecem em “Sem SUP”): ${esc(d.zonasSemSup.join(", "))}.`);
     if (d.subSemClasse.length) avisos.push(`Subcategorias fora da relação (aparecem em “${R.SEM_CLASSIFICACAO}”): ${esc(d.subSemClasse.join(", "))}.`);
-    const descMes = {};
-    for (const r of d.CF) if (r[5]) descMes[r[0]] = (descMes[r[0]] || 0) + r[5];
+    const descMes = C.descontoPorMes(d);
     const ultimos = d.meses.map((m, i) => [m, descMes[i]]).filter(([, v]) => v).slice(-3);
     if (ultimos.length) avisos.push("Desconto comercial abatido (ligações que pagaram no mês, como no BI): "
       + ultimos.map(([m, v]) => `${C.rotuloMes(m)} ${rs(-v)}`).join("; ") + ".");

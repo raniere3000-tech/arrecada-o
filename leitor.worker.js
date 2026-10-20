@@ -4,12 +4,12 @@ const V = self.location.search;                         // ?v=versão do site: o
 importScripts("lib/xlsx.full.min.js", "assets/regras.js" + V, "assets/calculos.js" + V);
 
 const C = self.CALC, R = self.REGRAS;
-const avisa = (tipo, dados) => self.postMessage({ tipo, ...dados });
+const avisa = (tipo, dados, transferir = []) => self.postMessage({ tipo, ...dados }, transferir);
 
 self.onmessage = async (ev) => {
   try {
     const r = await processa(ev.data.arquivos || []);
-    avisa("pronto", r);
+    avisa("pronto", r, C.buffers(r.dados));          // as tabelas vão para a página sem cópia
   } catch (e) {
     avisa("erro", { mensagem: String((e && e.message) || e), detalhe: String((e && e.stack) || "") });
   }
@@ -177,7 +177,7 @@ async function leCsv(file, aoLer, leitura) {
 }
 
 // ---------- cache: o que cada CSV exportou fica no navegador (IndexedDB); arquivo igual não é lido de novo ----------
-const CACHE_VERSAO = 1;
+const CACHE_VERSAO = 2;
 const banco = () => new Promise((ok, erro) => {
   const r = indexedDB.open("arrecadacao_cache", 1);
   r.onupgradeneeded = () => r.result.createObjectStore("arquivos");
