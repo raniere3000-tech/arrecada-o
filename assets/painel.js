@@ -545,12 +545,10 @@
   }
   function desenhaPerfil() {
     tresTabelas(["tPerValor", "tPerCli", "tPerCon"], (c) => c.perfil, porOrdem(R.ORDEM_PERFIS, [R.SEM_PERFIL]), { titulo: "Perfil (Cluster Saldo)" });
-    const arq = E.res.arquivos.filter((a) => a.tipo === "perfil").map((a) => a.rel).join(", ");
-    $("legendaPerfil").innerHTML = `<p><b>Perfil do cliente</b>${arq ? ` — planilha ${esc(arq)}` : " — planilha de cluster não encontrada na pasta"}</p>
-      <p><b>Adimplente</b> – cliente sem faturas vencidas e que já realizou ao menos um pagamento.</p>
+    $("legendaPerfil").innerHTML = `<p><b>Adimplente</b> – cliente sem faturas vencidas e que já realizou ao menos um pagamento.</p>
       <p><b>Inadimplente</b> – cliente com débitos em aberto e que já realizou ao menos um pagamento.</p>
       <p><b>Nunca Pagou</b> – cliente que nunca realizou um pagamento.</p>
-      <p><b>${R.SEM_PERFIL}</b> – ligação + contrato que não está na planilha de perfil.</p>`;
+      <p><b>${R.SEM_PERFIL}</b> – cliente sem perfil de pagamento definido.</p>`;
   }
   function desenhaCidades() {
     tresTabelas(["tCidValor", "tCidCli", "tCidCon"], (c) => c.cidade, (l) => [...l].sort((a, b) => a.localeCompare(b, "pt-BR")), { titulo: "Cidade" });
@@ -560,10 +558,11 @@
   function desenhaEscada() {
     const d = E.res.dados, meses = mesesDaComparacao(), idx = meses.map(idxMes);
     const esq = C.escada(d, idx, marcas(), E.sel);
-    // linhas: do 1º vencimento até 2 meses depois do mês escolhido; os vencimentos posteriores somam numa linha só
+    // no painel, todos os vencimentos; no PDF (executivo), até 2 meses depois do mês escolhido e o resto numa linha só
     const limite = C.mesAnterior(E.mes, -2), POST = "\u0002depois";
+    const resumida = document.body.classList.contains("gerando-pdf");
     for (const v of [...esq.linhas.keys()]) {
-      if (!v || v <= limite) continue;
+      if (!resumida || !v || v <= limite) continue;
       let p = esq.linhas.get(POST);
       if (!p) { p = new Map(); esq.linhas.set(POST, p); }
       for (const [m, x] of esq.linhas.get(v)) p.set(m, (p.get(m) || 0) + x);
