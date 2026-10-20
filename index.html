@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrecadação Diária</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/painel.css?v=v1-20261020">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-linha">
+    <div>
+      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v1</span></div>
+      <h1>Arrecadação Diária</h1>
+    </div>
+    <div class="filtros" id="filtros">
+      <label class="filtro"><span>Superintendência</span><select id="selSup" disabled><option>—</option></select></label>
+      <label class="filtro"><span>Cidade</span><select id="selCidade" disabled><option>—</option></select></label>
+      <label class="filtro"><span>Subcategoria</span><select id="selGrupo" disabled><option>—</option></select></label>
+      <label class="filtro"><span>Mês</span><select id="selMes" disabled><option>—</option></select></label>
+    </div>
+    <div class="ferramentas">
+      <button type="button" class="btn-top" id="btnPasta">📁 Conectar pasta</button>
+      <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
+      <button type="button" class="btn-top" id="btnPdf" disabled>📄 PDF</button>
+      <div class="chave-visual" role="group" aria-label="Visual do painel">
+        <button type="button" data-visual="painel" class="on">Painel</button>
+        <button type="button" data-visual="bi">Power BI</button>
+      </div>
+      <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
+    </div>
+  </div>
+  <div class="fonte-status" id="fonteStatus">Nenhuma pasta conectada.</div>
+  <div class="progresso" id="progresso" hidden>
+    <div class="prog-linha"><div class="barra"><div class="barra-fill" id="barraFill"></div></div><b id="statusPct">0%</b><span id="statusTexto">Preparando…</span></div>
+  </div>
+  <details class="leitura" id="leitura" hidden>
+    <summary>Arquivos lidos e avisos</summary>
+    <div id="listaArquivos"></div>
+  </details>
+</header>
+
+<nav class="abas" id="abas" aria-label="Abas do painel" hidden>
+  <div class="toggle" role="tablist">
+    <button type="button" class="active" data-aba="resumo">Resumo</button>
+    <button type="button" data-aba="subcategoria">Subcategoria</button>
+    <button type="button" data-aba="perfil">Perfil de pagamento</button>
+    <button type="button" data-aba="cidades">Cidades</button>
+    <button type="button" data-aba="escada">Escada</button>
+  </div>
+</nav>
+
+<main id="inicio">
+  <section class="card vazio" id="vazio">
+    <h2>Conecte a pasta da arrecadação</h2>
+    <p>Clique em <b>📁 Conectar pasta</b> e escolha a pasta com os arquivos. As subpastas também são lidas. Tudo é processado aqui no navegador: nenhum arquivo é enviado para a internet.</p>
+    <ul class="esperados">
+      <li><b>Arrecadação diária</b>: o CSV do dia (<code>Acomp. de Arrecadação R1.csv</code>, R4…) numa pasta com “Diária” no nome. Ele substitui o anterior a cada dia.</li>
+      <li><b>Arrecadação acumulada</b>: os CSVs dos meses fechados, um por mês (em qualquer outra subpasta). O mês que estiver no arquivo diário é lido só do diário.</li>
+      <li><b>Desconto comercial</b>: <code>Base_Desconto - 25.05.xlsx</code> (colunas NUM_LIGACAO, REFERENCIA e DESCONTO).</li>
+      <li><b>Perfil do cliente</b>: <code>Cluster_Cliente_Lagos - 08.08.xlsx</code> (NUM_LIGACAO, SEQ_RESPONSAVEL e CLUSTER SALDO).</li>
+      <li><b>Orçado</b>: a planilha RF do faturamento (colunas Sup, Rubrica e um mês por coluna), com a linha <b>ARRECADAÇÃO CRÉDITO</b>. Sem ela, o orçado do mês pode ser digitado no painel.</li>
+    </ul>
+    <p class="nota">No Chrome e no Edge a pasta fica lembrada e as alterações (orçado digitado e curva do orçado diário) são salvas nela, no arquivo <code>ajustes_arrecadacao.json</code>, valendo para todos que usam a mesma pasta.</p>
+  </section>
+
+  <div id="area" hidden>
+    <div class="cabecalho-pdf" id="cabecalhoPdf"></div>
+    <section class="card dias-card">
+      <h2>Dias úteis <small id="diasNota"></small></h2>
+      <div class="dias" id="dias"></div>
+    </section>
+
+    <section class="painel-aba" data-painel="resumo">
+      <div class="kpis" id="kpis"></div>
+      <div class="grade">
+        <div class="card"><h2>Orçado × Realizado <small id="notaOrc"></small></h2><div class="wrap"><table id="tOrc"></table></div></div>
+        <div class="card"><h2>Clientes pagantes</h2><div class="wrap"><table id="tCli"></table></div></div>
+        <div class="card"><h2>Contas pagas</h2><div class="wrap"><table id="tCon"></table></div></div>
+        <div class="card"><h2>Ticket médio</h2><div class="wrap"><table id="tTic"></table></div></div>
+      </div>
+      <details class="card curva sem-pdf" id="curvaCard">
+        <summary><h2>Orçado do mês e curva do orçado diário <small id="curvaResumo"></small></h2></summary>
+        <div id="curvaCorpo"></div>
+      </details>
+    </section>
+
+    <section class="painel-aba" data-painel="subcategoria" hidden>
+      <div class="card"><h2>Valor arrecadado <small class="ate-dia"></small></h2><div class="wrap"><table id="tSubValor"></table></div></div>
+      <div class="card"><h2>Clientes pagantes <small class="ate-dia"></small></h2><div class="wrap"><table id="tSubCli"></table></div></div>
+      <div class="card"><h2>Contas pagas <small class="ate-dia"></small></h2><div class="wrap"><table id="tSubCon"></table></div></div>
+    </section>
+
+    <section class="painel-aba" data-painel="perfil" hidden>
+      <div class="card"><h2>Valor arrecadado <small class="ate-dia"></small></h2><div class="wrap"><table id="tPerValor"></table></div></div>
+      <div class="card"><h2>Clientes pagantes <small class="ate-dia"></small></h2><div class="wrap"><table id="tPerCli"></table></div></div>
+      <div class="card"><h2>Contas pagas <small class="ate-dia"></small></h2><div class="wrap"><table id="tPerCon"></table></div></div>
+      <div class="card legenda" id="legendaPerfil"></div>
+    </section>
+
+    <section class="painel-aba" data-painel="cidades" hidden>
+      <div class="card"><h2>Valor arrecadado <small class="ate-dia"></small></h2><div class="wrap"><table id="tCidValor"></table></div></div>
+      <div class="card"><h2>Clientes pagantes <small class="ate-dia"></small></h2><div class="wrap"><table id="tCidCli"></table></div></div>
+      <div class="card"><h2>Contas pagas <small class="ate-dia"></small></h2><div class="wrap"><table id="tCidCon"></table></div></div>
+    </section>
+
+    <section class="painel-aba" data-painel="escada" hidden>
+      <div class="card"><h2>Arrecadação por mês de vencimento × mês de crédito <small class="ate-dia"></small></h2><div class="wrap"><table id="tEscada" class="escada"></table></div>
+        <p class="nota">Cada coluna é o mês do crédito; cada linha, o mês de vencimento da conta paga. A diagonal destacada é o pagamento das contas que venceram no próprio mês. O desconto comercial fica numa linha própria.</p></div>
+    </section>
+  </div>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="lib/html2canvas.min.js" defer></script>
+<script src="lib/jspdf.umd.min.js" defer></script>
+<script src="assets/regras.js?v=v1-20261020"></script>
+<script src="assets/calculos.js?v=v1-20261020"></script>
+<script>const VERSAO_SITE = "v1-20261020"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v1-20261020"></script>
+</body>
+</html>
