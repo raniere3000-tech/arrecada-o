@@ -4,7 +4,8 @@
   const C = window.CALC, R = window.REGRAS;
   const $ = (id) => document.getElementById(id);
   const ARQ_AJUSTES = "ajustes_arrecadacao.json";
-  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada" };
+  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", dados: "Dados" };
+  const ABAS_PDF = ["resumo", "subcategoria", "perfil", "cidades", "escada"];     // a aba Dados não entra no PDF
   const NOME_SUP = { INTERIOR: "Interior", LESTE: "Leste", [R.SEM_SUP]: "Sem SUP" };
   const DIGITADO = "__digitado";                      // opção do seletor de orçado: o valor digitado no painel
   const E = {
@@ -214,8 +215,9 @@
       + ultimos.map(([m, v]) => `${C.rotuloMes(m)} ${rs(-v)}`).join("; ") + ".");
     if (d.descartadas.semCredito) avisos.push(`${fmt(d.descartadas.semCredito)} linhas sem Data Crédito foram ignoradas.`);
     if (d.descartadas.semValor) avisos.push(`${fmt(d.descartadas.semValor)} linhas sem Val. Autenticado foram ignoradas.`);
-    $("listaArquivos").innerHTML = `<table><thead><tr><th>Arquivo</th><th>Uso</th><th>Linhas</th><th>Meses</th><th>Observação</th></tr></thead><tbody>${linhas}</tbody></table>`
+    E.htmlArquivos = `<table><thead><tr><th>Arquivo</th><th>Uso</th><th>Linhas</th><th>Meses</th><th>Observação</th></tr></thead><tbody>${linhas}</tbody></table>`
       + (avisos.length ? `<ul class="avisos">${avisos.map((a) => `<li>${a}</li>`).join("")}</ul>` : "");
+    $("listaArquivos").innerHTML = E.htmlArquivos;
     $("leitura").hidden = false;
   }
 
@@ -327,7 +329,8 @@
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
-    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada })[E.aba]();
+    $("diasCard").hidden = E.aba === "dados";
+    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, dados: desenhaDados })[E.aba]();
   }
 
   // "1 a 12", "1, 5 e 10", "0 (fins de semana e feriados) e 1 a 3"
@@ -590,6 +593,29 @@
     tabela("tEscada", ["Vencimento (R$)", ...meses.map(C.rotuloMes)], linhas);
   }
 
+  // ----- Dados: os números por trás do que está na tela -----
+  function desenhaDados() {
+    const d = E.res.dados, mi = idxMes(E.mes), cal = C.calendario(E.mes), mk = marcas();
+    const tot = C.totalDoMes(d, mi, mk, E.sel), orc = filtroParcial() ? null : orcadoMensal(E.mes, E.sup), cv = curvaDoMes(E.mes, E.sup);
+    const feriados = cal.dias.filter((x) => x.feriado).map((x) => dataBR(x.data));
+    const marcados = C.diasDaMascara(E.sel).filter((k) => k <= cal.uteis);
+    const datas = marcados.map((k) => (k ? dataBR(cal.dataDoDia[k]) : "fins de semana e feriados")).join(", ");
+    const nArq = E.res.arquivos.filter((a) => a.tipo === "diaria" || a.tipo === "acumulada").length;
+    const linhas = [
+      ["Mês", `${C.rotuloMes(E.mes)}: ${cal.uteis} dias úteis e ${cal.naoUteis} dias de fim de semana ou feriado`],
+      ["Feriados no mês", feriados.length ? feriados.join(", ") : "nenhum"],
+      ["Dias úteis marcados", `${rotuloSel(E.sel)}${datas ? ` (${datas})` : ""}`],
+      ["Arrecadação nos dias", `${rs(tot.valor - tot.desconto)} de Val. Autenticado − ${rs(-tot.desconto)} de desconto = ${rs(tot.valor)}`],
+      ["Contas pagas e clientes", `${fmt(tot.contas)} contas pagas · ${fmt(tot.clientes)} clientes distintos · ticket ${tot.contas ? fmt(tot.valor / tot.contas, 2) : "—"}`],
+      ["Orçado mensal", orc ? (orc.valor != null ? `${rs(orc.valor)} (${esc(orc.fonte)})` : "sem orçado no mês para o orçado escolhido") : "por superintendência (escolha Cidade e Subcategoria = Todas)"],
+      ["Curva do orçado", cv.mesesMedia.length ? `média de ${cv.mesesMedia.map(C.rotuloMes).join(", ")}${cv.editada ? " · pesos editados no painel" : ""}` : "sem meses anteriores: dividida igualmente"],
+      ["Leitura", `${nArq} arquivo(s) de arrecadação · ${fmt(d.linhas)} linhas usadas · crédito até ${dataBR(d.ultimoCredito[d.meses[d.meses.length - 1]])}`],
+    ];
+    $("dadosFiltros").textContent = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
+    $("dadosParametros").innerHTML = `<table class="explica"><tbody>${linhas.map(([a, b]) => `<tr><td class="rot"><b>${a}</b></td><td class="rot">${b}</td></tr>`).join("")}</tbody></table>`
+      + `<details class="arquivos-dados"><summary>Arquivos lidos e avisos</summary>${E.htmlArquivos || ""}</details>`;
+  }
+
   // ===== abas =====
   function mostraAba(aba) {
     E.aba = aba;
@@ -612,7 +638,7 @@
       // ou em pé, a que deixar o conteúdo maior
       let pdf = null;
       const M = 7;
-      for (const aba of Object.keys(ABAS)) {
+      for (const aba of ABAS_PDF) {
         mostraAba(aba);
         await quadro();
         const fundo = document.body.classList.contains("bi") ? "#ffffff" : "#f3f6f9";

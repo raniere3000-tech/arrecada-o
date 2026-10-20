@@ -7,14 +7,14 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v6-20261020">
+<link rel="stylesheet" href="assets/painel.css?v=v7-20261020">
 </head>
 <body>
 
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v6</span></div>
+      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v7</span></div>
       <h1>Arrecadação Diária</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -52,6 +52,7 @@
     <button type="button" data-aba="perfil">Perfil de pagamento</button>
     <button type="button" data-aba="cidades">Cidades</button>
     <button type="button" data-aba="escada">Escada</button>
+    <button type="button" data-aba="dados">Dados</button>
   </div>
 </nav>
 
@@ -71,7 +72,7 @@
 
   <div id="area" hidden>
     <div class="cabecalho-pdf" id="cabecalhoPdf"></div>
-    <section class="card dias-card">
+    <section class="card dias-card" id="diasCard">
       <h2>Dias úteis <small id="diasNota"></small></h2>
       <div class="dias" id="dias"></div>
     </section>
@@ -113,6 +114,75 @@
       <div class="card"><h2>Arrecadação por mês de vencimento × mês de crédito <small class="ate-dia"></small></h2><div class="wrap"><table id="tEscada" class="escada compacta"></table></div>
         <p class="nota">Cada coluna é o mês do crédito; cada linha, o mês de vencimento da conta paga. A diagonal destacada é o pagamento das contas que venceram no próprio mês. O desconto comercial fica numa linha própria. No PDF, a escada vai até 2 meses depois do mês escolhido; os vencimentos posteriores somam numa linha.</p></div>
     </section>
+    <section class="painel-aba dados" data-painel="dados" hidden>
+      <div class="card"><h2>Parâmetros do que está na tela <small id="dadosFiltros"></small></h2><div id="dadosParametros"></div></div>
+
+      <div class="card"><h2>De onde vêm os dados</h2>
+        <p>O painel lê a pasta conectada no próprio navegador (nada é enviado para a internet). As subpastas também são lidas.</p>
+        <table class="explica"><thead><tr><th>Arquivo</th><th>Como é reconhecido</th><th>O que entra no painel</th></tr></thead><tbody>
+          <tr><td>Arrecadação diária</td><td>CSV com as colunas Nº Ligação, Data Crédito e Val. Autenticado, numa pasta com “Diária” no caminho</td><td>O mês atual. O mês que estiver no arquivo diário é lido só dele, mesmo que exista também no acumulado.</td></tr>
+          <tr><td>Arrecadação acumulada</td><td>O mesmo CSV em qualquer outra pasta (um arquivo por mês, R1, R4…)</td><td>Os meses anteriores.</td></tr>
+          <tr><td>Desconto comercial</td><td>Planilha com NUM_LIGACAO, REFERENCIA e DESCONTO</td><td>Desconto de cada ligação no mês da REFERENCIA.</td></tr>
+          <tr><td>Perfil do cliente</td><td>Planilha com NUM_LIGACAO, SEQ_RESPONSAVEL e CLUSTER SALDO</td><td>Adimplente, Inadimplente ou Nunca Pagou de cada ligação + contrato.</td></tr>
+          <tr><td>Orçado (RF)</td><td>Planilha com Sup, Rubrica e um mês por coluna, com a linha “(+) Arrecadação”, “05.01. Arrecadação” ou “ARRECADAÇÃO CRÉDITO”</td><td>Orçado mensal por superintendência; o seletor <b>Orçado</b> escolhe a planilha.</td></tr>
+          <tr><td>ajustes_arrecadacao.json</td><td>Gravado pelo próprio painel</td><td>Orçado digitado, curva do orçado diário editada e o mês de início da média. Vale para todos que usam a pasta.</td></tr>
+        </tbody></table>
+        <p class="nota">Cada linha do CSV entra como está (linhas repetidas não são tiradas, como no BI). Linhas sem Data Crédito ou sem Val. Autenticado são ignoradas e contadas em “Arquivos lidos e avisos”.
+          Os CSVs já lidos ficam guardados neste navegador: na atualização do dia, só o arquivo que mudou é lido de novo.</p></div>
+
+      <div class="card"><h2>Filtros e dias úteis</h2>
+        <ul>
+          <li><b>Superintendência</b>: vem da cidade (coluna Zona do CSV). Cidades “Lagos” do BI = <b>Interior</b>; “R4” = <b>Leste</b>. Zona fora da relação aparece em “Sem SUP”.</li>
+          <li><b>Cidade</b> e <b>Subcategoria</b> filtram todas as abas. O orçado só existe por superintendência: com Cidade ou Subcategoria escolhida, ele aparece como “—”.</li>
+          <li><b>Mês</b>: mês da Data Crédito. As abas Subcategoria, Perfil, Cidades e Escada mostram o mês escolhido e os 13 anteriores que estão na pasta; o Resumo compara com os 2 anteriores.</li>
+          <li><b>Dia útil</b>: cada Data Crédito recebe a ordem do dia útil no mês (1º, 2º…). Sábados, domingos e feriados nacionais e do RJ ficam com 0. Feriados usados: Confraternização, Carnaval (segunda e terça), Paixão de Cristo, Tiradentes, São Jorge, Dia do Trabalho, Corpus Christi, Independência, N. Sra. Aparecida, Finados, Proclamação da República, Consciência Negra e Natal.</li>
+          <li><b>Dias marcados</b>: só os dias úteis marcados entram em todas as contas, e os outros meses usam os mesmos números de dia útil (comparação “até o mesmo dia útil”). O 0 junta todos os fins de semana e feriados do mês.</li>
+        </ul></div>
+
+      <div class="card"><h2>Resumo</h2>
+        <table class="explica"><thead><tr><th>Indicador / tabela</th><th>Cálculo</th></tr></thead><tbody>
+          <tr><td>Arrecadação</td><td>Soma do <b>Val. Autenticado</b> das linhas cuja Data Crédito cai nos dias marcados, <b>menos o desconto comercial</b> (ver abaixo).</td></tr>
+          <tr><td>Arrecadação dia (tabela Orçado × Realizado)</td><td>Soma do Val. Autenticado do dia, sem desconto. O desconto do mês aparece numa linha própria e entra só no total (como no BI).</td></tr>
+          <tr><td>Contas pagas</td><td>Nº de linhas com Tipo Fatura <b>1-NOTA FISCAL MENSAL</b> ou <b>2-NOTA FISCAL AVULSA</b> (parcelas e outros tipos não contam).</td></tr>
+          <tr><td>Clientes pagantes</td><td>Nº de ligações distintas que pagaram. No dia: distintas no dia. No total: distintas no conjunto dos dias marcados (quem pagou em dois dias conta uma vez).</td></tr>
+          <tr><td>Ticket médio</td><td>Arrecadação ÷ contas pagas. Por dia, sem o desconto; no total, com o desconto.</td></tr>
+          <tr><td>Orçado mensal</td><td>Valor da linha da arrecadação no RF escolhido em <b>Orçado</b>, para o mês e a superintendência (Todas = soma). Ou o valor digitado no painel.</td></tr>
+          <tr><td>Orçado dia</td><td>Orçado mensal × peso do dia útil na curva do mês (abaixo). Orçado nos dias = soma dos dias marcados.</td></tr>
+          <tr><td>Dif e Δ (%)</td><td>Dif = arrecadação − orçado; Δ = arrecadação ÷ orçado − 1.</td></tr>
+        </tbody></table></div>
+
+      <div class="card"><h2>Curva do orçado diário</h2>
+        <ol>
+          <li>Para cada mês da média (do mês em “Média a partir de”, padrão janeiro do ano, até o mês anterior ao escolhido), calcula a participação de cada posição de dia útil (1º, 2º… 23º) e do 0 (fins de semana e feriados) no total arrecadado do mês, sem desconto.</li>
+          <li>Faz a média simples dessas participações entre os meses (cada mês pesa igual).</li>
+          <li>No mês escolhido, cada dia útil 1…D recebe a média da sua posição. O que a média tem nas posições acima de D (meses com mais dias úteis, até 23) é dividido igualmente entre os D dias. Ex.: com 20 dias úteis, a parte dos dias 21, 22 e 23 é dividida entre os 20.</li>
+          <li>O 0 recebe a média dos fins de semana e feriados. Os pesos somam 100%.</li>
+          <li>Os pesos podem ser editados em Resumo › Orçado do mês e curva; ao salvar, a soma é ajustada para 100%.</li>
+        </ol></div>
+
+      <div class="card"><h2>Desconto comercial</h2>
+        <p>O desconto de cada ligação entra no mês da REFERENCIA da planilha de desconto, só para as ligações que pagaram no mês (como no BI), na cidade, subcategoria e perfil da ligação.
+          Ele é abatido quando a ligação pagou em algum dos dias marcados. Desconto de ligação que não pagou no mês fica de fora.</p></div>
+
+      <div class="card"><h2>Subcategoria, Perfil de pagamento e Cidades</h2>
+        <ul>
+          <li>Mesmas contas do Resumo (valor com desconto, clientes distintos e contas pagas), por linha e por mês, nos dias úteis marcados de cada mês.</li>
+          <li><b>Subcategoria</b>: a Utilização (Sub. Categ.) do CSV é agrupada pela tabela do BI (47 códigos) em Comercial, Industrial, Pequeno Comércio, Público, Residencial e Social; o detalhe do Público (400 a 405) abre ao clicar. Código fora da tabela vai para “Sem classificação”.</li>
+          <li><b>Perfil de pagamento</b>: o CLUSTER SALDO da planilha de perfil, ligado pela ligação + nº do contrato (SEQ_RESPONSAVEL). Sem correspondência: “Sem perfil”.</li>
+          <li><b>Cidades</b>: a cidade da Zona do CSV.</li>
+        </ul></div>
+
+      <div class="card"><h2>Escada</h2>
+        <p>Valor arrecadado (Val. Autenticado, sem desconto) por <b>mês de vencimento</b> da conta (linhas) × <b>mês do crédito</b> (colunas), nos dias úteis marcados. A diagonal é o pagamento das contas que venceram no próprio mês.
+          O desconto comercial fica numa linha própria, e o total de cada coluna é igual ao valor arrecadado das outras abas. No PDF, a escada vai até 2 meses depois do mês escolhido e os vencimentos posteriores somam numa linha.</p></div>
+
+      <div class="card"><h2>Diferenças em relação ao BI</h2>
+        <ul>
+          <li>Feriados: o painel considera São Jorge (23/04) e Consciência Negra (20/11) em todos os anos; o BI só os tinha em 2025.</li>
+          <li>No BI o desconto fica ligado ao dia 1º do mês e some quando o dia 1º é fim de semana ou feriado e o 0 não está marcado; no painel, o desconto entra sempre.</li>
+          <li>Escada: o desconto aparece numa linha própria (no BI ele se espalha pelos meses de vencimento).</li>
+        </ul></div>
+    </section>
   </div>
 </main>
 
@@ -120,9 +190,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v6-20261020"></script>
-<script src="assets/calculos.js?v=v6-20261020"></script>
-<script>const VERSAO_SITE = "v6-20261020"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v6-20261020"></script>
+<script src="assets/regras.js?v=v7-20261020"></script>
+<script src="assets/calculos.js?v=v7-20261020"></script>
+<script>const VERSAO_SITE = "v7-20261020"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v7-20261020"></script>
 </body>
 </html>

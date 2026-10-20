@@ -10,7 +10,8 @@ para a internet: tudo é processado no navegador.
 2. No Chrome e no Edge a pasta fica lembrada: nas próximas visitas basta clicar em qualquer lugar da página.
    **↻ Atualizar** relê a pasta depois que o arquivo do dia for trocado.
 3. Use os filtros do cabeçalho (Superintendência, Cidade, Subcategoria, Mês) e os botões de **dias úteis**.
-4. **Painel / Power BI** troca o visual. **📄 PDF** gera um PDF com as 5 abas no visual escolhido.
+4. **Painel / Power BI** troca o visual. **📄 PDF** gera o executivo com as 5 abas no visual escolhido (sem a aba Dados).
+5. A aba **Dados** explica todos os cálculos e mostra os números por trás do que está na tela.
 
 Os CSVs já lidos ficam guardados no navegador: na atualização do dia, só o arquivo diário é lido de novo.
 

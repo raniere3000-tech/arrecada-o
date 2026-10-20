@@ -96,6 +96,7 @@ tr.fora td { color: #b6c2cf; }
 tr.grupo td.rot { cursor: pointer; font-weight: 600; }
 tr.grupo td.rot::before { content: "▸ "; color: var(--azul-claro); }
 tr.grupo.aberto td.rot::before { content: "▾ "; }
+body.gerando-pdf tr.grupo td.rot::before { content: none; }        /* no PDF, categorias alinhadas, sem a setinha */
 /* tabelas largas (14 meses): letra menor e células justas para caber na tela sem rolar para o lado */
 table.compacta { font-size: 11.5px; }
 table.compacta th, table.compacta td { padding: 4px 5px; }
@@ -184,3 +185,18 @@ body.bi.gerando-pdf .card { padding: 0; }
   .barra { flex-basis: 140px; }
   body.bi .dias button { min-width: 38px; }
 }
+
+/* aba Dados */
+.dados p, .dados li { line-height: 1.55; font-size: 13.5px; }
+.dados ul, .dados ol { padding-left: 20px; margin: 6px 0; }
+table.explica { font-family: var(--fonte); font-size: 13px; }
+table.explica td { white-space: normal; text-align: left; vertical-align: top; color: #000; }
+table.explica td:first-child { width: 230px; }
+.arquivos-dados { margin-top: 12px; font-size: 13px; }
+.arquivos-dados summary { cursor: pointer; color: var(--azul); font-weight: 600; }
+.arquivos-dados table { margin-top: 8px; }
+.arquivos-dados td { white-space: normal; text-align: left; }
+.arquivos-dados .avisos { color: var(--laranja-texto); }
+body.bi .dados .card { padding: 0 0 8px; }
+body.bi .dados .card h2 { justify-content: flex-start; }
+body.bi table.explica td.rot { background: transparent !important; color: #000; }
