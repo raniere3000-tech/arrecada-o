@@ -19,6 +19,7 @@ test("números e datas no formato brasileiro", () => {
   assert.equal(C.ligacao("0100000001"), "100000001");
   assert.equal(C.rotuloMes("2026-10"), "out/2026");
   assert.equal(C.mesAnterior("2026-01", 2), "2025-11");
+  assert.equal(C.mesAnterior("2026-11", -2), "2027-01");
 });
 
 test("dias úteis de outubro/2026 batem com o BI (21 dias, 12 = dia 19)", () => {
@@ -76,33 +77,33 @@ test("agregação: valores, contas, clientes distintos e desconto", () => {
   assert.equal(s.contas[2], 1);
   assert.equal(s.clientes[2], 2);
   // até o dia útil 2, sem o 0: 350 - desconto 15 da ligação 1 (pagou no dia 1)
-  const t2 = C.totalDoMes(d, mi, tudo, 2, false);
+  const t2 = C.totalDoMes(d, mi, tudo, C.mascaraAte(2, false));
   perto(t2.valor, 335);
   perto(t2.desconto, -15);
   assert.equal(t2.contas, 2);
   assert.equal(t2.clientes, 2);
   // com o 0 (fins de semana e feriados): + 30 e + 1 cliente
-  const t2z = C.totalDoMes(d, mi, tudo, 2, true);
+  const t2z = C.totalDoMes(d, mi, tudo, C.mascaraAte(2, true));
   perto(t2z.valor, 365);
   assert.equal(t2z.clientes, 3);
   // só Interior: tira São Gonçalo
   const interior = C.marcaCombos(d, { sup: "INTERIOR" });
-  perto(C.totalDoMes(d, mi, interior, 3, false).valor, 335);
-  perto(C.totalDoMes(d, mi, tudo, 3, false).valor, 375);
+  perto(C.totalDoMes(d, mi, interior, C.mascaraAte(3, false)).valor, 335);
+  perto(C.totalDoMes(d, mi, tudo, C.mascaraAte(3, false)).valor, 375);
 });
 
 test("tabelas por grupo: subcategoria, perfil e o desconto na linha da ligação", () => {
   const d = exemplo(), tudo = C.marcaCombos(d, {});
-  const g = C.porGrupo(d, [1], tudo, 3, false, (c) => c.grupo);
+  const g = C.porGrupo(d, [1], tudo, C.mascaraAte(3), (c) => c.grupo);
   perto(g.get("RESIDENCIAL").get(1).valor, 100 + 50 + 40 - 15);
   perto(g.get("PUBLICO").get(1).valor, 200);
-  const p = C.porGrupo(d, [1], tudo, 3, false, (c) => c.perfil);
+  const p = C.porGrupo(d, [1], tudo, C.mascaraAte(3), (c) => c.perfil);
   assert.equal(p.get("Adimplente").get(1).clientes, 1);
   assert.equal(p.get(R.SEM_PERFIL).get(1).clientes, 1);       // ligação 4 (sem perfil); a 3 pagou só no sábado
 });
 
 test("escada: mês de vencimento × mês de crédito e desconto à parte", () => {
-  const d = exemplo(), e = C.escada(d, [0, 1], C.marcaCombos(d, {}), 23, true);
+  const d = exemplo(), e = C.escada(d, [0, 1], C.marcaCombos(d, {}), C.mascaraAte(23, true));
   assert.equal(e.linhas.get("2026-10").get(1), 100 + 50 + 200 + 30 + 40);
   assert.equal(e.linhas.get("2026-09").get(0), 80);
   assert.equal(e.desconto.get(1), -15);
@@ -146,8 +147,8 @@ test("arquivos lidos separados e juntados: o mês do arquivo diário substitui o
   assert.deepEqual(ra.meses, ["2026-09"]);
   assert.equal(ra.puladas, 1);
   const d = a.resultado(new Map()), tudo = C.marcaCombos(d, {});
-  perto(C.totalDoMes(d, 1, tudo, 23, true).valor, 100);
-  perto(C.totalDoMes(d, 0, tudo, 23, true).valor, 120);
+  perto(C.totalDoMes(d, 1, tudo, C.mascaraAte(23, true)).valor, 100);
+  perto(C.totalDoMes(d, 0, tudo, C.mascaraAte(23, true)).valor, 120);
   assert.equal(d.combos.length, 2);                            // Rio Bonito e São Gonçalo: mesma combinação reaproveitada
 });
 
@@ -158,6 +159,17 @@ test("a mesma ligação em dois arquivos do mês conta uma vez como cliente", ()
   const a = new C.Agregador();
   a.junta(x.exporta()); a.junta(y.exporta());
   const d = a.resultado(new Map());
-  assert.equal(C.totalDoMes(d, 0, C.marcaCombos(d, {}), 2, false).clientes, 1);
+  assert.equal(C.totalDoMes(d, 0, C.marcaCombos(d, {}), C.mascaraAte(2)).clientes, 1);
   assert.equal(C.serieDoMes(d, 0, C.marcaCombos(d, {})).clientes[2], 1);
+});
+
+test("dias úteis escolhidos um a um (ex.: só o 1 e o 3)", () => {
+  const d = exemplo(), tudo = C.marcaCombos(d, {}), so13 = (1 << 1) | (1 << 3);
+  const t = C.totalDoMes(d, 1, tudo, so13);
+  perto(t.valor, 100 + 40 - 15);                               // dia 1 (ligação 1, com o desconto dela) + dia 3
+  assert.equal(t.clientes, 2);
+  assert.equal(C.totalDoMes(d, 1, tudo, 1 << 2).clientes, 2);   // só o dia 2: ligações 1 e 2
+  perto(C.totalDoMes(d, 1, tudo, 1 << 2).desconto, -15);        // a ligação 1 também pagou no dia 2
+  assert.equal(C.totalDoMes(d, 1, tudo, 0).valor, 0);
+  assert.deepEqual(C.diasDaMascara(so13), [1, 3]);
 });

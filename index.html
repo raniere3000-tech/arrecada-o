@@ -7,14 +7,14 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v2-20261020">
+<link rel="stylesheet" href="assets/painel.css?v=v3-20261020">
 </head>
 <body>
 
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v2</span></div>
+      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v3</span></div>
       <h1>Arrecadação Diária</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -90,26 +90,26 @@
     </section>
 
     <section class="painel-aba" data-painel="subcategoria" hidden>
-      <div class="card"><h2>Valor arrecadado <small class="ate-dia"></small></h2><div class="wrap"><table id="tSubValor"></table></div></div>
+      <div class="card"><h2>Valor arrecadado <small class="ate-dia"></small></h2><div class="wrap"><table id="tSubValor" class="compacta"></table></div></div>
       <div class="card"><h2>Clientes pagantes <small class="ate-dia"></small></h2><div class="wrap"><table id="tSubCli"></table></div></div>
       <div class="card"><h2>Contas pagas <small class="ate-dia"></small></h2><div class="wrap"><table id="tSubCon"></table></div></div>
     </section>
 
     <section class="painel-aba" data-painel="perfil" hidden>
-      <div class="card"><h2>Valor arrecadado <small class="ate-dia"></small></h2><div class="wrap"><table id="tPerValor"></table></div></div>
+      <div class="card"><h2>Valor arrecadado <small class="ate-dia"></small></h2><div class="wrap"><table id="tPerValor" class="compacta"></table></div></div>
       <div class="card"><h2>Clientes pagantes <small class="ate-dia"></small></h2><div class="wrap"><table id="tPerCli"></table></div></div>
       <div class="card"><h2>Contas pagas <small class="ate-dia"></small></h2><div class="wrap"><table id="tPerCon"></table></div></div>
       <div class="card legenda" id="legendaPerfil"></div>
     </section>
 
     <section class="painel-aba" data-painel="cidades" hidden>
-      <div class="card"><h2>Valor arrecadado <small class="ate-dia"></small></h2><div class="wrap"><table id="tCidValor"></table></div></div>
+      <div class="card"><h2>Valor arrecadado <small class="ate-dia"></small></h2><div class="wrap"><table id="tCidValor" class="compacta"></table></div></div>
       <div class="card"><h2>Clientes pagantes <small class="ate-dia"></small></h2><div class="wrap"><table id="tCidCli"></table></div></div>
       <div class="card"><h2>Contas pagas <small class="ate-dia"></small></h2><div class="wrap"><table id="tCidCon"></table></div></div>
     </section>
 
     <section class="painel-aba" data-painel="escada" hidden>
-      <div class="card"><h2>Arrecadação por mês de vencimento × mês de crédito <small class="ate-dia"></small></h2><div class="wrap"><table id="tEscada" class="escada"></table></div>
+      <div class="card"><h2>Arrecadação por mês de vencimento × mês de crédito <small class="ate-dia"></small></h2><div class="wrap"><table id="tEscada" class="escada compacta"></table></div>
         <p class="nota">Cada coluna é o mês do crédito; cada linha, o mês de vencimento da conta paga. A diagonal destacada é o pagamento das contas que venceram no próprio mês. O desconto comercial fica numa linha própria.</p></div>
     </section>
   </div>
@@ -119,9 +119,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v2-20261020"></script>
-<script src="assets/calculos.js?v=v2-20261020"></script>
-<script>const VERSAO_SITE = "v2-20261020"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v2-20261020"></script>
+<script src="assets/regras.js?v=v3-20261020"></script>
+<script src="assets/calculos.js?v=v3-20261020"></script>
+<script>const VERSAO_SITE = "v3-20261020"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v3-20261020"></script>
 </body>
 </html>

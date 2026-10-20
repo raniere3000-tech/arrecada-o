@@ -7,7 +7,7 @@
   const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada" };
   const NOME_SUP = { INTERIOR: "Interior", LESTE: "Leste", [R.SEM_SUP]: "Sem SUP" };
   const E = {
-    res: null, sup: "INTERIOR", cidade: "", grupo: "", mes: "", N: 1, incl0: false, aba: "resumo",
+    res: null, sup: "INTERIOR", cidade: "", grupo: "", mes: "", sel: 0, aba: "resumo",
     abertos: new Set(), ajustes: { orcado: {}, curva: {} }, pasta: null, rodando: false,
   };
   try { $("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) { /* sem versão */ }
@@ -192,7 +192,7 @@
     const sups = supsDisponiveis();
     if (!sups.includes(E.sup)) E.sup = sups.includes("INTERIOR") ? "INTERIOR" : sups[0] || "";
     if (!d.meses.includes(E.mes)) E.mes = d.meses[d.meses.length - 1];
-    E.N = diaPadrao(E.mes);
+    E.sel = C.mascaraAte(diaPadrao(E.mes));
     montaFiltros();
     desenha();
   }
@@ -241,7 +241,7 @@
   $("selSup").addEventListener("change", (e) => { E.sup = e.target.value; montaFiltros(); desenha(); });
   $("selCidade").addEventListener("change", (e) => { E.cidade = e.target.value; desenha(); });
   $("selGrupo").addEventListener("change", (e) => { E.grupo = e.target.value; desenha(); });
-  $("selMes").addEventListener("change", (e) => { E.mes = e.target.value; E.N = diaPadrao(E.mes); desenha(); });
+  $("selMes").addEventListener("change", (e) => { E.mes = e.target.value; E.sel = C.mascaraAte(diaPadrao(E.mes)); desenha(); });
 
   function ordena(lista, ordem) {
     const pos = (x) => { const i = ordem.indexOf(x); return i < 0 ? 999 : i; };
@@ -295,29 +295,44 @@
     if (!E.res) return;
     desenhaDias();
     const filtros = [`Superintendência: ${nomeSup(E.sup)}`, E.cidade ? `Cidade: ${E.cidade}` : "", E.grupo ? `Subcategoria: ${E.grupo}` : "",
-      `Mês: ${C.rotuloMes(E.mes)}`, `até o dia útil ${E.N}${E.incl0 ? " + fins de semana e feriados" : ""}`].filter(Boolean).join(" · ");
+      `Mês: ${C.rotuloMes(E.mes)}`, `dias úteis: ${rotuloSel(E.sel)}`].filter(Boolean).join(" · ");
     $("cabecalhoPdf").innerHTML = `<h1>Arrecadação Diária — ${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
-    document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `até o dia útil ${E.N} de cada mês${E.incl0 ? ", com fins de semana e feriados" : ""}`; });
+    document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
     ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada })[E.aba]();
   }
 
+  // "1 a 12", "1, 5 e 10", "0 (fins de semana e feriados) e 1 a 3"
+  function rotuloSel(sel) {
+    const dias = C.diasDaMascara(sel).filter((d) => d > 0), partes = [];
+    for (let i = 0; i < dias.length; i++) {
+      let j = i;
+      while (j + 1 < dias.length && dias[j + 1] === dias[j] + 1) j++;
+      partes.push(j - i >= 2 ? `${dias[i]} a ${dias[j]}` : j > i ? `${dias[i]}, ${dias[j]}` : `${dias[i]}`);
+      i = j;
+    }
+    if (sel & 1) partes.unshift("0 (fins de semana e feriados)");
+    if (!partes.length) return "nenhum";
+    return partes.length === 1 ? partes[0] : partes.slice(0, -1).join(", ") + " e " + partes[partes.length - 1];
+  }
   function desenhaDias() {
     const cal = C.calendario(E.mes), ult = ultimoDiaComDados(E.mes);
-    if (E.N > cal.uteis) E.N = cal.uteis;
-    let h = `<button type="button" data-d="0" class="zero${E.incl0 ? " ate" : ""}" title="Fins de semana e feriados (${cal.naoUteis} dias): clique para ${E.incl0 ? "tirar" : "incluir"}">0</button>`;
+    let h = `<button type="button" data-d="0" class="zero${E.sel & 1 ? " sel" : ""}" title="Fins de semana e feriados (${cal.naoUteis} dias)">0</button>`;
     for (let k = 1; k <= cal.uteis; k++) {
-      const cls = [k === E.N ? "sel" : k < E.N ? "ate" : "", k > ult ? "futuro" : ""].filter(Boolean).join(" ");
+      const cls = [E.sel & (1 << k) ? "sel" : "", k > ult ? "futuro" : ""].filter(Boolean).join(" ");
       h += `<button type="button" data-d="${k}" class="${cls}" title="${dataBR(cal.dataDoDia[k])}">${k}</button>`;
     }
+    h += `<span class="dias-acoes sem-pdf"><button type="button" data-acao="ate" title="Marca do dia útil 1 ao último com dados">1 a ${ult || cal.uteis}</button>`
+      + `<button type="button" data-acao="limpa">Limpar</button></span>`;
     $("dias").innerHTML = h;
-    $("diasNota").textContent = `${C.rotuloMes(E.mes)}: ${cal.uteis} dias úteis · até o dia útil ${E.N} (${dataBR(cal.dataDoDia[E.N])}); os outros meses são comparados até o mesmo dia útil`
-      + ` · 0 = fins de semana e feriados${E.incl0 ? " (incluídos)" : " (fora, como no BI)"}`;
+    $("diasNota").textContent = `${C.rotuloMes(E.mes)}: ${cal.uteis} dias úteis · marcados: ${rotuloSel(E.sel)} · clique em cada dia para marcar ou desmarcar;`
+      + " os outros meses usam os mesmos dias úteis · 0 = fins de semana e feriados";
   }
   $("dias").addEventListener("click", (e) => {
     const b = e.target.closest("button");
     if (!b) return;
-    const d = +b.dataset.d;
-    if (d === 0) E.incl0 = !E.incl0; else E.N = d;
+    if (b.dataset.acao === "ate") E.sel = C.mascaraAte(diaPadrao(E.mes));
+    else if (b.dataset.acao === "limpa") E.sel = 0;
+    else E.sel = (E.sel ^ (1 << +b.dataset.d)) >>> 0;
     desenha();
   });
 
@@ -327,21 +342,21 @@
 
   // ----- Resumo -----
   function desenhaResumo() {
-    const d = E.res.dados, mi = idxMes(E.mes), mk = marcas(), cal = C.calendario(E.mes), N = E.N, inc = E.incl0;
-    const s = C.serieDoMes(d, mi, mk), tot = C.totalDoMes(d, mi, mk, N, inc), ult = ultimoDiaComDados(E.mes);
+    const d = E.res.dados, mi = idxMes(E.mes), mk = marcas(), cal = C.calendario(E.mes), sel = E.sel;
+    const s = C.serieDoMes(d, mi, mk), tot = C.totalDoMes(d, mi, mk, sel), ult = ultimoDiaComDados(E.mes);
+    const dias = C.diasDaMascara(sel).filter((k) => k <= cal.uteis);   // só os dias marcados, nesta ordem (0 primeiro)
     const orc = filtroParcial() ? { valor: null, fonte: "" } : orcadoMensal(E.mes, E.sup);
     const pesos = curvaDoMes(E.mes, E.sup).pesos;
     const temOrc = orc.valor != null;
     const orcDia = (k) => (temOrc ? pesos[k] * orc.valor : NaN);
     let orcAte = 0;
-    for (let k = 1; k <= N; k++) orcAte += orcDia(k);
-    if (inc) orcAte += orcDia(0);
+    for (const k of dias) orcAte += orcDia(k);
     const delta = temOrc && orcAte ? tot.valor / orcAte - 1 : NaN;
     const semOrc = filtroParcial() ? "o orçado é por superintendência (Cidade e Subcategoria = Todas)" : "sem orçado do mês";
     $("kpis").innerHTML = [
       ["Orçado mensal", temOrc ? milhoes(orc.valor) : "—", temOrc ? `${C.rotuloMes(E.mes)} · ${esc(orc.fonte)}` : semOrc],
-      ["Orçado até o dia", temOrc ? milhoes(orcAte) : "—", `dia útil ${N} de ${cal.uteis}`],
-      ["Arrecadação até o dia", milhoes(tot.valor), `${rs(tot.valor)}${tot.desconto ? ` (desconto comercial ${rs(tot.desconto)})` : ""}`],
+      ["Orçado nos dias", temOrc ? milhoes(orcAte) : "—", `dias úteis ${rotuloSel(sel)} de ${cal.uteis}`],
+      ["Arrecadação nos dias", milhoes(tot.valor), `${rs(tot.valor)}${tot.desconto ? ` (desconto comercial ${rs(tot.desconto)})` : ""}`],
       ["Δ (%)", `<i class="${delta < 0 ? "neg" : ""}" style="font-style:normal">${pct(delta)}</i>`, temOrc ? `${rs(tot.valor - orcAte)} vs orçado` : semOrc],
       ["Ticket médio", tot.contas ? fmt(tot.valor / tot.contas, 2) : "—", `${fmt(tot.contas)} contas pagas`],
     ].map(([t, v, sub]) => `<div class="kpi"><span>${t}</span><b>${v}</b><small>${sub}</small></div>`).join("");
@@ -352,9 +367,9 @@
       return `<tr class="${fora ? "fora" : ""}">${td(rot, "rot")}${td(du, "du")}${td(temOrc ? fmt(o) : "—")}`
         + `${td(temDado ? fmt(a) : "")}${temDado && temOrc ? tdNum(dif, fmt) + tdNum(p, pct) : td("") + td("")}</tr>`;
     };
-    const rows = [];
-    if (inc) rows.push(linhaOrc(`Fins de semana e feriados (${cal.naoUteis})`, 0, orcDia(0), s.valor[0], false, true));
-    for (let k = 1; k <= cal.uteis; k++) rows.push(linhaOrc(C.rotuloDia(cal.dataDoDia[k]), k, orcDia(k), s.valor[k], k > N, k <= ult));
+    const rows = dias.map((k) => (k === 0
+      ? linhaOrc(`Fins de semana e feriados (${cal.naoUteis})`, 0, orcDia(0), s.valor[0], false, true)
+      : linhaOrc(C.rotuloDia(cal.dataDoDia[k]), k, orcDia(k), s.valor[k], false, k <= ult)));
     if (tot.desconto) rows.push(`<tr class="desc">${td("Desconto comercial", "rot")}${td("")}${td("")}${td(fmt(tot.desconto))}${td("")}${td("")}</tr>`);
     rows.push(`<tr class="total">${td("Total", "rot")}${td("")}${td(temOrc ? fmt(orcAte) : "—")}${td(fmt(tot.valor))}`
       + `${temOrc ? tdNum(tot.valor - orcAte, fmt) + tdNum(delta, pct) : td("") + td("")}</tr>`);
@@ -363,8 +378,7 @@
     // clientes, contas e ticket: mês escolhido e os dois anteriores, até o mesmo dia útil
     const meses = [C.mesAnterior(E.mes, 2), C.mesAnterior(E.mes, 1), E.mes];
     const series = meses.map((m) => (idxMes(m) >= 0 ? C.serieDoMes(d, idxMes(m), mk) : null));
-    const totais = meses.map((m) => (idxMes(m) >= 0 ? C.totalDoMes(d, idxMes(m), mk, N, inc) : null));
-    const dias = [...(inc ? [0] : []), ...Array.from({ length: N }, (_, i) => i + 1)];
+    const totais = meses.map((m) => (idxMes(m) >= 0 ? C.totalDoMes(d, idxMes(m), mk, sel) : null));
     const cab = ["Dia útil", ...meses.map(C.rotuloMes)];
     const tresMeses = (el, porDia, total, dec) => tabela(el, cab, [
       ...dias.map((k) => `<tr>${td(k, "du")}${series.map((sr) => td(sr && porDia(sr, k) != null ? fmt(porDia(sr, k), dec) : "")).join("")}</tr>`),
@@ -452,8 +466,8 @@
   // linhas: [{rot, chave, cls}] → três tabelas (valor, clientes, contas)
   function tresTabelas(ids, grupoDe, ordemRot, opcoes = {}) {
     const d = E.res.dados, meses = mesesDaComparacao(), idx = meses.map(idxMes), mk = marcas();
-    const g = C.porGrupo(d, idx, mk, E.N, E.incl0, grupoDe);
-    const det = opcoes.detalheDe ? C.porGrupo(d, idx, mk, E.N, E.incl0, opcoes.detalheDe) : null;
+    const g = C.porGrupo(d, idx, mk, E.sel, grupoDe);
+    const det = opcoes.detalheDe ? C.porGrupo(d, idx, mk, E.sel, opcoes.detalheDe) : null;
     const rotulos = ordemRot([...g.keys()]);
     const cab = [opcoes.titulo, ...meses.map(C.rotuloMes)];
     const total = (campo) => idx.map((m) => { let s = 0; for (const l of g.values()) { const c = l.get(m); if (c) s += c[campo]; } return s; });
@@ -471,7 +485,8 @@
       linhas.push(`<tr class="total">${td("Total", "rot")}${total(campo).map((v) => tdNum(v, f)).join("")}</tr>`);
       return linhas;
     };
-    tabela(ids[0], cab, monta("valor", rs, true));
+    // valor sem "R$" em cada célula (está no título) para a tabela caber na tela sem rolar para o lado
+    tabela(ids[0], [opcoes.titulo + " (R$)", ...cab.slice(1)], monta("valor", fmt, true));
     tabela(ids[1], cab, monta("clientes", fmt, false));
     tabela(ids[2], cab, monta("contas", fmt, false));
   }
@@ -506,24 +521,35 @@
   // ----- Escada -----
   function desenhaEscada() {
     const d = E.res.dados, meses = mesesDaComparacao(), idx = meses.map(idxMes);
-    const esq = C.escada(d, idx, marcas(), E.N, E.incl0);
-    const vencs = [...esq.linhas.keys()].sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)));
+    const esq = C.escada(d, idx, marcas(), E.sel);
+    // linhas: do 1º vencimento até 2 meses depois do mês escolhido; os vencimentos posteriores somam numa linha só
+    const limite = C.mesAnterior(E.mes, -2), POST = "\u0002depois";
+    for (const v of [...esq.linhas.keys()]) {
+      if (!v || v <= limite) continue;
+      let p = esq.linhas.get(POST);
+      if (!p) { p = new Map(); esq.linhas.set(POST, p); }
+      for (const [m, x] of esq.linhas.get(v)) p.set(m, (p.get(m) || 0) + x);
+      esq.linhas.delete(v);
+    }
+    const ordemV = (v) => (v === POST ? "9998" : v === "" ? "9999" : v);
+    const vencs = [...esq.linhas.keys()].sort((a, b) => ordemV(a).localeCompare(ordemV(b)));
     let max = 0;
     for (const l of esq.linhas.values()) for (const v of l.values()) if (v > max) max = v;
     const linhas = vencs.map((v) => {
       const l = esq.linhas.get(v);
-      return `<tr>${td(v ? C.rotuloMes(v) : "(sem vencimento)", "rot")}${idx.map((m, j) => {
+      const rot = v === POST ? `após ${C.rotuloMes(limite)}` : v ? C.rotuloMes(v) : "(sem vencimento)";
+      return `<tr>${td(rot, "rot")}${idx.map((m, j) => {
         const x = l.get(m);
         if (x == null) return td("");
         const a = x > 0 && max ? 0.06 + 0.55 * (x / max) : 0;
         const st = a ? ` style="background:rgba(23,107,156,${a.toFixed(3)})${a > 0.4 ? ";color:#fff" : ""}"` : "";
-        return `<td class="${[x < 0 ? "neg" : "", v === meses[j] ? "diag" : ""].filter(Boolean).join(" ")}"${st}>${rs(x)}</td>`;
+        return `<td class="${[x < 0 ? "neg" : "", v === meses[j] ? "diag" : ""].filter(Boolean).join(" ")}"${st}>${fmt(x)}</td>`;
       }).join("")}</tr>`;
     });
-    if ([...esq.desconto.values()].some((v) => v)) linhas.push(`<tr class="desc">${td("Desconto comercial", "rot")}${idx.map((m) => (esq.desconto.get(m) ? tdNum(esq.desconto.get(m), rs) : td(""))).join("")}</tr>`);
+    if ([...esq.desconto.values()].some((v) => v)) linhas.push(`<tr class="desc">${td("Desconto comercial", "rot")}${idx.map((m) => (esq.desconto.get(m) ? tdNum(esq.desconto.get(m), fmt) : td(""))).join("")}</tr>`);
     const tot = idx.map((m) => { let s = esq.desconto.get(m) || 0; for (const l of esq.linhas.values()) s += l.get(m) || 0; return s; });
-    linhas.push(`<tr class="total">${td("Total", "rot")}${tot.map((v) => tdNum(v, rs)).join("")}</tr>`);
-    tabela("tEscada", ["Vencimento", ...meses.map(C.rotuloMes)], linhas);
+    linhas.push(`<tr class="total">${td("Total", "rot")}${tot.map((v) => tdNum(v, fmt)).join("")}</tr>`);
+    tabela("tEscada", ["Vencimento (R$)", ...meses.map(C.rotuloMes)], linhas);
   }
 
   // ===== abas =====
@@ -544,25 +570,27 @@
     btn.textContent = "Gerando…";
     document.body.classList.add("gerando-pdf");
     try {
-      const pdf = new window.jspdf.jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      const W = 297, H = 210, M = 8, larg = W - 2 * M, alt = H - 2 * M;
-      let primeira = true;
+      // cada aba numa folha A4 só: a imagem (em alta resolução, PNG) é reduzida para caber inteira; a folha fica deitada
+      // ou em pé, a que deixar o conteúdo maior
+      let pdf = null;
+      const M = 7;
       for (const aba of Object.keys(ABAS)) {
         mostraAba(aba);
         await quadro();
         const fundo = document.body.classList.contains("bi") ? "#ffffff" : "#f3f6f9";
-        const cv = await window.html2canvas($("area"), { scale: 1.5, backgroundColor: fundo, windowWidth: 1440 });
-        const fatiaPx = Math.floor((cv.width * alt) / larg);
-        for (let y = 0; y < cv.height; y += fatiaPx) {
-          const h = Math.min(fatiaPx, cv.height - y), parte = document.createElement("canvas");
-          parte.width = cv.width; parte.height = h;
-          const ctx = parte.getContext("2d");
-          ctx.fillStyle = fundo; ctx.fillRect(0, 0, parte.width, h);
-          ctx.drawImage(cv, 0, y, cv.width, h, 0, 0, cv.width, h);
-          if (!primeira) pdf.addPage();
-          primeira = false;
-          pdf.addImage(parte.toDataURL("image/jpeg", 0.92), "JPEG", M, M, larg, (h * larg) / cv.width);
-        }
+        const area = $("area");
+        const cv = await window.html2canvas(area, { scale: 3, backgroundColor: fundo, windowWidth: 1440, width: area.scrollWidth, height: area.scrollHeight });
+        const opcoes = [["landscape", 297, 210], ["portrait", 210, 297]].map(([o, W, H]) => {
+          const k = Math.min((W - 2 * M) / cv.width, (H - 2 * M) / cv.height);
+          return { o, W, H, k };
+        });
+        const { o, W, H, k } = opcoes[0].k >= opcoes[1].k ? opcoes[0] : opcoes[1];
+        if (!pdf) pdf = new window.jspdf.jsPDF({ orientation: o, unit: "mm", format: "a4", compress: true });
+        else pdf.addPage("a4", o);
+        const w = cv.width * k, h = cv.height * k;
+        pdf.setFillColor(fundo);
+        pdf.rect(0, 0, W, H, "F");
+        pdf.addImage(cv.toDataURL("image/png"), "PNG", (W - w) / 2, M, w, h, undefined, "FAST");
       }
       pdf.save(`Arrecadacao_${E.mes}_${(E.sup || "todas").toLowerCase()}.pdf`);
     } catch (e) {

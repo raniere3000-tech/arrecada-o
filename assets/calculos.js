@@ -37,9 +37,10 @@
     if (!mes) return "(sem data)";
     return `${MESES_CURTOS[+mes.slice(5, 7) - 1]}/${mes.slice(0, 4)}`;
   }
-  function mesAnterior(mes, n = 1) {
+  function mesAnterior(mes, n = 1) {                    // n negativo: meses depois
     let a = +mes.slice(0, 4), m = +mes.slice(5, 7) - n;
     while (m < 1) { m += 12; a--; }
+    while (m > 12) { m -= 12; a++; }
     return `${a}-${String(m).padStart(2, "0")}`;
   }
 
@@ -225,7 +226,7 @@
       if (this.parcial) { this.junta(this.parcial.exporta()); this.parcial = null; }
       const meses = [...this.meses.keys()].sort();
       const VD = colunas(["mi", "d", "c", "valor", "contas"]), VE = colunas(["mi", "d", "c", "v", "valor"]);
-      const CD = colunas(["mi", "c", "d", "n"]), CF = colunas(["mi", "c", "p", "z", "n", "desc"]);
+      const CD = colunas(["mi", "c", "d", "n"]), CF = colunas(["mi", "c", "m", "n", "desc"]);
       const descontoSemPagamento = {}, ultimoCredito = {};
       meses.forEach((mes, mi) => {
         const M = this.meses.get(mes);
@@ -255,9 +256,8 @@
           const c = k % MAX_COMBOS, lig = (k - c) / MAX_COMBOS;
           let primeiro = 0;
           for (let d = 1; d <= MAX_DIA; d++) if (mask & (1 << d)) { primeiro = d; break; }
-          const tem0 = mask & 1;
           for (let d = 0; d <= MAX_DIA; d++) if (mask & (1 << d)) { const kd = c * 32 + d; cd.set(kd, (cd.get(kd) || 0) + 1); }
-          const kf = c * 64 + primeiro * 2 + tem0, e = cf.get(kf);
+          const kf = c * DIAS_MASK + mask, e = cf.get(kf);
           if (e) e[0]++; else cf.set(kf, [1, 0]);
           if (dm.has(lig)) {
             const ordemEscolha = primeiro || 99, atual = escolha.get(lig);
@@ -271,7 +271,7 @@
         for (const [lig, v] of dm) { const x = escolha.get(lig); if (x) cf.get(x[0])[1] += v; else semPag += v; }
         if (semPag) descontoSemPagamento[mes] = semPag;
         for (const [kd, n] of cd) CD.add(mi, Math.floor(kd / 32), kd % 32, n);
-        for (const [kf, e] of cf) CF.add(mi, Math.floor(kf / 64), Math.floor((kf % 64) / 2), kf % 2, e[0], e[1]);
+        for (const [kf, e] of cf) CF.add(mi, Math.floor(kf / DIAS_MASK), kf % DIAS_MASK, e[0], e[1]);
       });
       this.meses = new Map();
       return {
@@ -285,7 +285,9 @@
   const TIPOS_VD = { mi: Uint8Array, d: Uint8Array, c: Uint16Array, valor: Float64Array, contas: Float64Array };
   const TIPOS_VE = { mi: Uint8Array, d: Uint8Array, c: Uint16Array, v: Uint16Array, valor: Float64Array };
   const TIPOS_CD = { mi: Uint8Array, c: Uint16Array, d: Uint8Array, n: Uint32Array };
-  const TIPOS_CF = { mi: Uint8Array, c: Uint16Array, p: Uint8Array, z: Uint8Array, n: Uint32Array, desc: Float64Array };
+  // CF: por mês × combinação × conjunto de dias em que a ligação pagou (máscara): nº de ligações e o desconto delas
+  const TIPOS_CF = { mi: Uint8Array, c: Uint16Array, m: Uint32Array, n: Uint32Array, desc: Float64Array };
+  const DIAS_MASK = 2 ** 24;
   function colunas(nomes) {                              // tabela por colunas: add(...valores) e fim(tipos) → { tam, coluna: TypedArray }
     const cols = nomes.map(() => []);
     return {
@@ -314,9 +316,12 @@
     });
     return f;
   }
-  // dia útil d entra no corte: 1..N, e o 0 (fins de semana e feriados do mês inteiro) só se incl0 — como o filtro do BI
-  const noCorte = (d, N, incl0) => (d === 0 ? incl0 : d <= N);
-  const cfNoCorte = (CF, i, N, incl0) => (CF.p[i] >= 1 && CF.p[i] <= N) || (incl0 && CF.z[i] === 1);
+  // Seleção de dias úteis = máscara de bits (bit d = dia útil d; bit 0 = fins de semana e feriados do mês inteiro),
+  // igual ao filtro de dias úteis do BI: só os dias marcados entram, em todos os meses comparados.
+  const mascaraAte = (N, incl0 = false) => { let m = incl0 ? 1 : 0; for (let d = 1; d <= N; d++) m |= 1 << d; return m >>> 0; };
+  const diasDaMascara = (sel) => { const out = []; for (let d = 0; d <= MAX_DIA; d++) if (sel & (1 << d)) out.push(d); return out; };
+  const noCorte = (d, sel) => (sel & (1 << d)) !== 0;
+  const cfNoCorte = (CF, i, sel) => (CF.m[i] & sel) !== 0;
   const flagsMeses = (dados, mesesIdx) => { const q = new Uint8Array(dados.meses.length + 1); mesesIdx.forEach((m) => { if (m >= 0) q[m] = 1; }); return q; };
 
   // Por dia útil (0..23) de um mês: valor (sem desconto), contas, clientes distintos no dia
@@ -330,7 +335,7 @@
 
   // Tabela por grupo × mês até o dia útil N: Map rótulo → Map mi → {valor, desconto, contas, clientes}
   // `grupoDe(combo)` dá o rótulo da linha (ex.: c => c.cidade). O desconto entra no valor (Arrecadação = Val. Autenticado + desconto).
-  function porGrupo(dados, mesesIdx, marcas, N, incl0, grupoDe) {
+  function porGrupo(dados, mesesIdx, marcas, sel, grupoDe) {
     const quer = flagsMeses(dados, mesesIdx), linhas = new Map();
     const rotulos = dados.combos.map((c) => grupoDe(c));
     const cel = (rot, mi) => {
@@ -342,41 +347,41 @@
     };
     const V = dados.VD, F = dados.CF;
     for (let i = 0; i < V.tam; i++) {
-      if (!quer[V.mi[i]] || !marcas[V.c[i]] || !noCorte(V.d[i], N, incl0)) continue;
+      if (!quer[V.mi[i]] || !marcas[V.c[i]] || !noCorte(V.d[i], sel)) continue;
       const c = cel(rotulos[V.c[i]], V.mi[i]);
       c.valor += V.valor[i]; c.contas += V.contas[i];
     }
     for (let i = 0; i < F.tam; i++) {
-      if (!quer[F.mi[i]] || !marcas[F.c[i]] || !cfNoCorte(F, i, N, incl0)) continue;
+      if (!quer[F.mi[i]] || !marcas[F.c[i]] || !cfNoCorte(F, i, sel)) continue;
       const c = cel(rotulos[F.c[i]], F.mi[i]);
       c.clientes += F.n[i]; c.desconto -= F.desc[i]; c.valor -= F.desc[i];
     }
     return linhas;
   }
-  function totalDoMes(dados, mi, marcas, N, incl0) {
-    const l = porGrupo(dados, [mi], marcas, N, incl0, () => "T").get("T");
+  function totalDoMes(dados, mi, marcas, sel) {
+    const l = porGrupo(dados, [mi], marcas, sel, () => "T").get("T");
     return (l && l.get(mi)) || { valor: 0, desconto: 0, contas: 0, clientes: 0 };
   }
   // Desconto abatido em cada mês (todas as combinações, mês inteiro)
   function descontoPorMes(dados) {
     const out = new Float64Array(dados.meses.length), F = dados.CF;
-    for (let i = 0; i < F.tam; i++) if (F.p[i] >= 1 || F.z[i]) out[F.mi[i]] += F.desc[i];
+    for (let i = 0; i < F.tam; i++) out[F.mi[i]] += F.desc[i];
     return out;
   }
 
   // Escada: mês de vencimento ("AAAA-MM"; "" = sem) × mês de crédito (valor sem desconto) + o desconto de cada mês à parte
-  function escada(dados, mesesIdx, marcas, N, incl0) {
+  function escada(dados, mesesIdx, marcas, sel) {
     const quer = flagsMeses(dados, mesesIdx), linhas = new Map(), desconto = new Map();
     const E = dados.VE, F = dados.CF;
     for (let i = 0; i < E.tam; i++) {
-      if (!quer[E.mi[i]] || !marcas[E.c[i]] || !noCorte(E.d[i], N, incl0)) continue;
+      if (!quer[E.mi[i]] || !marcas[E.c[i]] || !noCorte(E.d[i], sel)) continue;
       const v = mesDoVenc(E.v[i]);
       let l = linhas.get(v);
       if (!l) { l = new Map(); linhas.set(v, l); }
       l.set(E.mi[i], (l.get(E.mi[i]) || 0) + E.valor[i]);
     }
     for (let i = 0; i < F.tam; i++) {
-      if (!quer[F.mi[i]] || !marcas[F.c[i]] || !F.desc[i] || !cfNoCorte(F, i, N, incl0)) continue;
+      if (!quer[F.mi[i]] || !marcas[F.c[i]] || !F.desc[i] || !cfNoCorte(F, i, sel)) continue;
       desconto.set(F.mi[i], (desconto.get(F.mi[i]) || 0) - F.desc[i]);
     }
     return { linhas, desconto };
@@ -424,7 +429,7 @@
 
   return {
     MAX_DIA, MESES_CURTOS, chave, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
-    zonaInfo, subInfo, chaveLig, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
+    zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
   };
