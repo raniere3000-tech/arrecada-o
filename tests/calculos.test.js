@@ -187,3 +187,23 @@ test("curva: a média começa no mês escolhido (padrão: janeiro do ano)", () =
   assert.deepEqual(C.mesesDaCurva(d, "2026-03", "2025-12"), ["2025-12", "2026-01", "2026-02"]);
   assert.deepEqual(C.mesesDaCurva(d, "2026-01"), ["2025-11", "2025-12"]);   // janeiro: os 12 meses anteriores
 });
+
+test("cliente distinto é a ligação, mesmo com contas de perfis (contratos) diferentes no mês", () => {
+  const perfis = new Map([["7|1", "Adimplente"], ["7|2", "Inadimplente"]]);
+  const a = new C.Agregador({ perfis });
+  a.adiciona(linha(7, "01/10/2026", "10,00", { contrato: "1" }));
+  a.adiciona(linha(7, "01/10/2026", "20,00", { contrato: "2" }));
+  a.adiciona(linha(7, "02/10/2026", "5,00", { contrato: "2" }));
+  a.adiciona(linha(8, "02/10/2026", "5,00"));
+  const d = a.resultado(new Map([["2026-10", new Map([["7", 3]])]])), tudo = C.marcaCombos(d, {});
+  const t = C.totalDoMes(d, 0, tudo, C.mascaraAte(2));
+  assert.equal(t.clientes, 2);                                 // ligações 7 e 8 (antes: 3)
+  perto(t.valor, 40 - 3);                                      // desconto da ligação 7 abatido uma vez
+  const s = C.serieDoMes(d, 0, tudo);
+  assert.equal(s.clientes[1], 1);
+  assert.equal(s.clientes[2], 2);
+  const p = C.porGrupo(d, [0], tudo, C.mascaraAte(2), (c) => c.perfil);
+  assert.equal(p.get("Adimplente").get(0).clientes, 1);       // em cada perfil ela conta uma vez (como no BI)
+  assert.equal(p.get("Inadimplente").get(0).clientes, 1);
+  perto([...p.values()].reduce((x, l) => x + l.get(0).desconto, 0), -3);
+});

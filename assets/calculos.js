@@ -237,7 +237,7 @@
       if (this.parcial) { this.junta(this.parcial.exporta()); this.parcial = null; }
       const meses = [...this.meses.keys()].sort();
       const VD = colunas(["mi", "d", "c", "valor", "contas"]), VE = colunas(["mi", "d", "c", "v", "valor"]);
-      const CD = colunas(["mi", "c", "d", "n"]), CF = colunas(["mi", "c", "m", "n", "desc"]);
+      const CF = colunas(["mi", "ini", "len", "n", "desc"]), SE = colunas(["c", "m"]);
       const descontoSemPagamento = {}, ultimoCredito = {};
       meses.forEach((mes, mi) => {
         const M = this.meses.get(mes);
@@ -252,41 +252,45 @@
         for (const [t, a] of semVenc) { const c = t % MAX_COMBOS; VD.add(mi, (t - c) / MAX_COMBOS, c, a[0], a[1]); }
         M.V = null;
         // dias em que cada (ligação, combinação) pagou: junta as partes do mês (arquivos R1, R4…)
-        let L;
-        if (M.partes.length === 1 && M.partes[0].mapa.every((g, i) => g === i)) L = null;
-        else {
-          L = new Map();
-          for (const { L: P, mapa } of M.partes) for (let i = 0; i < P.k.length; i++) {
-            const c = P.k[i] % MAX_COMBOS, nk = P.k[i] - c + mapa[c];
-            L.set(nk, (L.get(nk) || 0) | P.m[i]);
-          }
+        const L = new Map();
+        for (const { L: P, mapa } of M.partes) for (let i = 0; i < P.k.length; i++) {
+          const c = P.k[i] % MAX_COMBOS, nk = P.k[i] - c + mapa[c];
+          L.set(nk, (L.get(nk) || 0) | P.m[i]);
         }
-        const cd = new Map(), cf = new Map(), dm = new Map(), escolha = new Map();
-        if (descontos && descontos.get(mes)) for (const [lig, v] of descontos.get(mes)) { const k = chaveLig(lig); dm.set(k, (dm.get(k) || 0) + v); }
-        const visita = (k, mask) => {
-          const c = k % MAX_COMBOS, lig = (k - c) / MAX_COMBOS;
-          let primeiro = 0;
-          for (let d = 1; d <= MAX_DIA; d++) if (mask & (1 << d)) { primeiro = d; break; }
-          for (let d = 0; d <= MAX_DIA; d++) if (mask & (1 << d)) { const kd = c * 32 + d; cd.set(kd, (cd.get(kd) || 0) + 1); }
-          const kf = c * DIAS_MASK + mask, e = cf.get(kf);
-          if (e) e[0]++; else cf.set(kf, [1, 0]);
-          if (dm.has(lig)) {
-            const ordemEscolha = primeiro || 99, atual = escolha.get(lig);
-            if (!atual || ordemEscolha < atual[1]) escolha.set(lig, [kf, ordemEscolha]);
-          }
-        };
-        if (L) for (const [k, mask] of L) visita(k, mask);
-        else { const P = M.partes[0].L; for (let i = 0; i < P.k.length; i++) visita(P.k[i], P.m[i]); }
         M.partes = null;
+        const dm = new Map();
+        if (descontos && descontos.get(mes)) for (const [lig, v] of descontos.get(mes)) { const k = chaveLig(lig); dm.set(k, (dm.get(k) || 0) + v); }
+        // Cliente distinto é a LIGAÇÃO (como o DISTINCTCOUNT do BI), mesmo que ela apareça em mais de uma combinação
+        // (ex.: contas com contratos de perfis diferentes). Cada ligação vira uma "assinatura": a lista de
+        // (combinação, dias em que pagou). Ligações com a mesma assinatura são somadas numa linha.
+        const chaves = Float64Array.from(L.keys()).sort();
+        const sigs = new Map();                        // chave da assinatura → { ent: [[c, máscara]], n, desc }
+        for (let a = 0; a < chaves.length;) {
+          const lig = Math.floor(chaves[a] / MAX_COMBOS);
+          let b = a;
+          while (b < chaves.length && Math.floor(chaves[b] / MAX_COMBOS) === lig) b++;
+          const ent = [];
+          for (let x = a; x < b; x++) ent.push([chaves[x] - lig * MAX_COMBOS, L.get(chaves[x])]);
+          if (ent.length > 1) ent.sort((e1, e2) => primeiroDia(e1[1]) - primeiroDia(e2[1]) || e1[0] - e2[0]);
+          const k = ent.length === 1 ? ent[0][0] * DIAS_MASK + ent[0][1] : ent.map((e) => e[0] + ":" + e[1]).join(",");
+          let sg = sigs.get(k);
+          if (!sg) { sg = { ent, n: 0, desc: 0 }; sigs.set(k, sg); }
+          sg.n++;
+          const d = dm.get(lig);
+          if (d) { sg.desc += d; dm.delete(lig); }
+          a = b;
+        }
         let semPag = 0;
-        for (const [lig, v] of dm) { const x = escolha.get(lig); if (x) cf.get(x[0])[1] += v; else semPag += v; }
+        for (const v of dm.values()) semPag += v;
         if (semPag) descontoSemPagamento[mes] = semPag;
-        for (const [kd, n] of cd) CD.add(mi, Math.floor(kd / 32), kd % 32, n);
-        for (const [kf, e] of cf) CF.add(mi, Math.floor(kf / DIAS_MASK), kf % DIAS_MASK, e[0], e[1]);
+        for (const sg of sigs.values()) {
+          CF.add(mi, SE.tam(), sg.ent.length, sg.n, sg.desc);
+          for (const [c, m] of sg.ent) SE.add(c, m);
+        }
       });
       this.meses = new Map();
       return {
-        meses, combos: this.combos, VD: VD.fim(TIPOS_VD), VE: VE.fim(TIPOS_VE), CD: CD.fim(TIPOS_CD), CF: CF.fim(TIPOS_CF),
+        meses, combos: this.combos, VD: VD.fim(TIPOS_VD), VE: VE.fim(TIPOS_VE), CF: CF.fim(TIPOS_CF), SE: SE.fim(TIPOS_SE),
         descontoSemPagamento, ultimoCredito,
         linhas: this.linhas, descartadas: this.descartadas, ultimaAtualizacao: this.ultimaAtualizacao,
         zonasSemSup: [...this.zonasSemSup.keys()], subSemClasse: [...this.subSemClasse.keys()],
@@ -295,14 +299,16 @@
   }
   const TIPOS_VD = { mi: Uint8Array, d: Uint8Array, c: Uint16Array, valor: Float64Array, contas: Float64Array };
   const TIPOS_VE = { mi: Uint8Array, d: Uint8Array, c: Uint16Array, v: Uint16Array, valor: Float64Array };
-  const TIPOS_CD = { mi: Uint8Array, c: Uint16Array, d: Uint8Array, n: Uint32Array };
-  // CF: por mês × combinação × conjunto de dias em que a ligação pagou (máscara): nº de ligações e o desconto delas
-  const TIPOS_CF = { mi: Uint8Array, c: Uint16Array, m: Uint32Array, n: Uint32Array, desc: Float64Array };
+  // CF: por mês × assinatura (SE[ini .. ini+len-1] = combinações e dias em que a ligação pagou): nº de ligações e o desconto delas
+  const TIPOS_CF = { mi: Uint8Array, ini: Uint32Array, len: Uint16Array, n: Uint32Array, desc: Float64Array };
+  const TIPOS_SE = { c: Uint16Array, m: Uint32Array };
+  const primeiroDia = (mask) => { for (let d = 1; d <= MAX_DIA; d++) if (mask & (1 << d)) return d; return 99; };
   const DIAS_MASK = 2 ** 24;
   function colunas(nomes) {                              // tabela por colunas: add(...valores) e fim(tipos) → { tam, coluna: TypedArray }
     const cols = nomes.map(() => []);
     return {
       add(...v) { for (let i = 0; i < cols.length; i++) cols[i].push(v[i]); },
+      tam() { return cols[0].length; },
       fim(tipos) {
         const t = { tam: cols[0].length };
         nomes.forEach((nome, i) => { t[nome] = tipos[nome].from(cols[i]); cols[i] = null; });
@@ -313,7 +319,7 @@
   // buffers das tabelas, para o worker transferir sem copiar
   function buffers(dados) {
     const out = [];
-    for (const t of [dados.VD, dados.VE, dados.CD, dados.CF]) for (const v of Object.values(t)) if (ArrayBuffer.isView(v)) out.push(v.buffer);
+    for (const t of [dados.VD, dados.VE, dados.CF, dados.SE]) for (const v of Object.values(t)) if (ArrayBuffer.isView(v)) out.push(v.buffer);
     return out;
   }
 
@@ -332,15 +338,19 @@
   const mascaraAte = (N, incl0 = false) => { let m = incl0 ? 1 : 0; for (let d = 1; d <= N; d++) m |= 1 << d; return m >>> 0; };
   const diasDaMascara = (sel) => { const out = []; for (let d = 0; d <= MAX_DIA; d++) if (sel & (1 << d)) out.push(d); return out; };
   const noCorte = (d, sel) => (sel & (1 << d)) !== 0;
-  const cfNoCorte = (CF, i, sel) => (CF.m[i] & sel) !== 0;
   const flagsMeses = (dados, mesesIdx) => { const q = new Uint8Array(dados.meses.length + 1); mesesIdx.forEach((m) => { if (m >= 0) q[m] = 1; }); return q; };
 
   // Por dia útil (0..23) de um mês: valor (sem desconto), contas, clientes distintos no dia
   function serieDoMes(dados, mi, marcas) {
     const s = { valor: new Float64Array(MAX_DIA + 1), contas: new Float64Array(MAX_DIA + 1), clientes: new Float64Array(MAX_DIA + 1) };
-    const V = dados.VD, D = dados.CD;
+    const V = dados.VD, F = dados.CF, S = dados.SE;
     for (let i = 0; i < V.tam; i++) if (V.mi[i] === mi && marcas[V.c[i]]) { s.valor[V.d[i]] += V.valor[i]; s.contas[V.d[i]] += V.contas[i]; }
-    for (let i = 0; i < D.tam; i++) if (D.mi[i] === mi && marcas[D.c[i]]) s.clientes[D.d[i]] += D.n[i];
+    for (let i = 0; i < F.tam; i++) {
+      if (F.mi[i] !== mi) continue;
+      let u = 0;                                       // dias em que a ligação pagou em alguma combinação do filtro
+      for (let e = F.ini[i]; e < F.ini[i] + F.len[i]; e++) if (marcas[S.c[e]]) u |= S.m[e];
+      for (let d = 0; u && d <= MAX_DIA; d++) if (u & (1 << d)) s.clientes[d] += F.n[i];
+    }
     return s;
   }
 
@@ -356,16 +366,26 @@
       if (!c) { c = { valor: 0, desconto: 0, contas: 0, clientes: 0 }; l.set(mi, c); }
       return c;
     };
-    const V = dados.VD, F = dados.CF;
+    const V = dados.VD, F = dados.CF, S = dados.SE;
     for (let i = 0; i < V.tam; i++) {
       if (!quer[V.mi[i]] || !marcas[V.c[i]] || !noCorte(V.d[i], sel)) continue;
       const c = cel(rotulos[V.c[i]], V.mi[i]);
       c.valor += V.valor[i]; c.contas += V.contas[i];
     }
+    // a ligação conta uma vez em cada linha onde pagou nos dias marcados; o desconto vai para a 1ª delas
+    const vistos = [];
     for (let i = 0; i < F.tam; i++) {
-      if (!quer[F.mi[i]] || !marcas[F.c[i]] || !cfNoCorte(F, i, sel)) continue;
-      const c = cel(rotulos[F.c[i]], F.mi[i]);
-      c.clientes += F.n[i]; c.desconto -= F.desc[i]; c.valor -= F.desc[i];
+      if (!quer[F.mi[i]]) continue;
+      vistos.length = 0;
+      for (let e = F.ini[i]; e < F.ini[i] + F.len[i]; e++) {
+        if (!marcas[S.c[e]] || !(S.m[e] & sel)) continue;
+        const rot = rotulos[S.c[e]];
+        if (vistos.includes(rot)) continue;
+        const c = cel(rot, F.mi[i]);
+        c.clientes += F.n[i];
+        if (!vistos.length) { c.desconto -= F.desc[i]; c.valor -= F.desc[i]; }
+        vistos.push(rot);
+      }
     }
     return linhas;
   }
@@ -383,7 +403,7 @@
   // Escada: mês de vencimento ("AAAA-MM"; "" = sem) × mês de crédito (valor sem desconto) + o desconto de cada mês à parte
   function escada(dados, mesesIdx, marcas, sel) {
     const quer = flagsMeses(dados, mesesIdx), linhas = new Map(), desconto = new Map();
-    const E = dados.VE, F = dados.CF;
+    const E = dados.VE, F = dados.CF, S = dados.SE;
     for (let i = 0; i < E.tam; i++) {
       if (!quer[E.mi[i]] || !marcas[E.c[i]] || !noCorte(E.d[i], sel)) continue;
       const v = mesDoVenc(E.v[i]);
@@ -392,8 +412,10 @@
       l.set(E.mi[i], (l.get(E.mi[i]) || 0) + E.valor[i]);
     }
     for (let i = 0; i < F.tam; i++) {
-      if (!quer[F.mi[i]] || !marcas[F.c[i]] || !F.desc[i] || !cfNoCorte(F, i, sel)) continue;
-      desconto.set(F.mi[i], (desconto.get(F.mi[i]) || 0) - F.desc[i]);
+      if (!quer[F.mi[i]] || !F.desc[i]) continue;
+      let pagou = false;
+      for (let e = F.ini[i]; e < F.ini[i] + F.len[i] && !pagou; e++) pagou = marcas[S.c[e]] && (S.m[e] & sel) !== 0;
+      if (pagou) desconto.set(F.mi[i], (desconto.get(F.mi[i]) || 0) - F.desc[i]);
     }
     return { linhas, desconto };
   }
