@@ -81,14 +81,16 @@ main { max-width: 1400px; margin: 0 auto; padding: 0 16px 48px; }
 .wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-family: var(--fonte-cond); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 th, td { border: 1px solid var(--linha); padding: 5px 8px; text-align: right; white-space: nowrap; }
+td { color: #000; }                                     /* números em preto (as células de fundo escuro mudam a cor abaixo) */
 th { background: var(--marinho); color: #fff; font-weight: 600; font-size: 11.5px; text-align: center; }
 td.rot { text-align: left; }
 td.du { text-align: center; }
 tbody tr:nth-child(even) td { background: var(--zebra); }
 tbody tr:hover td { background: var(--tint); }
 tr.total td { font-weight: 700; background: var(--tint) !important; }
-tr.desc td { color: var(--azul-claro); font-style: italic; }
-tr.det td.rot { padding-left: 24px; color: var(--azul-claro); }
+tr.desc td { color: #000; font-style: italic; }
+tr.det td.rot { padding-left: 24px; }
+table.categorias tr:not(.det) td.rot { font-weight: 700; }     /* Subcategoria: nome das categorias em negrito */
 td.neg { color: var(--laranja-texto); }
 tr.fora td { color: #b6c2cf; }
 tr.grupo td.rot { cursor: pointer; font-weight: 600; }
@@ -145,7 +147,7 @@ body.bi tbody tr:nth-child(even) td, body.bi tbody tr:hover td { background: tra
 body.bi td.rot, body.bi td.du { background: var(--bi) !important; color: #fff; }
 body.bi tr.total td { background: transparent !important; border-top: 1px solid #999; }
 body.bi tr.total td.rot, body.bi tr.total td.du { background: var(--bi) !important; color: #fff; }
-body.bi td.neg { color: inherit; }
+body.bi td.neg { color: #000; }
 body.bi .toggle { border-radius: 0; }
 body.bi /* tabelas largas (14 meses): letra menor e células justas para caber na tela sem rolar para o lado */
 table.compacta { font-size: 11.5px; }

@@ -9,7 +9,7 @@
   const DIGITADO = "__digitado";                      // opção do seletor de orçado: o valor digitado no painel
   const E = {
     res: null, sup: "INTERIOR", cidade: "", grupo: "", mes: "", sel: 0, aba: "resumo",
-    abertos: new Set(), ajustes: { orcado: {}, curva: {} }, pasta: null, rodando: false,
+    abertos: new Set(["PUBLICO"]), ajustes: { orcado: {}, curva: {} }, pasta: null, rodando: false,
   };
   try { $("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) { /* sem versão */ }
 
@@ -324,7 +324,8 @@
     const filtros = [`Superintendência: ${nomeSup(E.sup)}`, E.cidade ? `Cidade: ${E.cidade}` : "", E.grupo ? `Subcategoria: ${E.grupo}` : "",
       `Mês: ${C.rotuloMes(E.mes)}`, `Orçado: ${fonteAtiva(E.mes) === DIGITADO ? "digitado" : fonteAtiva(E.mes)}`,
       `dias úteis: ${rotuloSel(E.sel)}`].filter(Boolean).join(" · ");
-    $("cabecalhoPdf").innerHTML = `<h1>Arrecadação Diária — ${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
+    // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
+    $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
     ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada })[E.aba]();
   }
