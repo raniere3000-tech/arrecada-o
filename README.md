@@ -22,7 +22,7 @@ Os CSVs já lidos ficam guardados no navegador: na atualização do dia, só o a
 | Arrecadação acumulada | o mesmo CSV em qualquer outra pasta (um por mês) | Meses anteriores. O mês que está no diário é lido só do diário |
 | `Base_Desconto - 25.05.xlsx` | colunas NUM_LIGACAO, REFERENCIA e DESCONTO | Desconto comercial |
 | `Cluster_Cliente_Lagos - 08.08.xlsx` | colunas NUM_LIGACAO, SEQ_RESPONSAVEL e CLUSTER SALDO | Perfil de pagamento |
-| Orçado (RF do faturamento) | colunas Sup, Rubrica e um mês por coluna, com a linha **ARRECADAÇÃO CRÉDITO** | Orçado mensal por superintendência |
+| Orçados (RF01T26, RF02T26, RF3T25…) | colunas Sup, Rubrica e um mês por coluna (`jan/26` ou `Soma de 01/10/2025`), com a linha da arrecadação: `(+) Arrecadação`, `05.01. Arrecadação` ou `ARRECADAÇÃO CRÉDITO` | Orçado mensal; o seletor **Orçado** do cabeçalho escolhe a planilha |
 | `ajustes_arrecadacao.json` | gravado pelo painel | Orçado digitado e curva do orçado diário editada (vale para todos que usam a pasta) |
 
 Outras planilhas (Cadastro, Faturões…) são listadas em "Arquivos lidos e avisos" como não usadas.
@@ -35,9 +35,10 @@ Outras planilhas (Cadastro, Faturões…) são listadas em "Arquivos lidos e avi
   **Ticket médio** = arrecadação ÷ contas pagas.
 - **Dia útil**: sem fins de semana e feriados nacionais e do RJ (`assets/regras.js`). Todos os meses são comparados até o mesmo
   nº de dia útil. O botão **0** inclui os créditos de fins de semana e feriados (no BI ele fica desmarcado).
-- **Orçado mensal**: linha ARRECADAÇÃO CRÉDITO do RF, pela Sup (LAGOS = Interior). Sem RF, o valor pode ser digitado no Resumo.
-- **Orçado diário**: curva média da participação de cada dia útil (1 a 23) no total arrecadado de janeiro até o mês anterior
-  (em janeiro, os 12 meses anteriores). Num mês com menos dias úteis, a parte dos dias que sobram é dividida igualmente entre os
+- **Orçado mensal**: linha da arrecadação do RF escolhido em **Orçado** (padrão: o RF mais novo que tem o mês), pela Sup
+  (LAGOS = Interior). Também dá para digitar o valor no Resumo ("Digitado no painel").
+- **Orçado diário**: curva média da participação de cada dia útil (1 a 23) no total arrecadado do mês escolhido em
+  "Média a partir de" (padrão: janeiro do ano) até o mês anterior (em janeiro, os 12 meses anteriores). Num mês com menos dias úteis, a parte dos dias que sobram é dividida igualmente entre os
   dias do mês; o 0 (fins de semana e feriados) também sai da média. A curva pode ser editada em **Resumo › Orçado do mês e curva**.
 - **Superintendência** pela cidade (Zona): cidades "Lagos" do BI = **Interior**, "R4" = **Leste** (`assets/regras.js`).
 - **Subcategoria** e o detalhe do Público pela tabela do BI (47 códigos); código fora da tabela aparece em "Sem classificação".

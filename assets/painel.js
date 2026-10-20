@@ -6,6 +6,7 @@
   const ARQ_AJUSTES = "ajustes_arrecadacao.json";
   const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada" };
   const NOME_SUP = { INTERIOR: "Interior", LESTE: "Leste", [R.SEM_SUP]: "Sem SUP" };
+  const DIGITADO = "__digitado";                      // opção do seletor de orçado: o valor digitado no painel
   const E = {
     res: null, sup: "INTERIOR", cidade: "", grupo: "", mes: "", sel: 0, aba: "resumo",
     abertos: new Set(), ajustes: { orcado: {}, curva: {} }, pasta: null, rodando: false,
@@ -198,13 +199,13 @@
   }
 
   function listaArquivos(res) {
-    const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (ARRECADAÇÃO CRÉDITO)", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
+    const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (linha da arrecadação)", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
     const linhas = res.arquivos.map((a) => `<tr>${td(esc(a.rel), "rot")}${td(USO[a.tipo] || a.tipo, "rot")}${td(a.registros != null ? fmt(a.registros) : "")}`
       + `${td(esc((a.meses || []).map(C.rotuloMes).join(", ")), "rot")}${td(esc(a.motivo || [a.puladas ? `${fmt(a.puladas)} linhas de mês que está no arquivo diário não foram usadas` : "", a.doCache ? "já lido antes (guardado neste navegador)" : ""].filter(Boolean).join("; ")), "rot")}</tr>`).join("");
     const d = res.dados, avisos = [];
     if (!res.temDesconto) avisos.push("Planilha de desconto comercial não encontrada: a arrecadação aparece sem o desconto.");
     if (!res.temPerfil) avisos.push("Planilha de perfil do cliente (Cluster) não encontrada: todos aparecem como “Sem perfil”.");
-    if (!res.orcados.length) avisos.push("Nenhuma planilha de orçado com a linha ARRECADAÇÃO CRÉDITO: digite o orçado do mês no Resumo (Orçado do mês e curva).");
+    if (!res.orcados.length) avisos.push("Nenhuma planilha de orçado (RF) com a linha da arrecadação: digite o orçado do mês no Resumo (Orçado do mês e curva).");
     if (d.zonasSemSup.length) avisos.push(`Zonas fora da relação de cidades (aparecem em “Sem SUP”): ${esc(d.zonasSemSup.join(", "))}.`);
     if (d.subSemClasse.length) avisos.push(`Subcategorias fora da relação (aparecem em “${R.SEM_CLASSIFICACAO}”): ${esc(d.subSemClasse.join(", "))}.`);
     const descMes = C.descontoPorMes(d);
@@ -237,11 +238,33 @@
     if (!grupos.includes(E.grupo)) E.grupo = "";
     opcoes($("selGrupo"), [["", "Todas"], ...grupos.map((g) => [g, g])], E.grupo);
     opcoes($("selMes"), [...d.meses].reverse().map((m) => [m, C.rotuloMes(m)]), E.mes);
+    montaSeletorOrcado();
   }
+  // Seletor de orçado: as planilhas RF da pasta (a mais nova primeiro) e o valor digitado no painel
+  function fontesOrcado() {
+    return [...new Set(E.res.orcados.map((o) => o.fonte))].sort((a, b) => C.ordemOrcado(b) - C.ordemOrcado(a) || a.localeCompare(b));
+  }
+  // Orçado em uso no mês: o escolhido; sem escolha (ou planilha que não está na pasta), o RF mais novo que tem o mês
+  function fonteAtiva(mes) {
+    const fontes = fontesOrcado();
+    if (E.fonte === DIGITADO || fontes.includes(E.fonte)) return E.fonte;
+    const comMes = fontes.find((f) => E.res.orcados.some((o) => o.fonte === f && o.mes === mes));
+    return comMes || (E.ajustes.orcado[mes] ? DIGITADO : fontes[0] || DIGITADO);
+  }
+  function montaSeletorOrcado() {
+    const mes = E.mes, temMes = (f) => E.res.orcados.some((o) => o.fonte === f && o.mes === mes);
+    opcoes($("selOrc"), [...fontesOrcado().map((f) => [f, temMes(f) ? f : `${f} (sem ${C.rotuloMes(mes)})`]), [DIGITADO, "Digitado no painel"]], fonteAtiva(mes));
+  }
+  $("selOrc").addEventListener("change", (e) => {
+    E.fonte = e.target.value;
+    try { localStorage.setItem("arrecadacao_orcado", E.fonte); } catch (x) { /* sem armazenamento */ }
+    desenha();
+  });
+  try { E.fonte = localStorage.getItem("arrecadacao_orcado") || ""; } catch (x) { E.fonte = ""; }
   $("selSup").addEventListener("change", (e) => { E.sup = e.target.value; montaFiltros(); desenha(); });
   $("selCidade").addEventListener("change", (e) => { E.cidade = e.target.value; desenha(); });
   $("selGrupo").addEventListener("change", (e) => { E.grupo = e.target.value; desenha(); });
-  $("selMes").addEventListener("change", (e) => { E.mes = e.target.value; E.sel = C.mascaraAte(diaPadrao(E.mes)); desenha(); });
+  $("selMes").addEventListener("change", (e) => { E.mes = e.target.value; E.sel = C.mascaraAte(diaPadrao(E.mes)); montaSeletorOrcado(); desenha(); });
 
   function ordena(lista, ordem) {
     const pos = (x) => { const i = ordem.indexOf(x); return i < 0 ? 999 : i; };
@@ -263,23 +286,27 @@
   const marcasSup = (sup) => C.marcaCombos(E.res.dados, { sup });
   const filtroParcial = () => !!(E.cidade || E.grupo);
 
-  // Orçado mensal da SUP ("" = todas): digitado no painel ou da planilha RF
+  // Orçado mensal da SUP ("" = todas) no orçado escolhido: uma planilha RF ou o valor digitado no painel
   function orcadoMensal(mes, sup) {
-    const chaveSup = sup || "TODAS", dig = (E.ajustes.orcado[mes] || {})[chaveSup];
-    if (dig != null && isFinite(dig)) return { valor: +dig, fonte: "digitado no painel" };
+    const f = fonteAtiva(mes);
+    if (f === DIGITADO) {
+      const dig = (E.ajustes.orcado[mes] || {})[sup || "TODAS"];
+      if (dig != null && isFinite(dig)) return { valor: +dig, fonte: "digitado no painel" };
+    }
     if (!sup) {
       const partes = supsDisponiveis().filter((s) => R.SUPS.includes(s)).map((s) => orcadoMensal(mes, s));
       const comValor = partes.filter((p) => p.valor != null);
       if (!comValor.length) return { valor: null, fonte: "" };
-      return { valor: comValor.reduce((a, p) => a + p.valor, 0), fonte: "soma das superintendências" };
+      return { valor: comValor.reduce((a, p) => a + p.valor, 0), fonte: comValor.length > 1 ? "soma das superintendências" : comValor[0].fonte };
     }
-    const linhas = E.res.orcados.filter((o) => o.mes === mes && o.sup === sup);
+    if (f === DIGITADO) return { valor: null, fonte: "" };
+    const linhas = E.res.orcados.filter((o) => o.fonte === f && o.mes === mes && o.sup === sup);
     if (!linhas.length) return { valor: null, fonte: "" };
-    return { valor: linhas.reduce((a, o) => a + o.valor, 0), fonte: "planilha " + [...new Set(linhas.map((o) => o.arquivo))].join(", ") };
+    return { valor: linhas.reduce((a, o) => a + o.valor, 0), fonte: f };
   }
   // Curva do mês: editada no painel ou a média de janeiro até o mês anterior
   function curvaDoMes(mes, sup) {
-    const media = C.curvaMedia(E.res.dados, mes, marcasSup(sup));
+    const media = C.curvaMedia(E.res.dados, mes, marcasSup(sup), E.ajustes.curvaInicio);
     let padrao;
     if (media.media) padrao = C.distribuiCurva(media.media, mes);
     else {                                             // sem histórico: divide igualmente entre os dias úteis
@@ -295,7 +322,8 @@
     if (!E.res) return;
     desenhaDias();
     const filtros = [`Superintendência: ${nomeSup(E.sup)}`, E.cidade ? `Cidade: ${E.cidade}` : "", E.grupo ? `Subcategoria: ${E.grupo}` : "",
-      `Mês: ${C.rotuloMes(E.mes)}`, `dias úteis: ${rotuloSel(E.sel)}`].filter(Boolean).join(" · ");
+      `Mês: ${C.rotuloMes(E.mes)}`, `Orçado: ${fonteAtiva(E.mes) === DIGITADO ? "digitado" : fonteAtiva(E.mes)}`,
+      `dias úteis: ${rotuloSel(E.sel)}`].filter(Boolean).join(" · ");
     $("cabecalhoPdf").innerHTML = `<h1>Arrecadação Diária — ${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
     ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada })[E.aba]();
@@ -352,7 +380,8 @@
     let orcAte = 0;
     for (const k of dias) orcAte += orcDia(k);
     const delta = temOrc && orcAte ? tot.valor / orcAte - 1 : NaN;
-    const semOrc = filtroParcial() ? "o orçado é por superintendência (Cidade e Subcategoria = Todas)" : "sem orçado do mês";
+    const semOrc = filtroParcial() ? "o orçado é por superintendência (Cidade e Subcategoria = Todas)"
+      : `sem orçado de ${C.rotuloMes(E.mes)} em ${fonteAtiva(E.mes) === DIGITADO ? "Digitado" : fonteAtiva(E.mes)}`;
     $("kpis").innerHTML = [
       ["Orçado mensal", temOrc ? milhoes(orc.valor) : "—", temOrc ? `${C.rotuloMes(E.mes)} · ${esc(orc.fonte)}` : semOrc],
       ["Orçado nos dias", temOrc ? milhoes(orcAte) : "—", `dias úteis ${rotuloSel(sel)} de ${cal.uteis}`],
@@ -414,12 +443,18 @@
     const somaP = cv.pesos.reduce((a, b) => a + b, 0), somaPad = cv.padrao.reduce((a, b) => a + b, 0);
     linhas.push(`<tr class="total">${td("Total", "du")}${td("")}${td(pctInput(somaPad) + "%")}${td(pctInput(somaP) + "%")}${td(orc.valor != null ? fmt(orc.valor * somaP) : "—")}</tr>`);
     const mesesMedia = cv.mesesMedia.length ? `${C.rotuloMes(cv.mesesMedia[0])} a ${C.rotuloMes(cv.mesesMedia[cv.mesesMedia.length - 1])} (${cv.mesesMedia.length} meses)` : "nenhum mês anterior na pasta: dividida igualmente";
+    const inicio = E.ajustes.curvaInicio && E.ajustes.curvaInicio < E.mes ? E.ajustes.curvaInicio : E.mes.slice(0, 4) + "-01";
+    const opInicio = E.res.dados.meses.filter((m) => m < E.mes);
+    if (!opInicio.includes(inicio)) opInicio.unshift(inicio);
     corpo.innerHTML = `
-      <div class="orc-linha"><b>Orçado mensal (ARRECADAÇÃO CRÉDITO) — ${esc(rot)}:</b>
-        <input type="text" inputmode="decimal" id="inOrc" value="${orc.valor != null ? fmt(orc.valor, 2) : ""}" placeholder="R$">
-        <button type="button" class="btn" id="btnSalvaOrc">Salvar orçado</button>
-        ${orc.fonte === "digitado no painel" ? '<button type="button" class="btn sec" id="btnLimpaOrc">Voltar ao da planilha</button>' : ""}
-        <span class="salvo">${orc.valor != null ? "fonte: " + esc(orc.fonte) : "sem orçado na planilha RF: digite o valor"}</span></div>
+      <div class="orc-linha"><b>Orçado mensal (arrecadação) — ${esc(rot)}:</b>
+        <span>${orc.valor != null ? `<b>${rs(orc.valor)}</b> · ${esc(orc.fonte)}` : "sem valor no orçado escolhido"}</span>
+        <span class="salvo">· troque a planilha em <b>Orçado</b>, no cabeçalho, ou digite um valor:</span>
+        <input type="text" inputmode="decimal" id="inOrc" value="${orc.fonte === "digitado no painel" ? fmt(orc.valor, 2) : ""}" placeholder="R$">
+        <button type="button" class="btn sec" id="btnSalvaOrc">Usar valor digitado</button></div>
+      <div class="orc-linha"><b>Média a partir de:</b>
+        <select id="selInicio">${opInicio.map((m) => `<option value="${m}"${m === inicio ? " selected" : ""}>${C.rotuloMes(m)}</option>`).join("")}</select>
+        <span class="salvo">até o mês anterior ao escolhido (vale para todos que usam a pasta)</span></div>
       <p class="nota">Curva do orçado diário: a <b>média</b> é a participação de cada dia útil no total arrecadado de ${esc(mesesMedia)}.
         Os dias que passam de ${cal.uteis} (o nº de dias úteis de ${C.rotuloMes(E.mes)}) têm a parte dividida igualmente entre os ${cal.uteis} dias;
         o 0 vale para os fins de semana e feriados do mês. Edite o <b>peso usado</b> e salve: a soma é ajustada para 100% e vale para todos que usam a pasta.</p>
@@ -432,11 +467,14 @@
       if (!isFinite(v) || v <= 0) { toast("Digite o orçado em reais, ex.: 12.103.044,93", true); return; }
       const r = await gravaAjustes((a) => { (a.orcado[E.mes] = a.orcado[E.mes] || {})[chaveSup] = v; });
       avisoGravacao(r, "Orçado salvo");
+      if (r.ok) { E.fonte = DIGITADO; try { localStorage.setItem("arrecadacao_orcado", DIGITADO); } catch (x) { /* sem armazenamento */ } }
+      montaSeletorOrcado();
       desenha();
     };
-    if ($("btnLimpaOrc")) $("btnLimpaOrc").onclick = async () => {
-      const r = await gravaAjustes((a) => { if (a.orcado[E.mes]) delete a.orcado[E.mes][chaveSup]; });
-      avisoGravacao(r, "Orçado voltou ao da planilha");
+    $("selInicio").onchange = async (e) => {
+      const v = e.target.value;
+      const r = await gravaAjustes((a) => { a.curvaInicio = v; });
+      avisoGravacao(r, `Média a partir de ${C.rotuloMes(v)}`);
       desenha();
     };
     $("btnSalvaCurva").onclick = async () => {

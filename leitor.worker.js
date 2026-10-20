@@ -107,7 +107,7 @@ function refDaCelula(v) {                              // data (Date, serial do 
   if (v == null || v === "") return "";
   if (v instanceof Date) return C.dataISO(v).slice(0, 7);
   if (typeof v === "number") { const d = XLSX.SSF.parse_date_code(v); return d ? `${d.y}-${String(d.m).padStart(2, "0")}` : ""; }
-  const s = String(v).trim();
+  const s = String(v).trim().replace(/^soma\s+de\s+/i, "");     // "Soma de 01/10/2025" (tabela dinâmica)
   const iso = C.dataISO(s);
   if (iso) return iso.slice(0, 7);
   let m = /^(\d{1,2})\/(\d{4})$/.exec(s);
@@ -119,7 +119,7 @@ function refDaCelula(v) {                              // data (Date, serial do 
   }
   return "";
 }
-// Orçado (RF): colunas Sup, Rubrica e um mês por coluna; usa a linha ARRECADAÇÃO CRÉDITO
+// Orçado (RF): colunas Sup, Rubrica e um mês por coluna; usa a linha da arrecadação ("(+) Arrecadação", "05.01. Arrecadação"…)
 async function leOrcado(file, aba) {
   const linhas = linhasDaAba(leLivro(await file.arrayBuffer()), aba);
   const cab = achaCabecalho(linhas, COLS_ORCADO), { SUP: s, RUBRICA: r } = cab.idx;
@@ -128,7 +128,7 @@ async function leOrcado(file, aba) {
   const out = [];
   for (let i = cab.i + 1; i < linhas.length; i++) {
     const l = linhas[i];
-    if (!l || !C.chave(l[r]).includes("ARRECADACAOCREDITO")) continue;
+    if (!l || !C.ehLinhaArrecadacao(l[r])) continue;
     let sup = C.chave(l[s]);
     if (sup === "LAGOS") sup = "INTERIOR";
     for (const [j, ref] of colMes) {
@@ -222,10 +222,11 @@ async function processa(itens) {
       if (a.tipo === "desconto") { avisa("progresso", { pct: 14, texto: `Lendo descontos: ${a.rel}` }); a.registros = await leDesconto(a, descontos); a.livro = null; }
       if (a.tipo === "orcado") {
         const o = await leOrcado(a.file, a.aba);
-        o.forEach((x) => { x.arquivo = a.rel; });
+        const fonte = a.rel.split("/").pop().replace(/\.[^.]+$/, "");
+        o.forEach((x) => { x.arquivo = a.rel; x.fonte = fonte; });
         orcados.push(...o);
         a.registros = o.length;
-        if (!o.length) { a.tipo = "ignorado"; a.motivo = "planilha de orçado sem a linha ARRECADAÇÃO CRÉDITO"; }
+        if (!o.length) { a.tipo = "ignorado"; a.motivo = "planilha de orçado sem a linha da arrecadação"; }
       }
     } catch (e) {
       a.motivo = "não foi possível ler: " + ((e && e.message) || e); a.erro = true; a.tipo = "ignorado";

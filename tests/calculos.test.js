@@ -173,3 +173,17 @@ test("dias úteis escolhidos um a um (ex.: só o 1 e o 3)", () => {
   assert.equal(C.totalDoMes(d, 1, tudo, 0).valor, 0);
   assert.deepEqual(C.diasDaMascara(so13), [1, 3]);
 });
+
+test("orçado: linha da arrecadação nos três modelos de RF e ordem das planilhas", () => {
+  ["ARRECADAÇÃO CRÉDITO", "(+) Arrecadação", "05.01. Arrecadação"].forEach((r) => assert.ok(C.ehLinhaArrecadacao(r), r));
+  ["ARRECADAÇÃO BAIXA", "Faturamento Bruto", "", null].forEach((r) => assert.ok(!C.ehLinhaArrecadacao(r), String(r)));
+  const ordem = ["RF02T26", "RF3T25", "RF01T26"].sort((a, b) => C.ordemOrcado(a) - C.ordemOrcado(b));
+  assert.deepEqual(ordem, ["RF3T25", "RF01T26", "RF02T26"]);
+});
+
+test("curva: a média começa no mês escolhido (padrão: janeiro do ano)", () => {
+  const d = { meses: ["2025-11", "2025-12", "2026-01", "2026-02", "2026-03"] };
+  assert.deepEqual(C.mesesDaCurva(d, "2026-03"), ["2026-01", "2026-02"]);
+  assert.deepEqual(C.mesesDaCurva(d, "2026-03", "2025-12"), ["2025-12", "2026-01", "2026-02"]);
+  assert.deepEqual(C.mesesDaCurva(d, "2026-01"), ["2025-11", "2025-12"]);   // janeiro: os 12 meses anteriores
+});

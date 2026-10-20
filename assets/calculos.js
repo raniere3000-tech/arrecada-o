@@ -44,6 +44,17 @@
     return `${a}-${String(m).padStart(2, "0")}`;
   }
 
+  // Linha do orçado que é a arrecadação: "ARRECADAÇÃO CRÉDITO", "(+) Arrecadação", "05.01. Arrecadação"
+  function ehLinhaArrecadacao(rubrica) {
+    const k = chave(String(rubrica == null ? "" : rubrica).replace(/^\s*[\d.]+\s*/, "").replace(/^\s*\([+\-=]\)\s*/, ""));
+    return k === "ARRECADACAO" || k === "ARRECADACAOCREDITO";
+  }
+  // Nome da planilha de orçado → ordem (RF3T25 < RF01T26 < RF02T26): ano e nº da revisão
+  function ordemOrcado(nome) {
+    const m = /RF\s*0*(\d+)\s*T\s*(\d{2})/i.exec(nome || "");
+    return m ? (2000 + +m[2]) * 100 + +m[1] : 0;
+  }
+
   // ---------- calendário: ordem do dia útil (0 = fim de semana ou feriado) ----------
   const cacheCal = {};
   function calendario(mes) {
@@ -395,14 +406,15 @@
     return total > 0 ? Array.from(s, (v) => v / total) : null;
   }
   // Meses da média: janeiro até o mês anterior ao escolhido (em janeiro: os 12 meses anteriores), só os que têm dados
-  function mesesDaCurva(dados, mes) {
-    const ano = mes.slice(0, 4);
-    let lista = dados.meses.filter((m) => m < mes && m.slice(0, 4) === ano);
+  // inicio ("AAAA-MM", opcional): 1º mês da média; sem ele, janeiro do ano do mês escolhido
+  function mesesDaCurva(dados, mes, inicio) {
+    const de = inicio && inicio < mes ? inicio : mes.slice(0, 4) + "-01";
+    let lista = dados.meses.filter((m) => m < mes && m >= de);
     if (!lista.length) lista = dados.meses.filter((m) => m < mes && m >= mesAnterior(mes, 12));
     return lista;
   }
-  function curvaMedia(dados, mes, marcas) {
-    const meses = mesesDaCurva(dados, mes), soma = new Array(MAX_DIA + 1).fill(0);
+  function curvaMedia(dados, mes, marcas, inicio) {
+    const meses = mesesDaCurva(dados, mes, inicio), soma = new Array(MAX_DIA + 1).fill(0);
     let n = 0;
     const usados = [];
     for (const m of meses) {
@@ -428,7 +440,7 @@
   }
 
   return {
-    MAX_DIA, MESES_CURTOS, chave, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
+    MAX_DIA, MESES_CURTOS, chave, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
