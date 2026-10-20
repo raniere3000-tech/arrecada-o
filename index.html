@@ -7,14 +7,14 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v7-20261020">
+<link rel="stylesheet" href="assets/painel.css?v=v8-20261020">
 </head>
 <body>
 
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v7</span></div>
+      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v8</span></div>
       <h1>Arrecadação Diária</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -73,7 +73,7 @@
   <div id="area" hidden>
     <div class="cabecalho-pdf" id="cabecalhoPdf"></div>
     <section class="card dias-card" id="diasCard">
-      <h2>Dias úteis <small id="diasNota"></small></h2>
+      <h2>Dias úteis <small id="diasNota" class="sem-pdf"></small></h2>
       <div class="dias" id="dias"></div>
     </section>
 
@@ -190,9 +190,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v7-20261020"></script>
-<script src="assets/calculos.js?v=v7-20261020"></script>
-<script>const VERSAO_SITE = "v7-20261020"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v7-20261020"></script>
+<script src="assets/regras.js?v=v8-20261020"></script>
+<script src="assets/calculos.js?v=v8-20261020"></script>
+<script>const VERSAO_SITE = "v8-20261020"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v8-20261020"></script>
 </body>
 </html>
