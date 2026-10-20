@@ -194,7 +194,7 @@
     const sups = supsDisponiveis();
     if (!sups.includes(E.sup)) E.sup = sups.includes("INTERIOR") ? "INTERIOR" : sups[0] || "";
     if (!d.meses.includes(E.mes)) E.mes = d.meses[d.meses.length - 1];
-    E.sel = C.mascaraAte(diaPadrao(E.mes));
+    E.sel = selDoMes(E.mes);
     montaFiltros();
     desenha();
   }
@@ -266,7 +266,7 @@
   $("selSup").addEventListener("change", (e) => { E.sup = e.target.value; montaFiltros(); desenha(); });
   $("selCidade").addEventListener("change", (e) => { E.cidade = e.target.value; desenha(); });
   $("selGrupo").addEventListener("change", (e) => { E.grupo = e.target.value; desenha(); });
-  $("selMes").addEventListener("change", (e) => { E.mes = e.target.value; E.sel = C.mascaraAte(diaPadrao(E.mes)); montaSeletorOrcado(); desenha(); });
+  $("selMes").addEventListener("change", (e) => { E.mes = e.target.value; E.sel = selDoMes(E.mes); montaSeletorOrcado(); desenha(); });
 
   function ordena(lista, ordem) {
     const pos = (x) => { const i = ordem.indexOf(x); return i < 0 ? 999 : i; };
@@ -279,6 +279,22 @@
     let n = 0;
     for (const dia of C.calendario(mes).dias) { if (dia.data > ult) break; if (dia.ordem) n = dia.ordem; }
     return n;
+  }
+  // Dias úteis marcados: lembrados neste navegador, por mês (não mudam para os outros usuários).
+  // Mês sem marcação guardada: do dia 1 ao último dia com dados.
+  function selDoMes(mes) {
+    try {
+      const v = JSON.parse(localStorage.getItem("arrecadacao_dias") || "{}")[mes];
+      if (Number.isInteger(v) && v >= 0) return v >>> 0;
+    } catch (e) { /* sem armazenamento */ }
+    return C.mascaraAte(diaPadrao(mes));
+  }
+  function guardaSel() {
+    try {
+      const d = JSON.parse(localStorage.getItem("arrecadacao_dias") || "{}");
+      d[E.mes] = E.sel;
+      localStorage.setItem("arrecadacao_dias", JSON.stringify(d));
+    } catch (e) { /* sem armazenamento */ }
   }
   function diaPadrao(mes) { return Math.max(1, ultimoDiaComDados(mes) || C.calendario(mes).uteis); }
 
@@ -365,6 +381,7 @@
     if (b.dataset.acao === "ate") E.sel = C.mascaraAte(diaPadrao(E.mes));
     else if (b.dataset.acao === "limpa") E.sel = 0;
     else E.sel = (E.sel ^ (1 << +b.dataset.d)) >>> 0;
+    guardaSel();
     desenha();
   });
 
