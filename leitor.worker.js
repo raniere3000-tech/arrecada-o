@@ -6,14 +6,31 @@ importScripts("lib/xlsx.full.min.js", "assets/regras.js" + V, "assets/calculos.j
 const C = self.CALC, R = self.REGRAS;
 const avisa = (tipo, dados, transferir = []) => self.postMessage({ tipo, ...dados }, transferir);
 
+// Base dos rankings por ligação (aba Análise): fica aqui no worker; a página pede só as listas prontas
+let analise = null;
+
 self.onmessage = async (ev) => {
+  if (ev.data.tipo === "analise") { respondeAnalise(ev.data); return; }
   try {
     const r = await processa(ev.data.arquivos || []);
+    analise = r.dados.analise;
+    delete r.dados.analise;
     avisa("pronto", r, C.buffers(r.dados));          // as tabelas vão para a página sem cópia
   } catch (e) {
     avisa("erro", { mensagem: String((e && e.message) || e), detalhe: String((e && e.stack) || "") });
   }
 };
+
+function respondeAnalise({ id, mi, miAnt, marcas, sel, n }) {
+  if (!analise) { avisa("analise", { id, erro: "dados ainda não lidos" }); return; }
+  const r = C.rankings(analise, mi, miAnt, marcas, sel, n || 100);
+  for (const lista of Object.values(r)) for (const x of lista) {
+    if (x.nome !== undefined) continue;              // a mesma ligação pode estar em duas listas (maiores e aumentos)
+    x.nome = analise.nomes.get(x.lig) || "";
+    x.lig = x.lig < 1e10 ? String(x.lig) : "(não numérica)";
+  }
+  avisa("analise", { id, ...r });
+}
 
 const ext = (nome) => (nome.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();
 
@@ -151,12 +168,12 @@ async function leCsv(file, aoLer, leitura) {
       const ch = p.map(C.chave), pos = (c) => ch.indexOf(c);
       idx = { lig: pos("NLIGACAO"), venc: pos("VENCIMENTO"), cred: pos("DATACREDITO"), val: pos("VALAUTENTICADO"),
         util: pos("UTILIZACAOSUBCATEG"), zona: pos("ZONALOCALIDADE"), contrato: pos("NCONTRATO"), tipo: pos("TIPOFATURA"),
-        atual: pos("DATAATUALIZ") };
+        atual: pos("DATAATUALIZ"), cliente: pos("CLIENTE") };
       return;
     }
     leitura.adiciona({ lig: p[idx.lig], contrato: idx.contrato >= 0 ? p[idx.contrato] : "", vencimento: p[idx.venc], credito: p[idx.cred] || "",
       valor: p[idx.val], util: idx.util >= 0 ? p[idx.util] : "", zona: idx.zona >= 0 ? p[idx.zona] : "",
-      tipo: idx.tipo >= 0 ? p[idx.tipo] : "", atualizacao: idx.atual >= 0 ? p[idx.atual] : "" });
+      tipo: idx.tipo >= 0 ? p[idx.tipo] : "", atualizacao: idx.atual >= 0 ? p[idx.atual] : "", cliente: idx.cliente >= 0 ? p[idx.cliente] : "" });
   };
   for (;;) {
     const { done, value } = await leitor.read();
@@ -177,7 +194,7 @@ async function leCsv(file, aoLer, leitura) {
 }
 
 // ---------- cache: o que cada CSV exportou fica no navegador (IndexedDB); arquivo igual não é lido de novo ----------
-const CACHE_VERSAO = 2;
+const CACHE_VERSAO = 4;
 const banco = () => new Promise((ok, erro) => {
   const r = indexedDB.open("arrecadacao_cache", 1);
   r.onupgradeneeded = () => r.result.createObjectStore("arquivos");

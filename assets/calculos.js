@@ -98,8 +98,9 @@
   //  - V: somas por mês × dia útil × combinação × mês de vencimento (valor, contas, linhas)
   //  - L: por mês, os dias úteis em que cada ligação pagou (máscara de bits), para contar clientes distintos
   const SEP = "\u0001";
-  const MAX_COMBOS = 65536, MAX_VENC = 1024, LIG_HASH = 1e11;
-  function chaveLig(t) {                                 // ligação → número (as que não são números: hash, acima de 1e11)
+  // COMBOS_ARQ: combinações num arquivo; DIAS_L: posições de dia útil (0..23) na chave ligação × combinação × dia
+  const MAX_COMBOS = 65536, MAX_VENC = 1024, LIG_HASH = 1e10, COMBOS_ARQ = 16384, DIAS_L = 24, VALOR_COM_NOME = 200;
+  function chaveLig(t) {                                 // ligação → número (as que não são números: hash, acima de 1e10)
     if (typeof t === "number" && Number.isInteger(t) && t >= 0 && t < LIG_HASH) return t;
     const s = String(t == null ? "" : t).trim();
     if (/^\d{1,11}(\.0+)?$/.test(s)) { const n = parseInt(s, 10); if (n < LIG_HASH) return n; }
@@ -125,8 +126,9 @@
       this.meses = new Map();
       this.descartadas = { semCredito: 0, semValor: 0 };
       this.ultimaAtualizacao = "";
+      this.nomes = new Map();                          // ligação → nome do cliente (só de quem tem pagamento ≥ R$ 200: aba Análise)
     }
-    // r: { lig, contrato, vencimento, credito, valor, util, zona, tipo, atualizacao } — texto como vem do arquivo
+    // r: { lig, contrato, vencimento, credito, valor, util, zona, tipo, atualizacao, cliente } — texto como vem do arquivo
     adiciona(r) {
       const credito = dataISO(r.credito);
       if (!credito) { this.descartadas.semCredito++; return; }
@@ -142,7 +144,7 @@
       let c = this.idxCk.get(ck);
       if (c === undefined) {
         c = this.cks.length;
-        if (c >= MAX_COMBOS) throw new Error("combinações de zona × subcategoria × perfil demais num arquivo");
+        if (c >= COMBOS_ARQ) throw new Error("combinações de zona × subcategoria × perfil demais num arquivo");
         this.cks.push(ck); this.idxCk.set(ck, c);
       }
       const kv = (ordem * MAX_COMBOS + c) * MAX_VENC + vencIdx(dataISO(r.vencimento).slice(0, 7));
@@ -151,8 +153,10 @@
       a[0] += valor;
       if (R.TIPOS_CONTA.includes(String(r.tipo || "").trim())) a[1]++;
       a[2]++;
-      const kl = chaveLig(r.lig) * MAX_COMBOS + c;
-      M.L.set(kl, (M.L.get(kl) || 0) | (1 << ordem));
+      // valor de cada ligação × combinação × dia útil (dá os dias em que pagou e os rankings da aba Análise)
+      const lig = chaveLig(r.lig), kl = (lig * COMBOS_ARQ + c) * DIAS_L + ordem;
+      M.L.set(kl, (M.L.get(kl) || 0) + valor);
+      if (valor >= VALOR_COM_NOME && r.cliente && !this.nomes.has(lig)) this.nomes.set(lig, String(r.cliente).trim().split("").join(""));   // split/join: cópia solta da linha
       if (r.atualizacao) {
         const at = String(r.atualizacao).trim(), comp = dataISO(at) + at.slice(10);
         if (comp > this.ultimaAtualizacao) this.ultimaAtualizacao = comp;
@@ -164,12 +168,14 @@
         const n = M.V.size, V = { k: new Float64Array(n), valor: new Float64Array(n), contas: new Uint32Array(n), linhas: new Uint32Array(n) };
         let i = 0;
         for (const [k, a] of M.V) { V.k[i] = k; V.valor[i] = a[0]; V.contas[i] = a[1]; V.linhas[i] = a[2]; i++; }
-        const L = { k: new Float64Array(M.L.size), m: new Uint32Array(M.L.size) };
+        const L = { k: new Float64Array(M.L.size), d: new Uint8Array(M.L.size), v: new Float32Array(M.L.size) };
         i = 0;
-        for (const [k, m] of M.L) { L.k[i] = k; L.m[i] = m; i++; }
+        for (const [k, v] of M.L) { const d = k % DIAS_L; L.k[i] = (k - d) / DIAS_L; L.d[i] = d; L.v[i] = v; i++; }
         meses[mes] = { V, L, ultimoCredito: M.ultimoCredito, linhas: M.linhas };
       }
-      return { combos: this.cks.slice(), meses, descartadas: this.descartadas, ultimaAtualizacao: this.ultimaAtualizacao };
+      return { combos: this.cks.slice(), meses, descartadas: this.descartadas, ultimaAtualizacao: this.ultimaAtualizacao,
+        // nomes em forma compacta: as ligações numa lista de números e os nomes num texto só
+        nomes: { lig: Float64Array.from(this.nomes.keys()), txt: [...this.nomes.values()].join(SEP) } };
     }
   }
 
@@ -186,6 +192,7 @@
       this.linhas = 0;
       this.ultimaAtualizacao = "";
       this.parcial = null;
+      this.nomes = new Map();
     }
     combo(ck) {
       let i = this.idxCombo.get(ck);
@@ -225,6 +232,10 @@
       this.descartadas.semCredito += exp.descartadas.semCredito;
       this.descartadas.semValor += exp.descartadas.semValor;
       if (exp.ultimaAtualizacao > this.ultimaAtualizacao) this.ultimaAtualizacao = exp.ultimaAtualizacao;
+      if (exp.nomes && exp.nomes.lig.length) {
+        const txt = exp.nomes.txt.split(SEP);
+        exp.nomes.lig.forEach((lig, i) => { if (!this.nomes.has(lig)) this.nomes.set(lig, txt[i]); });
+      }
       return { linhas: usadas, puladas, meses: meses.sort() };
     }
     adiciona(r) {                                      // atalho (testes): linha a linha, como um arquivo só
@@ -238,7 +249,7 @@
       const meses = [...this.meses.keys()].sort();
       const VD = colunas(["mi", "d", "c", "valor", "contas"]), VE = colunas(["mi", "d", "c", "v", "valor"]);
       const CF = colunas(["mi", "ini", "len", "n", "desc"]), SE = colunas(["c", "m"]);
-      const descontoSemPagamento = {}, ultimoCredito = {};
+      const descontoSemPagamento = {}, ultimoCredito = {}, entradas = [], descPorLig = [];
       meses.forEach((mes, mi) => {
         const M = this.meses.get(mes);
         ultimoCredito[mes] = M.ultimoCredito;
@@ -254,12 +265,14 @@
         // dias em que cada (ligação, combinação) pagou: junta as partes do mês (arquivos R1, R4…)
         const L = new Map();
         for (const { L: P, mapa } of M.partes) for (let i = 0; i < P.k.length; i++) {
-          const c = P.k[i] % MAX_COMBOS, nk = P.k[i] - c + mapa[c];
-          L.set(nk, (L.get(nk) || 0) | P.m[i]);
+          const cl = P.k[i] % COMBOS_ARQ, lig = (P.k[i] - cl) / COMBOS_ARQ, nk = lig * MAX_COMBOS + mapa[cl];
+          L.set(nk, (L.get(nk) || 0) | (1 << P.d[i]));
         }
+        entradas[mi] = M.partes;                       // aba Análise: as próprias listas dos arquivos (sem cópia)
         M.partes = null;
         const dm = new Map();
         if (descontos && descontos.get(mes)) for (const [lig, v] of descontos.get(mes)) { const k = chaveLig(lig); dm.set(k, (dm.get(k) || 0) + v); }
+        const descMes = new Map(dm);
         // Cliente distinto é a LIGAÇÃO (como o DISTINCTCOUNT do BI), mesmo que ela apareça em mais de uma combinação
         // (ex.: contas com contratos de perfis diferentes). Cada ligação vira uma "assinatura": a lista de
         // (combinação, dias em que pagou). Ligações com a mesma assinatura são somadas numa linha.
@@ -280,6 +293,7 @@
           if (d) { sg.desc += d; dm.delete(lig); }
           a = b;
         }
+        descPorLig[mi] = descMes;
         let semPag = 0;
         for (const v of dm.values()) semPag += v;
         if (semPag) descontoSemPagamento[mes] = semPag;
@@ -294,6 +308,8 @@
         descontoSemPagamento, ultimoCredito,
         linhas: this.linhas, descartadas: this.descartadas, ultimaAtualizacao: this.ultimaAtualizacao,
         zonasSemSup: [...this.zonasSemSup.keys()], subSemClasse: [...this.subSemClasse.keys()],
+        // fica no worker (não vai para a página): base dos rankings por ligação da aba Análise
+        analise: { entradas, descontos: descPorLig, nomes: this.nomes },
       };
     }
   }
@@ -420,6 +436,52 @@
     return { linhas, desconto };
   }
 
+  // ---------- aba Análise: rankings por ligação ----------
+  // Valor de cada ligação nos dias marcados e nas combinações do filtro, menos o desconto dela (como nas abas), no mês
+  // e no mês anterior. Cidade/subcategoria/perfil mostrados: os do maior pagamento da ligação no mês (ou no anterior).
+  // Para pastas grandes: um Map ligação → posição e listas de números; das listas só saem os n maiores (sem ordenar tudo).
+  function rankings(an, mi, miAnt, marcas, sel, n = 100) {
+    const pos = new Map(), lig = [], val = [[], []], pagou = [[], []], comb = [[], []], maior = [[], []];
+    [mi, miAnt].forEach((m, t) => {
+      const partes = m >= 0 ? an.entradas[m] : null;
+      if (!partes) return;
+      for (const { L, mapa } of partes) for (let i = 0; i < L.k.length; i++) {
+        if (!(sel & (1 << L.d[i]))) continue;
+        const cl = L.k[i] % COMBOS_ARQ, c = mapa[cl];
+        if (!marcas[c]) continue;
+        const l = (L.k[i] - cl) / COMBOS_ARQ;
+        let p = pos.get(l);
+        if (p === undefined) {
+          p = lig.length; pos.set(l, p); lig.push(l);
+          for (let u = 0; u < 2; u++) { val[u].push(0); pagou[u].push(0); comb[u].push(0); maior[u].push(-Infinity); }
+        }
+        val[t][p] += L.v[i]; pagou[t][p] = 1;
+        if (L.v[i] > maior[t][p]) { maior[t][p] = L.v[i]; comb[t][p] = c; }
+      }
+      const dm = an.descontos[m];
+      if (dm) for (const [l, d] of dm) { const p = pos.get(l); if (p !== undefined && pagou[t][p]) val[t][p] -= d; }
+    });
+    const item = (p) => ({ lig: lig[p], c: pagou[0][p] ? comb[0][p] : comb[1][p], atual: val[0][p], anterior: val[1][p], dif: val[0][p] - val[1][p] });
+    // os n de maior nota (nota > 0), em ordem decrescente
+    const topo = (nota) => {
+      const sel_ = [];
+      let piso = 0;
+      for (let p = 0; p < lig.length; p++) {
+        const x = nota(p);
+        if (!(x > 0) || (sel_.length >= n && x <= piso)) continue;
+        sel_.push([x, p]);
+        if (sel_.length > 2 * n) { sel_.sort((a, b) => b[0] - a[0]); sel_.length = n; piso = sel_[n - 1][0]; }
+      }
+      sel_.sort((a, b) => b[0] - a[0]);
+      return sel_.slice(0, n).map(([, p]) => item(p));
+    };
+    return {
+      maiores: topo((p) => (pagou[0][p] ? val[0][p] : 0)),
+      aumentos: topo((p) => val[0][p] - val[1][p]),
+      quedas: topo((p) => val[1][p] - val[0][p]),
+    };
+  }
+
   // ---------- orçado diário ----------
   // Participação de cada posição de dia útil (0 = fins de semana e feriados) no total arrecadado do mês (sem desconto)
   function participacoes(dados, mi, marcas) {
@@ -464,7 +526,7 @@
   return {
     MAX_DIA, MESES_CURTOS, chave, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
-    descontoPorMes, escada,
+    descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
   };
 });

@@ -7,14 +7,14 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v10-20261020">
+<link rel="stylesheet" href="assets/painel.css?v=v12-20261021">
 </head>
 <body>
 
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v10</span></div>
+      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v12</span></div>
       <h1>Arrecadação Diária</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -52,6 +52,7 @@
     <button type="button" data-aba="perfil">Perfil de pagamento</button>
     <button type="button" data-aba="cidades">Cidades</button>
     <button type="button" data-aba="escada">Escada</button>
+    <button type="button" data-aba="analise">Análise</button>
     <button type="button" data-aba="dados">Dados</button>
   </div>
 </nav>
@@ -114,6 +115,16 @@
       <div class="card"><h2>Arrecadação por mês de vencimento × mês de crédito <small class="ate-dia"></small></h2><div class="wrap"><table id="tEscada" class="escada compacta"></table></div>
         <p class="nota">Cada coluna é o mês do crédito; cada linha, o mês de vencimento da conta paga. A diagonal destacada é o pagamento das contas que venceram no próprio mês. O desconto comercial fica numa linha própria. No PDF, a escada vai até 2 meses depois do mês escolhido; os vencimentos posteriores somam numa linha.</p></div>
     </section>
+    <section class="painel-aba" data-painel="analise" hidden>
+      <p class="nota" id="analiseNota"></p>
+      <div class="card"><h2>Top clientes — maiores arrecadações <small class="analise-sub"></small><button type="button" class="btn sec csv" data-csv="tTopMaiores">Baixar CSV</button></h2>
+        <p class="nota">Até 100 ligações com o maior valor arrecadado no mês, nos dias úteis marcados e nos filtros do cabeçalho.</p><div class="wrap"><table id="tTopMaiores" class="compacta ranking"></table></div></div>
+      <div class="card"><h2>Top clientes — aumentos em relação ao mês anterior <small class="analise-sub"></small><button type="button" class="btn sec csv" data-csv="tTopAumentos">Baixar CSV</button></h2>
+        <p class="nota">Até 100 ligações com aumento em relação ao mês anterior, nos mesmos dias úteis, da maior diferença para a menor. A lista para onde acaba o aumento: diferença zero ou negativa não entra.</p><div class="wrap"><table id="tTopAumentos" class="compacta ranking"></table></div></div>
+      <div class="card"><h2>Top clientes — quedas em relação ao mês anterior <small class="analise-sub"></small><button type="button" class="btn sec csv" data-csv="tTopQuedas">Baixar CSV</button></h2>
+        <p class="nota">Até 100 ligações com queda em relação ao mês anterior, nos mesmos dias úteis, da maior queda para a menor (inclui quem pagou no mês anterior e não pagou neste). A lista para onde acaba a queda: diferença zero ou positiva não entra.</p><div class="wrap"><table id="tTopQuedas" class="compacta ranking"></table></div></div>
+    </section>
+
     <section class="painel-aba dados" data-painel="dados" hidden>
       <div class="card"><h2>Parâmetros do que está na tela <small id="dadosFiltros"></small></h2><div id="dadosParametros"></div></div>
 
@@ -176,6 +187,11 @@
         <p>Valor arrecadado (Val. Autenticado, sem desconto) por <b>mês de vencimento</b> da conta (linhas) × <b>mês do crédito</b> (colunas), nos dias úteis marcados. A diagonal é o pagamento das contas que venceram no próprio mês.
           O desconto comercial fica numa linha própria, e o total de cada coluna é igual ao valor arrecadado das outras abas. No PDF, a escada vai até 2 meses depois do mês escolhido e os vencimentos posteriores somam numa linha.</p></div>
 
+      <div class="card"><h2>Análise</h2>
+        <p>Rankings por <b>ligação</b> no mês escolhido, nos dias úteis marcados e nos filtros do cabeçalho (fora do PDF). O valor de cada ligação é a soma do Val. Autenticado menos o desconto comercial dela, como nas outras abas.
+          <b>Aumentos</b> e <b>quedas</b> comparam com o mês anterior nos mesmos dias úteis (ligação que não pagou num dos meses entra com zero); cada lista tem até 100 ligações e para onde acaba o aumento (ou a queda), então uma ligação nunca aparece nas duas. Cidade, subcategoria e perfil mostrados são os do maior pagamento da ligação no mês.
+          O nome do cliente vem da coluna Cliente do CSV (guardado para ligações com algum pagamento a partir de R$ 200). <b>Baixar CSV</b> leva a lista para o Excel.</p></div>
+
       <div class="card"><h2>Diferenças em relação ao BI</h2>
         <ul>
           <li>Feriados: o painel considera São Jorge (23/04) e Consciência Negra (20/11) em todos os anos; o BI só os tinha em 2025.</li>
@@ -190,9 +206,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v10-20261020"></script>
-<script src="assets/calculos.js?v=v10-20261020"></script>
-<script>const VERSAO_SITE = "v10-20261020"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v10-20261020"></script>
+<script src="assets/regras.js?v=v12-20261021"></script>
+<script src="assets/calculos.js?v=v12-20261021"></script>
+<script>const VERSAO_SITE = "v12-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v12-20261021"></script>
 </body>
 </html>

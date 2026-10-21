@@ -207,3 +207,24 @@ test("cliente distinto é a ligação, mesmo com contas de perfis (contratos) di
   assert.equal(p.get("Inadimplente").get(0).clientes, 1);
   perto([...p.values()].reduce((x, l) => x + l.get(0).desconto, 0), -3);
 });
+
+test("análise: maiores arrecadações, aumentos e quedas por ligação (mesmos dias úteis, com desconto)", () => {
+  const a = new C.Agregador();
+  // setembro: 1 paga 100, 2 paga 300, 3 paga 50; outubro: 1 paga 400 (desconto 20), 2 paga 100, 4 paga 70 (novo)
+  a.adiciona(linha(1, "01/09/2026", "100,00", { cliente: "ANA" }));
+  a.adiciona(linha(2, "01/09/2026", "300,00", { cliente: "BETO" }));
+  a.adiciona(linha(3, "02/09/2026", "50,00"));
+  a.adiciona(linha(1, "01/10/2026", "250,00", { cliente: "ANA" }));
+  a.adiciona(linha(1, "02/10/2026", "150,00"));
+  a.adiciona(linha(2, "02/10/2026", "100,00"));
+  a.adiciona(linha(4, "01/10/2026", "70,00"));
+  a.adiciona(linha(4, "30/10/2026", "999,00"));                  // fora dos dias marcados
+  const d = a.resultado(new Map([["2026-10", new Map([["1", 20]])]])), tudo = C.marcaCombos(d, {});
+  const r = C.rankings(d.analise, 1, 0, tudo, C.mascaraAte(2));
+  assert.deepEqual(r.maiores.map((x) => [x.lig, x.atual]), [[1, 380], [2, 100], [4, 70]]);
+  assert.deepEqual(r.aumentos.map((x) => [x.lig, x.dif]), [[1, 280], [4, 70]]);
+  assert.deepEqual(r.quedas.map((x) => [x.lig, x.dif]), [[2, -200], [3, -50]]);
+  assert.equal(d.analise.nomes.get(2), "BETO");               // pagamento ≥ R$ 200 guarda o nome
+  assert.equal(d.analise.nomes.get(3), undefined);
+  assert.equal(C.rankings(d.analise, 1, 0, tudo, C.mascaraAte(2), 1).maiores.length, 1);
+});

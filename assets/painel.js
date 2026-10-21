@@ -4,8 +4,8 @@
   const C = window.CALC, R = window.REGRAS;
   const $ = (id) => document.getElementById(id);
   const ARQ_AJUSTES = "ajustes_arrecadacao.json";
-  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", dados: "Dados" };
-  const ABAS_PDF = ["resumo", "subcategoria", "perfil", "cidades", "escada"];     // a aba Dados não entra no PDF
+  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", analise: "Análise", dados: "Dados" };
+  const ABAS_PDF = ["resumo", "subcategoria", "perfil", "cidades", "escada"];     // Análise e Dados não entram no PDF
   const NOME_SUP = { INTERIOR: "Interior", LESTE: "Leste", [R.SEM_SUP]: "Sem SUP" };
   const DIGITADO = "__digitado";                      // opção do seletor de orçado: o valor digitado no painel
   const E = {
@@ -160,6 +160,7 @@
       const m = ev.data;
       if (m.tipo === "progresso") progresso(m.pct, m.texto);
       else if (m.tipo === "pronto") { fim(); carrega(m, nomePasta); }
+      else if (m.tipo === "analise") recebeAnalise(m);
       else if (m.tipo === "erro") { fim(); setFonte("Erro na leitura: " + esc(m.mensagem)); console.error(m.detalhe); }
     };
     worker.onerror = (e) => { fim(); setFonte("Erro na leitura: " + esc(e.message)); };
@@ -346,7 +347,7 @@
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
     $("diasCard").hidden = E.aba === "dados";
-    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, dados: desenhaDados })[E.aba]();
+    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, analise: desenhaAnalise, dados: desenhaDados })[E.aba]();
   }
 
   // "1 a 12", "1, 5 e 10", "0 (fins de semana e feriados) e 1 a 3"
@@ -609,6 +610,53 @@
     linhas.push(`<tr class="total">${td("Total", "rot")}${tot.map((v) => tdNum(v, fmt)).join("")}</tr>`);
     tabela("tEscada", ["Vencimento (R$)", ...meses.map(C.rotuloMes)], linhas);
   }
+
+  // ----- Análise: top 100 por ligação (calculado no worker, que guarda o valor de cada ligação por dia) -----
+  let idAnalise = 0, ultimaAnalise = null;
+  function desenhaAnalise() {
+    const mi = idxMes(E.mes), ant = C.mesAnterior(E.mes);
+    const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
+    $("analiseNota").textContent = `${C.rotuloMes(E.mes)} × ${C.rotuloMes(ant)} · dias úteis ${rotuloSel(E.sel)} · ${filtro}. Calculando…`;
+    document.querySelectorAll(".analise-sub").forEach((x) => { x.textContent = C.rotuloMes(E.mes); });
+    if (!worker) return;
+    worker.postMessage({ tipo: "analise", id: ++idAnalise, mi, miAnt: idxMes(ant), marcas: marcas(), sel: E.sel, n: 100 });
+  }
+  function recebeAnalise(m) {
+    if (m.id !== idAnalise) return;                  // resposta de um pedido antigo (filtro já mudou)
+    if (m.erro) { $("analiseNota").textContent = "Análise indisponível: " + m.erro; return; }
+    ultimaAnalise = m;
+    const ant = C.rotuloMes(C.mesAnterior(E.mes)), at = C.rotuloMes(E.mes), combos = E.res.dados.combos;
+    $("analiseNota").textContent = $("analiseNota").textContent.replace(" Calculando…", "");
+    const desc = (x) => { const c = combos[x.c] || {}; return [c.cidade || "", c.grupo || "", c.perfil || ""]; };
+    const cab = ["#", "Ligação", "Cliente", "Cidade", "Subcategoria", "Perfil", `${ant} (R$)`, `${at} (R$)`, "Diferença", "Δ (%)"];
+    const linha = (x, i) => {
+      const [cid, sub, per] = desc(x), p = x.anterior ? x.atual / x.anterior - 1 : NaN;
+      return `<tr>${td(i + 1, "du")}${td(esc(x.lig), "rot")}${td(esc(x.nome) || "—", "rot nome")}${td(esc(cid), "rot")}${td(esc(sub), "rot")}${td(esc(per), "rot")}`
+        + `${td(fmt(x.anterior))}${td(fmt(x.atual))}${tdNum(x.dif, fmt)}${x.anterior ? tdNum(p, pct) : td("novo")}</tr>`;
+    };
+    const vazio = (l) => (l.length ? l.map(linha) : [`<tr><td colspan="10" class="rot">Nenhuma ligação.</td></tr>`]);
+    const subs = document.querySelectorAll(".analise-sub");
+    [m.maiores, m.aumentos, m.quedas].forEach((l, i) => { subs[i].textContent = `${at} · ${fmt(l.length)} cliente${l.length === 1 ? "" : "s"}`; });
+    tabela("tTopMaiores", cab, vazio(m.maiores));
+    tabela("tTopAumentos", cab, vazio(m.aumentos));
+    tabela("tTopQuedas", cab, vazio(m.quedas));
+  }
+  // CSV (abre no Excel): a lista que está na tela
+  document.querySelectorAll("button[data-csv]").forEach((b) => b.addEventListener("click", () => {
+    if (!ultimaAnalise) return;
+    const qual = { tTopMaiores: "maiores", tTopAumentos: "aumentos", tTopQuedas: "quedas" }[b.dataset.csv];
+    const combos = E.res.dados.combos, num = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ",");
+    const linhas = [["Posição", "Ligação", "Cliente", "Cidade", "Subcategoria", "Perfil", "Mês anterior", "Mês", "Diferença"].join(";")];
+    ultimaAnalise[qual].forEach((x, i) => {
+      const c = combos[x.c] || {};
+      linhas.push([i + 1, x.lig, `"${String(x.nome || "").replace(/"/g, '""')}"`, c.cidade, c.grupo, c.perfil, num(x.anterior), num(x.atual), num(x.dif)].join(";"));
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["\ufeff" + linhas.join("\r\n")], { type: "text/csv;charset=utf-8" }));
+    a.download = `TopClientes_${qual}_${E.mes}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }));
 
   // ----- Dados: os números por trás do que está na tela -----
   function desenhaDados() {

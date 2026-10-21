@@ -200,3 +200,9 @@ table.explica td:first-child { width: 230px; }
 body.bi .dados .card { padding: 0 0 8px; }
 body.bi .dados .card h2 { justify-content: flex-start; }
 body.bi table.explica td.rot { background: transparent !important; color: #000; }
+
+/* aba Análise */
+.card h2 .csv { margin-left: auto; font-size: 12px; padding: 4px 10px; }
+table.ranking td.nome { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+body.bi table.ranking td.rot { background: transparent !important; color: #000; }
+body.bi table.ranking td.du { background: var(--bi) !important; color: #fff; }
