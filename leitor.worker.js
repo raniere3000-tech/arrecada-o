@@ -21,15 +21,15 @@ self.onmessage = async (ev) => {
   }
 };
 
-function respondeAnalise({ id, mi, miAnt, marcas, sel, n }) {
-  if (!analise) { avisa("analise", { id, erro: "dados ainda não lidos" }); return; }
+function respondeAnalise({ id, para, mi, miAnt, marcas, sel, n }) {
+  if (!analise) { avisa("analise", { id, para, erro: "dados ainda não lidos" }); return; }
   const r = C.rankings(analise, mi, miAnt, marcas, sel, n || 100);
-  for (const lista of Object.values(r)) for (const x of lista) {
+  for (const lista of [r.maiores, r.aumentos, r.quedas]) for (const x of lista) {
     if (x.nome !== undefined) continue;              // a mesma ligação pode estar em duas listas (maiores e aumentos)
     x.nome = analise.nomes.get(x.lig) || "";
     x.lig = x.lig < 1e10 ? String(x.lig) : "(não numérica)";
   }
-  avisa("analise", { id, ...r });
+  avisa("analise", { id, para, ...r });
 }
 
 const ext = (nome) => (nome.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();

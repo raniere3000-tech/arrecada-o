@@ -475,10 +475,13 @@
       sel_.sort((a, b) => b[0] - a[0]);
       return sel_.slice(0, n).map(([, p]) => item(p));
     };
+    let nAumentos = 0, nQuedas = 0;                    // quantas ligações tiveram aumento / queda (as listas param em n)
+    for (let p = 0; p < lig.length; p++) { const x = val[0][p] - val[1][p]; if (x > 0) nAumentos++; else if (x < 0) nQuedas++; }
     return {
       maiores: topo((p) => (pagou[0][p] ? val[0][p] : 0)),
       aumentos: topo((p) => val[0][p] - val[1][p]),
       quedas: topo((p) => val[1][p] - val[0][p]),
+      nAumentos, nQuedas,
     };
   }
 

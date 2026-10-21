@@ -439,6 +439,88 @@
     tresMeses("tCon", (sr, k) => sr.contas[k], (t) => t.contas, 0);
     tresMeses("tTic", (sr, k) => (sr.contas[k] ? sr.valor[k] / sr.contas[k] : null), (t) => (t.contas ? t.valor / t.contas : null), 2);
     desenhaCurva();
+    desenhaResumoAnalise(s, cal);
+  }
+
+  // ----- Resumo: análise por dia útil (gráfico, destaques e consolidado), como no painel de faturamento; fora do PDF -----
+  const MESES_LONGOS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  const mesLongo = (m) => `${MESES_LONGOS[+m.slice(5, 7) - 1]}/${m.slice(0, 4)}`;
+  const curto = (v) => (Math.abs(v) >= 1e6 ? fmt(v / 1e6, 2) + " mi" : fmt(v / 1e3) + " mil");
+  const ALERTA = 0.4;                                  // variação que pinta a barra (±40%)
+  let idResumo = 0;
+  function desenhaResumoAnalise(s, cal) {
+    const d = E.res.dados, mk = marcas(), ant = C.mesAnterior(E.mes), miAnt = idxMes(ant);
+    const sa = miAnt >= 0 ? C.serieDoMes(d, miAnt, mk) : null, calAnt = C.calendario(ant);
+    const dias = C.diasDaMascara(E.sel).filter((k) => k <= cal.uteis);
+    const nAt = mesLongo(E.mes), nAnt = mesLongo(ant), filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" — ");
+    const at = dias.map((k) => s.valor[k]), an = dias.map((k) => (sa ? sa.valor[k] : 0));
+    const rot = (k) => (k ? `Dia ${k}` : "Fins de semana");
+    // gráfico de barras (SVG): mês anterior × mês atual em cada dia útil marcado
+    $("gTitulo").textContent = `Arrecadação por dia útil — ${nAt} vs ${nAnt}`;
+    $("gNota").textContent = "Barras do mês atual em laranja indicam queda acima de 40%; em azul médio, crescimento acima de 40%. Rótulos nas duas barras (mês anterior e atual); passe o mouse para ver o valor exato.";
+    $("gLegenda").innerHTML = `<span><i class="cor-ant"></i>${nAnt}</span><span><i class="cor-at"></i>${nAt}</span><span><i class="cor-alerta"></i>Alerta (±40%)</span>`;
+    const larg = Math.max(720, dias.length * 92), alt = 270, base = 222, topo = 34, max = Math.max(1, ...at, ...an);
+    const passo = larg / Math.max(1, dias.length), bw = Math.min(36, passo * 0.32);
+    let svg = `<svg viewBox="0 0 ${larg} ${alt}" role="img" aria-label="Arrecadação por dia útil"><line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`;
+    dias.forEach((k, i) => {
+      const cx = passo * i + passo / 2, h1 = ((base - topo) * an[i]) / max, h2 = ((base - topo) * at[i]) / max;
+      const v = an[i] > 0 ? at[i] / an[i] - 1 : NaN;
+      const cls = v <= -ALERTA ? "b-queda" : v >= ALERTA ? "b-alta" : "b-at";
+      const data = k ? dataBR(cal.dataDoDia[k]).slice(0, 5) : "";
+      svg += `<g><title>${rot(k)}${data ? ` (${data})` : ""}\n${nAnt}: ${rs(an[i])}\n${nAt}: ${rs(at[i])}${isFinite(v) ? `\nΔ ${pct(v)}` : ""}</title>`
+        + `<rect class="b-ant" x="${cx - bw - 3}" y="${base - h1}" width="${bw}" height="${Math.max(0, h1)}" rx="2"/>`
+        + `<rect class="${cls}" x="${cx + 3}" y="${base - h2}" width="${bw}" height="${Math.max(0, h2)}" rx="2"/>`
+        + (an[i] ? `<text class="r-ant" x="${cx - bw / 2 - 3}" y="${base - h1 - 5}">${curto(an[i])}</text>` : "")
+        + (at[i] ? `<text class="r-at" x="${cx + bw / 2 + 3}" y="${base - h2 - 5}">${curto(at[i])}</text>` : "")
+        + `<text class="x" x="${cx}" y="${base + 18}">${rot(k)}</text><text class="x2" x="${cx}" y="${base + 32}">${data}</text></g>`;
+    });
+    $("grafico").innerHTML = dias.length ? svg + "</svg>" : '<p class="nota">Nenhum dia útil marcado.</p>';
+    // faixa: dias úteis dos dois meses
+    $("faixaDias").innerHTML = `<b>Dias úteis no mês</b><span>${nAt}: <b>${cal.uteis} dias</b></span><span>${nAnt}: <b>${calAnt.uteis} dias</b></span>`
+      + `<span><b>Δ ${cal.uteis - calAnt.uteis >= 0 ? "" : "−"}${Math.abs(cal.uteis - calAnt.uteis)} dia${Math.abs(cal.uteis - calAnt.uteis) === 1 ? "" : "s"}</b></span>`
+      + `<span>Dias marcados: <b>${rotuloSel(E.sel)}</b></span>`;
+    // destaques
+    $("destTitulo").textContent = `Destaques do mês — ${nAt} — ${filtro.toUpperCase()}`;
+    const tA = C.totalDoMes(d, idxMes(E.mes), mk, E.sel), tB = miAnt >= 0 ? C.totalDoMes(d, miAnt, mk, E.sel) : null;
+    const delta = (a, b, f) => (b ? ` (${a - b >= 0 ? "+" : "−"}${f(Math.abs(a - b))} vs ${nAnt})` : "");
+    const tic = (t) => (t && t.contas ? t.valor / t.contas : 0);
+    const porDia = dias.map((k, i) => ({ k, dif: at[i] - an[i], dt: (s.contas[k] ? s.valor[k] / s.contas[k] : 0) - (sa && sa.contas[k] ? sa.valor[k] / sa.contas[k] : 0), temAnt: !!(sa && sa.contas[k]) && !!s.contas[k] }));
+    const lista = (arr, f) => (arr.length ? arr.map((x) => `<li>${f(x)}</li>`).join("") : "<li>—</li>");
+    const dia = (k) => (k ? `Dia útil ${k} (${dataBR(cal.dataDoDia[k]).slice(0, 5)})` : "Fins de semana e feriados");
+    const blocos = [
+      ["Clientes e contas", `<li>${fmt(tA.clientes)} clientes pagantes${tB ? delta(tA.clientes, tB.clientes, fmt) : ""}</li><li>${fmt(tA.contas)} contas pagas${tB ? delta(tA.contas, tB.contas, fmt) : ""}</li>`
+        + `<li>Ticket médio R$ ${fmt(tic(tA), 2)}${tB ? delta(tic(tA), tic(tB), (v) => "R$ " + fmt(v, 2)) : ""}</li>`],
+      ["Crescimento — Arrecadação", lista(porDia.filter((x) => x.dif > 0).sort((a, b) => b.dif - a.dif).slice(0, 3), (x) => `${dia(x.k)}: arrecadação ${rs(x.dif)} acima`)],
+      ["Queda — Arrecadação", lista(porDia.filter((x) => x.dif < 0).sort((a, b) => a.dif - b.dif).slice(0, 3), (x) => `${dia(x.k)}: arrecadação ${rs(-x.dif)} abaixo`)],
+      ["Crescimento — Ticket médio", lista(porDia.filter((x) => x.temAnt && x.dt > 0).sort((a, b) => b.dt - a.dt).slice(0, 3), (x) => `${dia(x.k)}: ticket R$ ${fmt(x.dt, 2)} acima`)],
+      ["Queda — Ticket médio", lista(porDia.filter((x) => x.temAnt && x.dt < 0).sort((a, b) => a.dt - b.dt).slice(0, 3), (x) => `${dia(x.k)}: ticket R$ ${fmt(-x.dt, 2)} abaixo`)],
+      ["Top clientes — Aumentos", '<li id="destAumentos">calculando…</li>'],
+      ["Top clientes — Quedas", '<li id="destQuedas">calculando…</li>'],
+    ];
+    $("destaques").innerHTML = blocos.map(([t, li]) => `<div class="dest"><h3>${t}</h3><ul>${li}</ul></div>`).join("");
+    if (worker) worker.postMessage({ tipo: "analise", para: "resumo", id: ++idResumo, mi: idxMes(E.mes), miAnt, marcas: mk, sel: E.sel, n: 100 });
+    // consolidado por dia útil
+    $("consNota").textContent = "valores do dia sem o desconto; o total tem o desconto comercial, como nas outras tabelas";
+    const linhas = dias.map((k, i) => {
+      const v = an[i] ? at[i] / an[i] - 1 : NaN;
+      return `<tr>${td(k, "du")}${td(k ? dataBR(cal.dataDoDia[k]) : "fins de semana e feriados", "rot")}${td(fmt(at[i], 2))}${td(fmt(an[i], 2))}${isFinite(v) ? tdNum(v, pct) : td("")}`
+        + `${td(fmt(s.clientes[k]))}${td(fmt(s.contas[k]))}${td(s.contas[k] ? fmt(s.valor[k] / s.contas[k], 2) : "")}</tr>`;
+    });
+    const vT = tB && tB.valor ? tA.valor / tB.valor - 1 : NaN;
+    linhas.push(`<tr class="total">${td("Total", "du")}${td("")}${td(fmt(tA.valor, 2))}${td(tB ? fmt(tB.valor, 2) : "")}${isFinite(vT) ? tdNum(vT, pct) : td("")}`
+      + `${td(fmt(tA.clientes))}${td(fmt(tA.contas))}${td(tA.contas ? fmt(tic(tA), 2) : "")}</tr>`);
+    tabela("tConsolidado", ["Dia útil", "Data", `Arrecadação ${C.rotuloMes(E.mes)}`, `Arrecadação ${C.rotuloMes(ant)}`, "Δ (%)", "Clientes pagantes", "Contas pagas", "Ticket médio"], linhas);
+  }
+  function destaquesClientes(m) {
+    if (m.id !== idResumo || !$("destAumentos")) return;
+    const combos = E.res.dados.combos;
+    const quem = (x) => `${esc(x.lig)}${combos[x.c] ? ` (${esc(combos[x.c].cidade)})` : ""}`;
+    const bloco = (l, sinal, palavra, total) => (l.length
+      ? l.slice(0, 2).map((x, i) => `<li>${i + 1}ª maior ${palavra}: ${quem(x)} — ${rs(sinal * x.dif)}</li>`).join("")
+        + `<li>Total de clientes com ${palavra}: ${fmt(total)}</li>`
+      : `<li>Nenhum cliente com ${palavra}</li>`);
+    $("destAumentos").outerHTML = bloco(m.aumentos, 1, "aumento", m.nAumentos);
+    $("destQuedas").outerHTML = bloco(m.quedas, -1, "queda", m.nQuedas);
   }
 
   // ----- Orçado do mês e curva do orçado diário (editáveis) -----
@@ -622,6 +704,7 @@
     worker.postMessage({ tipo: "analise", id: ++idAnalise, mi, miAnt: idxMes(ant), marcas: marcas(), sel: E.sel, n: 100 });
   }
   function recebeAnalise(m) {
+    if (m.para === "resumo") { if (!m.erro) destaquesClientes(m); return; }
     if (m.id !== idAnalise) return;                  // resposta de um pedido antigo (filtro já mudou)
     if (m.erro) { $("analiseNota").textContent = "Análise indisponível: " + m.erro; return; }
     ultimaAnalise = m;
@@ -636,7 +719,11 @@
     };
     const vazio = (l) => (l.length ? l.map(linha) : [`<tr><td colspan="10" class="rot">Nenhuma ligação.</td></tr>`]);
     const subs = document.querySelectorAll(".analise-sub");
-    [m.maiores, m.aumentos, m.quedas].forEach((l, i) => { subs[i].textContent = `${at} · ${fmt(l.length)} cliente${l.length === 1 ? "" : "s"}`; });
+    const totais = [null, m.nAumentos, m.nQuedas];
+    [m.maiores, m.aumentos, m.quedas].forEach((l, i) => {
+      subs[i].textContent = `${at} · ${fmt(l.length)} cliente${l.length === 1 ? "" : "s"}`
+        + (totais[i] != null && totais[i] > l.length ? ` (dos ${fmt(totais[i])} com ${i === 1 ? "aumento" : "queda"})` : "");
+    });
     tabela("tTopMaiores", cab, vazio(m.maiores));
     tabela("tTopAumentos", cab, vazio(m.aumentos));
     tabela("tTopQuedas", cab, vazio(m.quedas));

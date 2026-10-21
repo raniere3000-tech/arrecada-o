@@ -7,14 +7,14 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v12-20261021">
+<link rel="stylesheet" href="assets/painel.css?v=v13-20261021">
 </head>
 <body>
 
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v12</span></div>
+      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v13</span></div>
       <h1>Arrecadação Diária</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -86,6 +86,16 @@
         <div class="card"><h2>Contas pagas</h2><div class="wrap"><table id="tCon" class="compacta"></table></div></div>
         <div class="card"><h2>Ticket médio</h2><div class="wrap"><table id="tTic" class="compacta"></table></div></div>
       </div>
+      <!-- análise do mês por dia útil (como no painel de faturamento); não entra no PDF -->
+      <div class="sem-pdf" id="resumoAnalise">
+        <div class="card"><h2 id="gTitulo">Arrecadação por dia útil</h2>
+          <p class="nota" id="gNota"></p>
+          <div class="legenda-g" id="gLegenda"></div>
+          <div class="grafico" id="grafico"></div></div>
+        <div class="card faixa" id="faixaDias"></div>
+        <div class="card"><h2 id="destTitulo">Destaques do mês</h2><div class="destaques" id="destaques"></div></div>
+        <div class="card"><h2>Resumo consolidado por dia útil <small id="consNota"></small></h2><div class="wrap"><table id="tConsolidado" class="compacta"></table></div></div>
+      </div>
       <details class="card curva sem-pdf" id="curvaCard">
         <summary><h2>Orçado do mês e curva do orçado diário <small id="curvaResumo"></small></h2></summary>
         <div id="curvaCorpo"></div>
@@ -117,6 +127,7 @@
     </section>
     <section class="painel-aba" data-painel="analise" hidden>
       <p class="nota" id="analiseNota"></p>
+      <p class="nota">Para ver os top clientes de um dia útil só: em <b>Dias úteis</b>, clique em <b>Limpar</b> e depois no dia. Vale para os dois meses comparados.</p>
       <div class="card"><h2>Top clientes — maiores arrecadações <small class="analise-sub"></small><button type="button" class="btn sec csv" data-csv="tTopMaiores">Baixar CSV</button></h2>
         <p class="nota">Até 100 ligações com o maior valor arrecadado no mês, nos dias úteis marcados e nos filtros do cabeçalho.</p><div class="wrap"><table id="tTopMaiores" class="compacta ranking"></table></div></div>
       <div class="card"><h2>Top clientes — aumentos em relação ao mês anterior <small class="analise-sub"></small><button type="button" class="btn sec csv" data-csv="tTopAumentos">Baixar CSV</button></h2>
@@ -160,7 +171,11 @@
           <tr><td>Orçado mensal</td><td>Valor da linha da arrecadação no RF escolhido em <b>Orçado</b>, para o mês e a superintendência (Todas = soma). Ou o valor digitado no painel.</td></tr>
           <tr><td>Orçado dia</td><td>Orçado mensal × peso do dia útil na curva do mês (abaixo). Orçado nos dias = soma dos dias marcados.</td></tr>
           <tr><td>Dif e Δ (%)</td><td>Dif = arrecadação − orçado; Δ = arrecadação ÷ orçado − 1.</td></tr>
-        </tbody></table></div>
+          <tr><td>Arrecadação por dia útil (gráfico)</td><td>Valor de cada dia útil marcado no mês e no mês anterior (mesma posição de dia útil), sem desconto. A barra do mês fica laranja quando cai mais de 40% e azul médio quando sobe mais de 40%.</td></tr>
+          <tr><td>Destaques do mês</td><td>Clientes, contas e ticket do mês contra o anterior (com desconto); os 3 dias úteis de maior crescimento e de maior queda da arrecadação e do ticket médio; e os 2 clientes de maior aumento e de maior queda (aba Análise), com o total de clientes que subiram ou caíram.</td></tr>
+          <tr><td>Resumo consolidado por dia útil</td><td>Por dia útil marcado: arrecadação do mês e do anterior, Δ (%), clientes pagantes, contas pagas e ticket médio. O total tem o desconto comercial.</td></tr>
+        </tbody></table>
+        <p class="nota">O gráfico, os destaques e o consolidado ficam no fim do Resumo e não entram no PDF.</p></div>
 
       <div class="card"><h2>Curva do orçado diário</h2>
         <ol>
@@ -206,9 +221,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v12-20261021"></script>
-<script src="assets/calculos.js?v=v12-20261021"></script>
-<script>const VERSAO_SITE = "v12-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v12-20261021"></script>
+<script src="assets/regras.js?v=v13-20261021"></script>
+<script src="assets/calculos.js?v=v13-20261021"></script>
+<script>const VERSAO_SITE = "v13-20261021"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v13-20261021"></script>
 </body>
 </html>

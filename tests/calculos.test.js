@@ -224,6 +224,8 @@ test("análise: maiores arrecadações, aumentos e quedas por ligação (mesmos 
   assert.deepEqual(r.maiores.map((x) => [x.lig, x.atual]), [[1, 380], [2, 100], [4, 70]]);
   assert.deepEqual(r.aumentos.map((x) => [x.lig, x.dif]), [[1, 280], [4, 70]]);
   assert.deepEqual(r.quedas.map((x) => [x.lig, x.dif]), [[2, -200], [3, -50]]);
+  assert.equal(r.nAumentos, 2);
+  assert.equal(r.nQuedas, 2);
   assert.equal(d.analise.nomes.get(2), "BETO");               // pagamento ≥ R$ 200 guarda o nome
   assert.equal(d.analise.nomes.get(3), undefined);
   assert.equal(C.rankings(d.analise, 1, 0, tudo, C.mascaraAte(2), 1).maiores.length, 1);
