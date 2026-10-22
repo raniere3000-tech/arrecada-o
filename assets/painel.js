@@ -697,6 +697,11 @@
     $("escadaNota").textContent = limpa
       ? `Mostrando só os valores a partir de R$ ${fmt(ESCADA_MINIMO)}; os menores ficam em branco, mas o Total soma todos (inclusive o desconto).`
       : "Mostrando todos os valores.";
+    // aviso do executivo (só no PDF), quando a escada está resumida
+    $("escadaAvisoPdf").textContent = limpa
+      ? `Para facilitar a leitura, a escada exibe apenas os valores a partir de R$ ${fmt(ESCADA_MINIMO / 1000)} mil. Os totais consideram a arrecadação integral de cada mês.`
+      : "";
+    $("escadaAvisoPdf").hidden = !limpa;
   }
   // Opção da escada: só valores a partir de R$ 50 mil (padrão) ou a escada completa. Lembrada neste navegador.
   const ESCADA_MINIMO = 50000;
