@@ -4,7 +4,7 @@
   const C = window.CALC, R = window.REGRAS;
   const $ = (id) => document.getElementById(id);
   const ARQ_AJUSTES = "ajustes_arrecadacao.json";
-  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", analise: "Análise", dados: "Dados" };
+  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", analise: "Análise", base: "Base", dados: "Dados" };
   const ABAS_PDF = ["resumo", "subcategoria", "perfil", "cidades", "escada"];     // Análise e Dados não entram no PDF
   const NOME_SUP = { INTERIOR: "Interior", LESTE: "Leste", [R.SEM_SUP]: "Sem SUP" };
   const DIGITADO = "__digitado";                      // opção do seletor de orçado: o valor digitado no painel
@@ -161,6 +161,8 @@
       if (m.tipo === "progresso") progresso(m.pct, m.texto);
       else if (m.tipo === "pronto") { fim(); carrega(m, nomePasta); }
       else if (m.tipo === "analise") recebeAnalise(m);
+      else if (m.tipo === "extracao-progresso") { if (m.id === idBase) $("baseStatus").textContent = `${m.texto}… ${m.pct}%`; }
+      else if (m.tipo === "extracao") recebeBase(m);
       else if (m.tipo === "erro") { fim(); setFonte("Erro na leitura: " + esc(m.mensagem)); console.error(m.detalhe); }
     };
     worker.onerror = (e) => { fim(); setFonte("Erro na leitura: " + esc(e.message)); };
@@ -346,8 +348,8 @@
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
-    $("diasCard").hidden = E.aba === "dados";
-    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, analise: desenhaAnalise, dados: desenhaDados })[E.aba]();
+    $("diasCard").hidden = E.aba === "dados" || E.aba === "base";
+    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados })[E.aba]();
   }
 
   // "1 a 12", "1, 5 e 10", "0 (fins de semana e feriados) e 1 a 3"
@@ -762,6 +764,82 @@
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }));
+
+  // ----- Base: extração das linhas completas para uma lista de matrículas e meses (o worker relê os CSVs) -----
+  let idBase = 0, mesesBase = null;
+  const ligsDoTexto = (t) => [...new Set((String(t).match(/\d{4,15}/g) || []).map(C.ligacao))];
+  function atualizaQtdBase() { const n = ligsDoTexto($("baseLigs").value).length; $("baseQtd").textContent = `${fmt(n)} matrícula${n === 1 ? "" : "s"}`; }
+  function desenhaBase() {
+    const meses = [...E.res.dados.meses].reverse();
+    if (!mesesBase || mesesBase.some((m) => !meses.includes(m))) mesesBase = [E.mes];
+    $("baseMeses").innerHTML = meses.map((m) => `<label><input type="checkbox" value="${m}"${mesesBase.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("");
+    atualizaQtdBase();
+  }
+  $("baseMeses").addEventListener("change", () => { mesesBase = [...$("baseMeses").querySelectorAll("input:checked")].map((i) => i.value); });
+  $("baseTodos").addEventListener("click", () => { mesesBase = [...E.res.dados.meses]; desenhaBase(); });
+  $("baseNenhum").addEventListener("click", () => { mesesBase = []; desenhaBase(); });
+  $("baseLigs").addEventListener("input", atualizaQtdBase);
+  $("baseLimpaLigs").addEventListener("click", () => { $("baseLigs").value = ""; atualizaQtdBase(); });
+  // arquivo de matrículas: Excel (coluna Matrícula/Ligação, ou a 1ª coluna) ou texto
+  $("baseArquivo").addEventListener("change", async (e) => {
+    const f = e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    try {
+      let ligs;
+      if (/\.xlsx?$/i.test(f.name)) {
+        if (!window.XLSX) await new Promise((ok, erro) => { const sc = document.createElement("script"); sc.src = "lib/xlsx.full.min.js"; sc.onload = ok; sc.onerror = erro; document.head.append(sc); });
+        const livro = window.XLSX.read(await f.arrayBuffer(), { type: "array" });
+        const linhas = window.XLSX.utils.sheet_to_json(livro.Sheets[livro.SheetNames[0]], { header: 1, raw: false, defval: "" });
+        const cab = (linhas[0] || []).map(C.chave);
+        let col = cab.findIndex((c) => /MATRICULA|LIGACAO/.test(c));
+        const ini = col >= 0 ? 1 : 0;
+        if (col < 0) col = 0;
+        ligs = linhas.slice(ini).map((l) => String(l[col] || "")).join("\n");
+      } else ligs = await f.text();
+      const lista = ligsDoTexto(ligs);
+      $("baseLigs").value = lista.join("\n");
+      atualizaQtdBase();
+      toast(`${fmt(lista.length)} matrículas carregadas de ${esc(f.name)}.`);
+    } catch (x) { toast("Não foi possível ler o arquivo de matrículas: " + esc(x.message || x), true); }
+  });
+  $("baseExtrair").addEventListener("click", () => {
+    const ligs = ligsDoTexto($("baseLigs").value);
+    if (!ligs.length) { toast("Informe as matrículas (cole a lista ou carregue um arquivo).", true); return; }
+    if (!mesesBase || !mesesBase.length) { toast("Marque pelo menos um mês.", true); return; }
+    if (!worker) return;
+    $("baseExtrair").disabled = true;
+    $("baseResultado").innerHTML = "";
+    $("baseStatus").textContent = "Lendo os arquivos…";
+    worker.postMessage({ tipo: "extrair", id: ++idBase, ligs, meses: [...mesesBase].sort() });
+  });
+  let ultimaBase = null;
+  function recebeBase(m) {
+    if (m.id !== idBase) return;
+    $("baseExtrair").disabled = false;
+    if (m.erro) { $("baseStatus").textContent = "Erro: " + m.erro; return; }
+    ultimaBase = m;
+    const meses = Object.keys(m.porMes).sort();
+    $("baseStatus").textContent = `${fmt(m.linhas)} linha${m.linhas === 1 ? "" : "s"} encontrada${m.linhas === 1 ? "" : "s"} em ${m.arquivos} arquivo(s).`;
+    $("baseResultado").innerHTML = `<table class="compacta base-tabela"><thead><tr><th>Mês</th><th>Linhas</th></tr></thead><tbody>`
+      + meses.map((x) => `<tr>${td(C.rotuloMes(x), "rot")}${td(fmt(m.porMes[x]))}</tr>`).join("")
+      + `<tr class="total">${td("Total", "rot")}${td(fmt(m.linhas))}</tr></tbody></table>`
+      + `<div class="base-acoes">${m.linhas ? '<button type="button" class="btn" id="baseBaixar">Baixar base (CSV)</button>' : ""}`
+      + (m.naoEncontradas.length ? `<button type="button" class="btn sec" id="baseBaixarNao">Baixar matrículas sem pagamento (${fmt(m.naoEncontradas.length)})</button>` : "")
+      + `</div>` + (m.linhas > 1048000 ? '<p class="nota">Atenção: a base passa de 1 milhão de linhas, o limite de uma planilha do Excel.</p>' : "")
+      + (m.naoEncontradas.length ? `<p class="nota">${fmt(m.naoEncontradas.length)} matrícula(s) da lista não têm pagamento nos meses marcados.</p>` : "");
+    const nome = `Base_arrecadacao_${meses.length ? meses[0] + (meses.length > 1 ? "_a_" + meses[meses.length - 1] : "") : "vazia"}.csv`;
+    if ($("baseBaixar")) $("baseBaixar").onclick = () => baixa(ultimaBase.csv, nome);
+    if ($("baseBaixarNao")) $("baseBaixarNao").onclick = () => baixa("\ufeffMatrícula\r\n" + ultimaBase.naoEncontradas.join("\r\n"), "Matriculas_sem_pagamento.csv");
+    if (m.linhas) baixa(m.csv, nome);
+  }
+  function baixa(texto, nome) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([texto], { type: "text/csv;charset=utf-8" }));
+    a.download = nome;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }
 
   // ----- Dados: os números por trás do que está na tela -----
   function desenhaDados() {

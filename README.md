@@ -12,7 +12,8 @@ para a internet: tudo é processado no navegador.
 3. Use os filtros do cabeçalho (Superintendência, Cidade, Subcategoria, Mês) e os botões de **dias úteis**.
 4. **Painel / Power BI** troca o visual. **📄 PDF** gera o executivo com as 5 abas no visual escolhido (sem a aba Dados).
 5. A aba **Análise** traz os top clientes (até 100): maiores arrecadações, aumentos e quedas em relação ao mês anterior,
-   com download em CSV. A aba **Dados** explica todos os cálculos. As duas não entram no PDF.
+   com download em CSV. A aba **Base** extrai as linhas completas dos CSVs para uma lista de matrículas e meses.
+   A aba **Dados** explica todos os cálculos. Essas abas não entram no PDF.
 
 Os CSVs já lidos ficam guardados no navegador: na atualização do dia, só o arquivo diário é lido de novo.
 

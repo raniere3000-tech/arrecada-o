@@ -8,9 +8,11 @@ const avisa = (tipo, dados, transferir = []) => self.postMessage({ tipo, ...dado
 
 // Base dos rankings por ligação (aba Análise): fica aqui no worker; a página pede só as listas prontas
 let analise = null;
+let fontes = null;                                     // arquivos CSV lidos (com os meses de cada um), para a aba Base
 
 self.onmessage = async (ev) => {
   if (ev.data.tipo === "analise") { respondeAnalise(ev.data); return; }
+  if (ev.data.tipo === "extrair") { extraiBase(ev.data).catch((e) => avisa("extracao", { id: ev.data.id, erro: String((e && e.message) || e) })); return; }
   try {
     const r = await processa(ev.data.arquivos || []);
     analise = r.dados.analise;
@@ -292,6 +294,8 @@ async function processa(itens) {
     const r = agregador.junta(exportados.get(a), (m) => !mesesDiaria.has(m));
     Object.assign(a, { registros: r.linhas, meses: r.meses, puladas: r.puladas });
   }
+  // arquivos de cada mês, para a extração da base (aba Base): o mês do arquivo diário sai só dele
+  fontes = { diarias: diarias.filter((a) => a.meses), acumuladas: acumuladas.filter((a) => a.meses), mesesDiaria };
   avisa("progresso", { pct: 99, texto: "Montando as tabelas…" });
   const dados = agregador.resultado(descontos);
   return {
@@ -301,4 +305,62 @@ async function processa(itens) {
     mesesDesconto: [...descontos.keys()].sort(),
     arquivos: arquivos.map(({ file, livro, ...a }) => a),
   };
+}
+
+// ---------- aba Base: linhas completas dos CSVs para uma lista de matrículas e meses ----------
+// Relê só os arquivos que têm os meses pedidos (as linhas inteiras não ficam guardadas). A saída tem as colunas do 1º
+// arquivo, na mesma ordem; arquivos com colunas em outra ordem são reorganizados pelo nome da coluna.
+async function extraiBase({ id, ligs, meses }) {
+  if (!fontes) throw new Error("dados ainda não lidos");
+  const quer = new Set(ligs.map(C.ligacao)), mesesQ = new Set(meses);
+  const usaDiaria = (m) => fontes.mesesDiaria.has(m);
+  const arquivos = [
+    ...fontes.diarias.filter((a) => a.meses.some((m) => mesesQ.has(m))).map((a) => ({ a, aceita: (m) => mesesQ.has(m) })),
+    ...fontes.acumuladas.filter((a) => a.meses.some((m) => mesesQ.has(m) && !usaDiaria(m))).map((a) => ({ a, aceita: (m) => mesesQ.has(m) && !usaDiaria(m) })),
+  ];
+  const total = arquivos.reduce((t, x) => t + x.a.tamanho, 0) || 1;
+  let base = 0, cab = null, chavesCab = null;
+  const saida = [], porMes = {}, achadas = new Set();
+  for (const { a, aceita } of arquivos) {
+    let idx = null, ordem = null;
+    await linhasDoArquivo(a.file, (linha) => {
+      const p = linha.split(";");
+      if (!idx) {
+        const ch = p.map(C.chave);
+        idx = { lig: ch.indexOf("NLIGACAO"), cred: ch.indexOf("DATACREDITO") };
+        if (!cab) { cab = linha; chavesCab = ch; }
+        else if (ch.join(";") !== chavesCab.join(";")) ordem = chavesCab.map((c) => ch.indexOf(c));
+        return;
+      }
+      const cred = p[idx.cred] || "";
+      const mes = cred.length >= 10 ? cred.slice(6, 10) + "-" + cred.slice(3, 5) : "";
+      if (!aceita(mes)) return;
+      const lig = C.ligacao(p[idx.lig]);
+      if (!quer.has(lig)) return;
+      achadas.add(lig);
+      porMes[mes] = (porMes[mes] || 0) + 1;
+      saida.push(ordem ? ordem.map((j) => (j >= 0 ? p[j] : "")).join(";") : linha);
+    }, (lidos) => avisa("extracao-progresso", { id, pct: Math.round(((base + lidos) / total) * 100), texto: `Lendo ${a.rel}` }));
+    base += a.tamanho;
+  }
+  const naoEncontradas = [...quer].filter((l) => !achadas.has(l));
+  avisa("extracao", { id, csv: cab ? "\ufeff" + [cab, ...saida].join("\r\n") : "", linhas: saida.length, porMes, naoEncontradas, arquivos: arquivos.length });
+}
+async function linhasDoArquivo(file, aoLinha, aoLer) {
+  const leitor = file.stream().getReader();
+  let resto = "", dec = null, lidos = 0, ultimo = 0;
+  for (;;) {
+    const { done, value } = await leitor.read();
+    if (done) break;
+    if (!dec) dec = new TextDecoder(ehUtf8(value) ? "utf-8" : "windows-1252");
+    resto += dec.decode(value, { stream: true });
+    const partes = resto.split("\n");
+    resto = partes.pop();
+    for (const l of partes) { const x = l.endsWith("\r") ? l.slice(0, -1) : l; if (x) aoLinha(x); }
+    lidos += value.length;
+    if (lidos - ultimo > 8e6) { ultimo = lidos; aoLer(lidos); }
+  }
+  if (dec) resto += dec.decode();
+  if (resto.replace(/\r$/, "")) aoLinha(resto.replace(/\r$/, ""));
+  aoLer(lidos);
 }

@@ -7,14 +7,14 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v15-20261022">
+<link rel="stylesheet" href="assets/painel.css?v=v16-20261022">
 </head>
 <body>
 
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v15</span></div>
+      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v16</span></div>
       <h1>Arrecadação Diária</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -53,6 +53,7 @@
     <button type="button" data-aba="cidades">Cidades</button>
     <button type="button" data-aba="escada">Escada</button>
     <button type="button" data-aba="analise">Análise</button>
+    <button type="button" data-aba="base">Base</button>
     <button type="button" data-aba="dados">Dados</button>
   </div>
 </nav>
@@ -139,6 +140,28 @@
         <p class="nota">Até 100 ligações com queda em relação ao mês anterior, nos mesmos dias úteis, da maior queda para a menor (inclui quem pagou no mês anterior e não pagou neste). A lista para onde acaba a queda: diferença zero ou positiva não entra.</p><div class="wrap"><table id="tTopQuedas" class="compacta ranking"></table></div></div>
     </section>
 
+    <section class="painel-aba base" data-painel="base" hidden>
+      <div class="card"><h2>Extrair base de arrecadação</h2>
+        <p class="nota">Gera um CSV com <b>todas as colunas</b> dos arquivos de arrecadação, só das matrículas informadas e dos meses marcados (mês da Data Crédito).
+          Os filtros do cabeçalho e os dias úteis não se aplicam aqui. O CSV abre no Excel.</p>
+        <div class="base-grade">
+          <div>
+            <h3>1. Matrículas</h3>
+            <textarea id="baseLigs" rows="9" placeholder="Cole aqui as matrículas (uma por linha, ou separadas por espaço, vírgula ou ponto e vírgula). Pode colar direto de uma coluna do Excel."></textarea>
+            <div class="base-acoes"><label class="btn sec">Carregar de arquivo (Excel, CSV ou TXT)<input type="file" id="baseArquivo" accept=".xlsx,.xls,.csv,.txt" hidden></label>
+              <button type="button" class="btn sec" id="baseLimpaLigs">Limpar</button><span class="salvo" id="baseQtd">0 matrículas</span></div>
+          </div>
+          <div>
+            <h3>2. Meses</h3>
+            <div class="base-meses" id="baseMeses"></div>
+            <div class="base-acoes"><button type="button" class="btn sec" id="baseTodos">Marcar todos</button><button type="button" class="btn sec" id="baseNenhum">Desmarcar</button></div>
+          </div>
+        </div>
+        <div class="base-acoes"><button type="button" class="btn" id="baseExtrair">3. Extrair base</button><span class="salvo" id="baseStatus"></span></div>
+        <div id="baseResultado"></div>
+      </div>
+    </section>
+
     <section class="painel-aba dados" data-painel="dados" hidden>
       <div class="card"><h2>Parâmetros do que está na tela <small id="dadosFiltros"></small></h2><div id="dadosParametros"></div></div>
 
@@ -210,6 +233,9 @@
           <b>Aumentos</b> e <b>quedas</b> comparam com o mês anterior nos mesmos dias úteis (ligação que não pagou num dos meses entra com zero); cada lista tem até 100 ligações e para onde acaba o aumento (ou a queda), então uma ligação nunca aparece nas duas. Cidade, subcategoria e perfil mostrados são os do maior pagamento da ligação no mês.
           O nome do cliente vem da coluna Cliente do CSV (guardado para ligações com algum pagamento a partir de R$ 200). <b>Baixar CSV</b> leva a lista para o Excel.</p></div>
 
+      <div class="card"><h2>Base</h2>
+        <p>Extrai as linhas completas dos CSVs de arrecadação para uma lista de matrículas e os meses marcados (mês da Data Crédito), com todas as colunas do arquivo. Para cada mês vale a mesma regra do painel: o mês que está no arquivo diário sai só dele. Os arquivos dos meses escolhidos são relidos na hora, então pastas grandes podem levar alguns minutos.</p></div>
+
       <div class="card"><h2>Diferenças em relação ao BI</h2>
         <ul>
           <li>Feriados: o painel considera São Jorge (23/04) e Consciência Negra (20/11) em todos os anos; o BI só os tinha em 2025.</li>
@@ -224,9 +250,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v15-20261022"></script>
-<script src="assets/calculos.js?v=v15-20261022"></script>
-<script>const VERSAO_SITE = "v15-20261022"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v15-20261022"></script>
+<script src="assets/regras.js?v=v16-20261022"></script>
+<script src="assets/calculos.js?v=v16-20261022"></script>
+<script>const VERSAO_SITE = "v16-20261022"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v16-20261022"></script>
 </body>
 </html>
