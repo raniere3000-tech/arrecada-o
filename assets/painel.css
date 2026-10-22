@@ -230,3 +230,5 @@ body.bi table.ranking td.du { background: var(--bi) !important; color: #fff; }
 .dest ul { margin: 0; padding-left: 16px; font-size: 13px; line-height: 1.5; color: #000; }
 body.bi .card.faixa { padding: 8px 0; }
 body.bi .dest h3 { border-top-color: var(--bi); }
+.card h2 .opcao { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--azul); display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+body.bi .card h2 .opcao { color: #fff; }

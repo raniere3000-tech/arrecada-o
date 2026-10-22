@@ -676,12 +676,14 @@
     const vencs = [...esq.linhas.keys()].sort((a, b) => ordemV(a).localeCompare(ordemV(b)));
     let max = 0;
     for (const l of esq.linhas.values()) for (const v of l.values()) if (v > max) max = v;
-    const linhas = vencs.map((v) => {
+    // escada "limpa" (padrão): só as células a partir de R$ 50 mil, e as linhas sem nenhuma somem; o total continua com tudo
+    const limpa = escadaLimpa(), aparece = (x) => x != null && (!limpa || x >= ESCADA_MINIMO);
+    const linhas = vencs.filter((v) => !limpa || [...esq.linhas.get(v).values()].some(aparece)).map((v) => {
       const l = esq.linhas.get(v);
       const rot = v === POST ? `após ${C.rotuloMes(limite)}` : v ? C.rotuloMes(v) : "(sem vencimento)";
       return `<tr>${td(rot, "rot")}${idx.map((m, j) => {
         const x = l.get(m);
-        if (x == null) return td("");
+        if (!aparece(x)) return td("");
         const a = x > 0 && max ? 0.06 + 0.55 * (x / max) : 0;
         const st = a ? ` style="background:rgba(23,107,156,${a.toFixed(3)})${a > 0.4 ? ";color:#fff" : ""}"` : "";
         return `<td class="${[x < 0 ? "neg" : "", v === meses[j] ? "diag" : ""].filter(Boolean).join(" ")}"${st}>${fmt(x)}</td>`;
@@ -691,7 +693,18 @@
     const tot = idx.map((m) => { let s = esq.desconto.get(m) || 0; for (const l of esq.linhas.values()) s += l.get(m) || 0; return s; });
     linhas.push(`<tr class="total">${td("Total", "rot")}${tot.map((v) => tdNum(v, fmt)).join("")}</tr>`);
     tabela("tEscada", ["Vencimento (R$)", ...meses.map(C.rotuloMes)], linhas);
+    $("escadaLimpa").checked = limpa;
+    $("escadaNota").textContent = limpa
+      ? `Mostrando só os valores a partir de R$ ${fmt(ESCADA_MINIMO)}; os menores ficam em branco, mas o Total soma todos (inclusive o desconto).`
+      : "Mostrando todos os valores.";
   }
+  // Opção da escada: só valores a partir de R$ 50 mil (padrão) ou a escada completa. Lembrada neste navegador.
+  const ESCADA_MINIMO = 50000;
+  function escadaLimpa() { try { return localStorage.getItem("arrecadacao_escada") !== "completa"; } catch (e) { return true; } }
+  $("escadaLimpa").addEventListener("change", (e) => {
+    try { localStorage.setItem("arrecadacao_escada", e.target.checked ? "limpa" : "completa"); } catch (x) { /* sem armazenamento */ }
+    desenha();
+  });
 
   // ----- Análise: top 100 por ligação (calculado no worker, que guarda o valor de cada ligação por dia) -----
   let idAnalise = 0, ultimaAnalise = null;
