@@ -205,10 +205,18 @@
     desenha();
   }
 
+  // faturamento: quantas linhas foram descartadas e por quê (com um exemplo do que veio no arquivo)
+  function rejeicao(a) {
+    const r = a.rejeitadas;
+    if (!r || !a.semChave) return "";
+    const motivos = [["lig", "sem matrícula"], ["venc", "vencimento não reconhecido"], ["ref", "referência não reconhecida"], ["valor", "valor não reconhecido"]]
+      .filter(([k]) => r[k]).map(([k, t]) => `${t}: ${fmt(r[k])}`).join(", ");
+    return `${fmt(a.semChave)} linhas descartadas (${motivos}). Ex.: ${r.exemplo}`;
+  }
   function listaArquivos(res) {
     const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (linha da arrecadação)", faturamento: "Faturamento (Fatura de ciclo)", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
     const linhas = res.arquivos.map((a) => `<tr>${td(esc(a.rel), "rot")}${td(USO[a.tipo] || a.tipo, "rot")}${td(a.registros != null ? fmt(a.registros) : "")}`
-      + `${td(esc((a.meses || []).map(C.rotuloMes).join(", ")), "rot")}${td(esc(a.motivo || [a.puladas ? `${fmt(a.puladas)} linhas de mês que está no arquivo diário não foram usadas` : "", a.doCache ? "já lido antes (guardado neste navegador)" : ""].filter(Boolean).join("; ")), "rot")}</tr>`).join("");
+      + `${td(esc((a.meses || []).map(C.rotuloMes).join(", ")), "rot")}${td(esc(a.motivo || [a.puladas ? `${fmt(a.puladas)} linhas de mês que está no arquivo diário não foram usadas` : "", rejeicao(a), a.doCache ? "já lido antes (guardado neste navegador)" : ""].filter(Boolean).join("; ")), "rot")}</tr>`).join("");
     const d = res.dados, avisos = [];
     if (!res.temDesconto) avisos.push("Planilha de desconto comercial não encontrada: a arrecadação aparece sem o desconto.");
     if (!res.temPerfil) avisos.push("Planilha de perfil do cliente (Cluster) não encontrada: todos aparecem como “Sem perfil”.");
@@ -858,12 +866,17 @@
   const SEL_MES_TODO = C.mascaraAte(C.MAX_DIA, true);          // mês de crédito inteiro (todos os dias)
   let fxaMesEscolhido = "", fxaOrdem = { fxaCid: ["dif", -1], fxaSub: ["dif", -1] }, fxaLinhas = {};
   function desenhaFxa() {
-    const cz = E.res.cruzamento, d = E.res.dados;
+    let cz = E.res.cruzamento;
+    const d = E.res.dados;
+    // arquivos lidos, mas sem nenhuma conta aproveitada: mostra o motivo (como se não houvesse faturamento)
+    const lidosSemConta = E.res.arquivos.filter((x) => x.tipo === "faturamento" && !x.registros && x.semChave);
+    if (cz && !cz.fat.length) cz = null;
     $("fxaCorpo").hidden = !cz;
     if (!cz) {
       $("fxaNota").textContent = "";
       // arquivos de faturamento que não foram reconhecidos ou deram erro: mostra o motivo, em vez de "nenhum arquivo"
       const problemas = E.res.arquivos.filter((x) => x.tipo === "ignorado" && (C.chave(x.rel).includes("FATURA") || /faturamento/i.test(x.motivo || "")));
+      lidosSemConta.forEach((x) => problemas.push({ rel: x.rel, motivo: rejeicao(x) }));
       $("fxaAviso").innerHTML = problemas.length
         ? `<p class="aviso-pdf">${fmt(problemas.length)} arquivo(s) de faturamento não puderam ser usados:</p><ul class="lista-problemas">`
           + problemas.slice(0, 12).map((x) => `<li><b>${esc(x.rel)}</b>: ${esc(x.motivo)}</li>`).join("") + (problemas.length > 12 ? `<li>… e mais ${problemas.length - 12}</li>` : "")

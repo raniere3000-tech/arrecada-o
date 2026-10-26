@@ -308,3 +308,18 @@ test("cruzamento sem faturamento ou sem arrecadação não quebra", () => {
   f.adiciona(fat(1, "10/10/2026", "10,00"));
   assert.equal(C.cruzaFaturamento([f.exporta()], undefined, []).fat.length, 1);
 });
+
+test("faturamento: campos entre aspas, ano com 2 dígitos e motivo das linhas descartadas", () => {
+  assert.deepEqual(C.separaCsv('"101";"10/10/2026";"R. A; casa";"1,50"'), ["101", "10/10/2026", "R. A; casa", "1,50"]);
+  assert.deepEqual(C.separaCsv('a;"di""z";c'), ["a", 'di"z', "c"]);
+  assert.equal(C.dataISO("10/10/26"), "2026-10-10");
+  assert.equal(C.dataISO('"10/10/2026"'), "2026-10-10");
+  assert.equal(C.dataISO("10-10-2026"), "2026-10-10");
+  const f = new C.LeituraFaturamento();
+  f.adiciona(fat(1, "10/10/26", "10,00"));
+  f.adiciona(fat(2, "xx", "10,00"));
+  const e = f.exporta();
+  assert.equal(e.contas.lig.length, 1);
+  assert.equal(e.rejeitadas.venc, 1);
+  assert.match(e.rejeitadas.exemplo, /vencimento "xx"/);
+});

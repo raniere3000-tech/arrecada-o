@@ -23,11 +23,31 @@
   }
   function dataISO(t) {                                 // "02/10/2026 02:09" ou "2026-10-02" → "2026-10-02"; inválida → ""
     if (t instanceof Date) return isNaN(t) ? "" : new Date(t.getTime() - t.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    const s = String(t == null ? "" : t).trim();
-    let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
+    let s = String(t == null ? "" : t).trim();
+    if (s.charCodeAt(0) === 34) s = s.replace(/^"|"$/g, "").trim();     // "10/10/2026" entre aspas
+    let m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/.exec(s);
     if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
     m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
-    return m ? `${m[1]}-${m[2]}-${m[3]}` : "";
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    m = /^(\d{1,2})\/(\d{1,2})\/(\d{2})(?!\d)/.exec(s);           // ano com 2 dígitos: 10/10/26
+    return m ? `20${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : "";
+  }
+  // Linha de CSV com ";" — campos entre aspas (com ";" ou aspas dobradas dentro) também
+  function separaCsv(linha) {
+    if (linha.indexOf('"') < 0) return linha.split(";");
+    const out = [];
+    let campo = "", aspas = false;
+    for (let i = 0; i < linha.length; i++) {
+      const ch = linha[i];
+      if (aspas) {
+        if (ch === '"') { if (linha[i + 1] === '"') { campo += '"'; i++; } else aspas = false; }
+        else campo += ch;
+      } else if (ch === '"') aspas = true;
+      else if (ch === ";") { out.push(campo); campo = ""; }
+      else campo += ch;
+    }
+    out.push(campo);
+    return out;
   }
   function ligacao(t) {                                 // "0100000001" e 100000001 viram a mesma chave
     const s = String(t == null ? "" : t).trim();
@@ -492,12 +512,19 @@
       this.linhas = 0;
       this.fora = { linhas: 0, valor: 0, contas: new Set() };
       this.semChave = 0;
+      this.rejeitadas = { lig: 0, venc: 0, ref: 0, valor: 0, exemplo: "" };   // por que as linhas foram descartadas
       this.nomes = new Map();
     }
     // r: { lig, venc, ref, valor, cidade, categoria, situacao, cliente } — texto como vem do arquivo
     adiciona(r) {
       const valor = numeroBR(r.valor), venc = vencNum(dataISO(r.venc)), ref = refDeTexto(r.ref);
-      if (!r.lig || !venc || !ref || !isFinite(valor)) { this.semChave++; return; }
+      if (!r.lig || !venc || !ref || !isFinite(valor)) {
+        this.semChave++;
+        const rj = this.rejeitadas;
+        if (!r.lig) rj.lig++; if (!venc) rj.venc++; if (!ref) rj.ref++; if (!isFinite(valor)) rj.valor++;
+        if (!rj.exemplo) rj.exemplo = `matrícula "${r.lig}", vencimento "${r.venc}", referência "${r.ref}", valor "${r.valor}"`;
+        return;
+      }
       const lig = chaveLig(r.lig), k = lig + "|" + venc;
       if (R.SITUACOES_FORA_DO_FATURAMENTO.includes(chave(r.situacao))) {
         this.fora.linhas++; this.fora.valor += valor; this.fora.contas.add(k);
@@ -525,7 +552,7 @@
         C_.lig[i] = +k.slice(0, p); C_.venc[i] = +k.slice(p + 1); C_.valor[i] = a[0]; C_.credito[i] = a[1]; C_.ref[i] = a[2]; C_.c[i] = a[3]; i++;
       }
       const refs = [...new Set(C_.ref)].sort().map((x) => `${String(x).slice(0, 4)}-${String(x).slice(4)}`);
-      return { contas: C_, combos: this.cks.slice(), linhas: this.linhas, semChave: this.semChave, refs,
+      return { contas: C_, combos: this.cks.slice(), linhas: this.linhas, semChave: this.semChave, rejeitadas: this.rejeitadas, refs,
         fora: { linhas: this.fora.linhas, valor: this.fora.valor, contas: this.fora.contas.size },
         nomes: { lig: Float64Array.from(this.nomes.keys()), txt: [...this.nomes.values()].join(SEP) } };
     }
@@ -677,7 +704,7 @@
   }
 
   return {
-    MAX_DIA, MESES_CURTOS, chave, refDeTexto, vencNum, consertaAcento, LeituraFaturamento, cruzaFaturamento, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
+    MAX_DIA, MESES_CURTOS, chave, separaCsv, refDeTexto, vencNum, consertaAcento, LeituraFaturamento, cruzaFaturamento, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
