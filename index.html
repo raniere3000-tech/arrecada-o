@@ -7,14 +7,14 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v20-20261026">
+<link rel="stylesheet" href="assets/painel.css?v=v21-20261027">
 </head>
 <body>
 
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v20</span></div>
+      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v21</span></div>
       <h1>Arrecadação Diária</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -62,6 +62,7 @@
   </div>
   <div class="toggle" role="tablist" data-grupo="analises" hidden>
     <button type="button" data-aba="fxa">Faturamento x Arrecadação</button>
+    <button type="button" data-aba="fxv">Fat. x Arrec. — mesmo vencimento</button>
     <button type="button" data-aba="conversao">Conversão por referência</button>
     <button type="button" data-aba="clientes">Clientes e oportunidades</button>
     <button type="button" data-aba="localidade">Diagnóstico por localidade</button>
@@ -168,6 +169,22 @@
         <div class="card"><h2>Por subcategoria <small>no cruzamento, Pequeno Comércio entra em Comercial (o faturamento não separa)</small><button type="button" class="btn sec csv" data-fxa-csv="fxaSub">Baixar CSV</button></h2><div class="wrap"><table id="fxaSub" class="compacta ordenavel"></table></div></div>
         <div class="card"><h2>Conciliação pelo vencimento <small>quanto da arrecadação do Interior encontrou a conta faturada (matrícula + data de vencimento)</small></h2><div class="wrap"><table id="fxaConcil" class="compacta"></table></div>
           <p class="nota" id="fxaConcilNota"></p></div>
+      </div>
+    </section>
+    <section class="painel-aba" data-painel="fxv" hidden>
+      <div class="card"><h2>Faturamento x Arrecadação — mesmo vencimento <label class="opcao">Mês da arrecadação <select id="fxvMes"></select></label></h2>
+        <p class="nota" id="fxvNota"></p><div id="fxvAviso"></div></div>
+      <div id="fxvCorpo">
+        <div class="kpis" id="fxvKpis"></div>
+        <div class="card"><h2>Arrecadado no mês por referência de origem</h2>
+          <p class="nota">Cada pagamento do mês ligado à conta que ele pagou (matrícula + data de vencimento); a barra fica na referência dessa conta.</p>
+          <div class="legenda-g"><span><i class="cor-fat"></i>Faturado das contas pagas</span><span><i class="cor-at"></i>Arrecadado no mês</span></div>
+          <div class="grafico" id="fxvG1"></div></div>
+        <div class="card"><h2>Por referência de origem <button type="button" class="btn sec csv" data-fxv-csv="fxvRef">Baixar CSV</button></h2><div class="wrap"><table id="fxvRef" class="compacta"></table></div>
+          <p class="nota">A diferença arrecadado − faturado mostra pagamentos acima da conta (juros e multas de atraso pagos junto) ou abaixo (pagamento parcial).
+            Conta paga em mais de um mês aparece em cada mês em que recebeu pagamento, com o faturado inteiro.</p></div>
+        <div class="card"><h2>Por cidade <small>clique no título da coluna para ordenar</small><button type="button" class="btn sec csv" data-fxv-csv="fxvCid">Baixar CSV</button></h2><div class="wrap"><table id="fxvCid" class="compacta ordenavel"></table></div></div>
+        <div class="card"><h2>Por subcategoria <small>Pequeno Comércio em Comercial</small><button type="button" class="btn sec csv" data-fxv-csv="fxvSub">Baixar CSV</button></h2><div class="wrap"><table id="fxvSub" class="compacta ordenavel"></table></div></div>
       </div>
     </section>
     <section class="painel-aba" data-painel="conversao" hidden>
@@ -298,6 +315,16 @@
           <li>Conta com a mesma matrícula e vencimento em dois arquivos de fatura conta uma vez (as repetidas aparecem nos avisos).</li>
         </ul></div>
 
+      <div class="card"><h2>Fat. x Arrec. — mesmo vencimento</h2>
+        <p>Escolhe-se o <b>mês da arrecadação</b> (mês de crédito). Cada pagamento do Interior nesse mês é ligado à conta que ele pagou pela <b>matrícula + data de vencimento</b>,
+          e a conta traz a sua <b>referência</b> (ex.: arrecadado em out/26 de uma conta com vencimento em out/26 que é da referência ago/26 aparece na linha ago/26).
+          Ao lado vai o <b>faturado dessas mesmas contas</b>. É uma ligação conta a conta, não uma comparação de períodos.</p>
+        <ul>
+          <li>Arrecadado: Val. Autenticado, sem o desconto comercial (o desconto não é por conta). Faturado: soma das rubricas da conta.</li>
+          <li>Ficam de fora, com o valor mostrado à parte: pagamentos sem conta na fatura (referência que não está na pasta, ou vencimento que não bate) e parcelas de acordos.</li>
+          <li>Matrículas e contas são distintas dentro de cada linha; uma conta paga em parcelas aparece em cada mês em que recebeu pagamento.</li>
+        </ul></div>
+
       <div class="card"><h2>Diferenças em relação ao BI</h2>
         <ul>
           <li>Feriados: o painel considera São Jorge (23/04) e Consciência Negra (20/11) em todos os anos; o BI só os tinha em 2025.</li>
@@ -312,9 +339,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v20-20261026"></script>
-<script src="assets/calculos.js?v=v20-20261026"></script>
-<script>const VERSAO_SITE = "v20-20261026"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v20-20261026"></script>
+<script src="assets/regras.js?v=v21-20261027"></script>
+<script src="assets/calculos.js?v=v21-20261027"></script>
+<script>const VERSAO_SITE = "v21-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v21-20261027"></script>
 </body>
 </html>

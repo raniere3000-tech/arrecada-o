@@ -297,6 +297,14 @@ test("cruzamento: pagamento acha a conta pela matrícula + vencimento; parcela e
   assert.equal(co("2026-10").reduce((s, r) => s + r.contas, 0), 2);
   assert.equal(co("2026-11").reduce((s, r) => s + r.contas, 0), 0);
   assert.equal(x.combos.find((c) => c.cidade === "CORDEIRO").grupo, "PUBLICO");
+  // mesmo vencimento: em out/26 foram pagos 360 de contas da ref. set/26 cujo faturado é 100 + 300 = 400; em nov/26, 40 da conta de 100
+  const pg = (mes) => x.pagas.filter((r) => r.mes === mes);
+  perto(pg("2026-10").reduce((s, r) => s + r.pago, 0), 360);
+  perto(pg("2026-10").reduce((s, r) => s + r.faturado, 0), 400);
+  assert.equal(pg("2026-10").reduce((s, r) => s + r.contas, 0), 2);
+  assert.equal(pg("2026-10").reduce((s, r) => s + r.matriculas, 0), 2);
+  perto(pg("2026-11").reduce((s, r) => s + r.faturado, 0), 100);
+  assert.ok(pg("2026-10").every((r) => r.ref === "2026-09"));
   assert.equal(x.combos[0].sup, "INTERIOR");
 });
 

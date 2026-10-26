@@ -273,3 +273,5 @@ table.ordenavel th.desc::after { content: " ▼"; font-size: 9px; }
 #fxaKpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 720px) { #fxaKpis { grid-template-columns: minmax(0, 1fr); } }
 .lista-problemas { font-size: 12.5px; margin: 6px 0; padding-left: 18px; color: #000; }
+#fxvKpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 720px) { #fxvKpis { grid-template-columns: minmax(0, 1fr); } }

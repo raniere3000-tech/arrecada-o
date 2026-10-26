@@ -595,6 +595,9 @@
     for (const [k, f] of fat) f.matriculas = ligsRef.get(k).size;
     // pagamentos, em ordem de mês de crédito: a conta fica "paga" no 1º mês em que recebe pagamento
     const pagaEm = new Int32Array(lig.length).fill(-1), coorte = new Map(), concil = [];
+    // "mesmo vencimento": por mês de crédito × referência de origem da conta × cidade/categoria — o que foi pago no mês
+    // e o faturado dessas contas (cada conta conta uma vez por mês em que recebe pagamento)
+    const pagas = new Map(), contaNoMes = new Int32Array(lig.length).fill(-1), ligNoGrupo = new Map();
     (pagamentos || []).forEach((partes, mi) => {
       const cc = { mes: mesesArrec[mi], achou: [0, 0, 0, 0], semConta: [0, 0, 0, 0], linhasAchou: 0, linhasSem: 0 };
       for (const P of partes || []) for (let i = 0; i < P.lig.length; i++) {
@@ -606,10 +609,16 @@
         if (!o) { o = { ref: refTxt(ref[p]), mes: mesesArrec[mi], c: cmb[p], valor: 0, contas: 0 }; coorte.set(k, o); }
         o.valor += P.v[i];
         if (pagaEm[p] < 0) { pagaEm[p] = mi; o.contas++; }
+        const kp = mi + "|" + ref[p] + "|" + cmb[p];
+        let q = pagas.get(kp);
+        if (!q) { q = { mes: mesesArrec[mi], ref: refTxt(ref[p]), c: cmb[p], pago: 0, faturado: 0, contas: 0, matriculas: 0 }; pagas.set(kp, q); }
+        q.pago += P.v[i];
+        if (contaNoMes[p] !== mi) { contaNoMes[p] = mi; q.faturado += valor[p]; q.contas++; }
+        if (ligNoGrupo.get(lig[p]) !== kp) { ligNoGrupo.set(lig[p], kp); q.matriculas++; }
       }
       concil.push(cc);
     });
-    return { combos, fat: [...fat.values()], coorte: [...coorte.values()], concil,
+    return { combos, fat: [...fat.values()], coorte: [...coorte.values()], concil, pagas: [...pagas.values()],
       diag: { contas: lig.length, duplicadas, linhas, semChave, fora } };
   }
 
