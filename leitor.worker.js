@@ -38,6 +38,12 @@ const ext = (nome) => (nome.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();
 
 // ---------- classificação ----------
 const COLS_ARRECADACAO = ["NLIGACAO", "DATACREDITO", "VALAUTENTICADO"];
+// Fatura de ciclo (faturamento): o mesmo arquivo do painel de faturamento, uma linha por rubrica de cada conta
+const COLS_FATURAMENTO = ["NDALIGACAO", "RUBRICA", "VALORPARCELA", "REFERENCIADELEITURA", "DATADEVENCIMENTO"];
+function ehFaturamento(linha) {
+  const cols = linha.split(";").map(C.chave);
+  return COLS_FATURAMENTO.every((c) => cols.includes(c));
+}
 async function cabecalhoCsv(file) {
   const bytes = new Uint8Array(await file.slice(0, 16384).arrayBuffer());
   return (ehUtf8(bytes) ? new TextDecoder("utf-8") : new TextDecoder("windows-1252")).decode(bytes).split(/\r?\n/)[0] || "";
@@ -76,6 +82,7 @@ async function classifica(item) {
   if (e === "csv" || e === "txt") {
     const cab = await cabecalhoCsv(file);
     if (ehArrecadacao(cab)) return { tipo: C.chave(rel).includes("DIARI") ? "diaria" : "acumulada" };
+    if (ehFaturamento(cab)) return { tipo: "faturamento" };
     return { tipo: "ignorado", motivo: "CSV sem as colunas Nº Ligação, Data Crédito e Val. Autenticado" };
   }
   if (!["xlsx", "xlsm", "xls", "xlsb"].includes(e)) return { tipo: "ignorado", motivo: "formato não usado" };
@@ -195,8 +202,29 @@ async function leCsv(file, aoLer, leitura) {
   return leitura.exporta();
 }
 
+// ---------- CSV do faturamento (Fatura de ciclo) ----------
+async function leFaturamento(file, aoLer) {
+  const leitura = new C.LeituraFaturamento();
+  let idx = null;
+  await linhasDoArquivo(file, (linha) => {
+    const p = linha.split(";");
+    if (!idx) {
+      const ch = p.map(C.chave), pos = (c) => ch.indexOf(c);
+      idx = { lig: pos("NDALIGACAO"), venc: pos("DATADEVENCIMENTO"), ref: pos("REFERENCIADELEITURA"), val: pos("VALORPARCELA"),
+        cidade: pos("NOMEDALOCALIDADE"), cat: pos("CATEGORIA"), sit: pos("SITUACAOCONTA"), cliente: pos("NOMECLIENTE") };
+      return;
+    }
+    const v = (j) => (j >= 0 ? p[j] : "");
+    leitura.adiciona({ lig: v(idx.lig), venc: v(idx.venc), ref: v(idx.ref), valor: v(idx.val), cidade: v(idx.cidade),
+      categoria: v(idx.cat), situacao: v(idx.sit), cliente: v(idx.cliente) });
+  }, aoLer);
+  if (!idx) throw new Error("arquivo vazio");
+  return leitura.exporta();
+}
+
 // ---------- cache: o que cada CSV exportou fica no navegador (IndexedDB); arquivo igual não é lido de novo ----------
-const CACHE_VERSAO = 4;
+const CACHE_VERSAO = 5;
+const CACHE_FATURAMENTO = 1;                           // cache do faturamento é separado: muda sem reler a arrecadação
 const banco = () => new Promise((ok, erro) => {
   const r = indexedDB.open("arrecadacao_cache", 1);
   r.onupgradeneeded = () => r.result.createObjectStore("arquivos");
@@ -259,7 +287,8 @@ async function processa(itens) {
   let db = null;
   try { db = await banco(); } catch (e) { /* navegador sem IndexedDB: lê tudo */ }
   const usados = new Set(), exportados = new Map();
-  const totalBytes = [...diarias, ...acumuladas].reduce((s, a) => s + a.tamanho, 0) || 1;
+  const faturas = arquivos.filter((a) => a.tipo === "faturamento");
+  const totalBytes = [...diarias, ...acumuladas, ...faturas].reduce((s, a) => s + a.tamanho, 0) || 1;
   let base = 0;
   for (const a of [...diarias, ...acumuladas]) {
     const id = `v${CACHE_VERSAO}|${R.FERIADOS_EXTRAS.join(",")}|${a.rel}|${a.tamanho}|${a.file.lastModified}|${assinaturaPerfil}`;
@@ -280,6 +309,30 @@ async function processa(itens) {
     if (exp) exportados.set(a, exp);
     base += a.tamanho;
   }
+  // faturamento: cada arquivo lido uma vez e guardado (chave própria, "fat|…")
+  const exportsFat = [];
+  for (const a of faturas) {
+    const id = `fat|v${CACHE_FATURAMENTO}|${a.rel}|${a.tamanho}|${a.file.lastModified}`;
+    usados.add(id);
+    let exp = db ? await cacheLe(db, id) : null;
+    if (exp) { a.doCache = true; avisa("progresso", { pct: 15 + Math.round((base / totalBytes) * 83), texto: `Já lido antes: ${a.rel}` }); }
+    else {
+      try {
+        exp = await leFaturamento(a.file, (lidos) => avisa("progresso", {
+          pct: 15 + Math.round(((base + lidos) / totalBytes) * 83),
+          texto: `Lendo faturamento ${a.rel} (${(lidos / 1048576).toFixed(0)} de ${(a.tamanho / 1048576).toFixed(0)} MB)`,
+        }));
+        if (db) await cacheGrava(db, id, exp);
+      } catch (e) {
+        Object.assign(a, { tipo: "ignorado", motivo: "faturamento: não foi possível ler: " + ((e && e.message) || e), erro: true });
+      }
+    }
+    if (exp) {
+      exportsFat.push(exp);
+      Object.assign(a, { registros: exp.linhas, meses: exp.refs, fora: exp.fora, semChave: exp.semChave });
+    }
+    base += a.tamanho;
+  }
   if (db) await cacheLimpa(db, usados);
   // O arquivo diário é o mais novo: os meses que ele traz não são lidos dos arquivos acumulados
   const mesesDiaria = new Set();
@@ -298,8 +351,14 @@ async function processa(itens) {
   fontes = { diarias: diarias.filter((a) => a.meses), acumuladas: acumuladas.filter((a) => a.meses), mesesDiaria };
   avisa("progresso", { pct: 99, texto: "Montando as tabelas…" });
   const dados = agregador.resultado(descontos);
+  // cruzamento com o faturamento (só somas pequenas vão para a página)
+  let cruzamento = null;
+  if (exportsFat.length) {
+    avisa("progresso", { pct: 99, texto: "Cruzando faturamento e arrecadação…" });
+    cruzamento = C.cruzaFaturamento(exportsFat, dados.analise.pagamentos, dados.meses);
+  }
   return {
-    dados, orcados,
+    dados, orcados, cruzamento,
     temPerfil: perfis.size > 0, temDesconto: descontos.size > 0,
     mesesDiaria: [...mesesDiaria].sort(),
     mesesDesconto: [...descontos.keys()].sort(),

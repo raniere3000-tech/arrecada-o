@@ -230,3 +230,80 @@ test("análise: maiores arrecadações, aumentos e quedas por ligação (mesmos 
   assert.equal(d.analise.nomes.get(3), undefined);
   assert.equal(C.rankings(d.analise, 1, 0, tudo, C.mascaraAte(2), 1).maiores.length, 1);
 });
+
+// ---------- faturamento (Fatura de ciclo) e cruzamento com a arrecadação ----------
+const fat = (lig, venc, valor, extra = {}) => ({ lig: String(lig), venc, ref: "set/26", valor, cidade: "RIO BONITO", categoria: "RESIDENCIAL",
+  situacao: "LIBERADA", cliente: "FULANO", ...extra });
+
+test("referência e acentos do faturamento", () => {
+  assert.equal(C.refDeTexto("set/26"), "2026-09");
+  assert.equal(C.refDeTexto("09/2026"), "2026-09");
+  assert.equal(C.refDeTexto("Soma de 01/10/2025".replace(/^Soma de /, "")), "2025-10");
+  assert.equal(C.refDeTexto("xyz"), "");
+  assert.equal(C.vencNum("2026-10-10"), 20261010);
+  assert.equal(C.consertaAcento("CORREÃ‡ÃƒO MONETÃ\u0081RIA"), "CORREÇÃO MONETÁRIA");   // como vem no arquivo real (com o \x81)
+  assert.equal(C.consertaAcento("NORMAL"), "NORMAL");
+});
+
+test("faturamento: conta = matrícula + vencimento, soma todas as rubricas (créditos inclusive), Em Análise fica de fora", () => {
+  const f = new C.LeituraFaturamento();
+  f.adiciona(fat(1, "10/10/2026", "129,16"));                       // VALOR DE AGUA
+  f.adiciona(fat(1, "10/10/2026", "-53,42"));                       // CREDITO/DEBITO DE ARRECADACAO
+  f.adiciona(fat(1, "10/10/2026", "4,01"));                         // JUROS
+  f.adiciona(fat(2, "05/10/2026", "300,00", { categoria: "PUBLICA", cidade: "CORDEIRO" }));
+  f.adiciona(fat(3, "05/10/2026", "999,00", { situacao: "EM ANALISE" }));
+  f.adiciona(fat("", "05/10/2026", "1,00"));                        // sem matrícula: ignorada e contada
+  const e = f.exporta();
+  assert.equal(e.contas.lig.length, 2);
+  assert.equal(e.linhas, 4);
+  assert.deepEqual(e.fora, { linhas: 1, valor: 999, contas: 1 });
+  assert.equal(e.semChave, 1);
+  assert.deepEqual(e.refs, ["2026-09"]);
+  const i1 = [...e.contas.lig].indexOf(1);
+  perto(e.contas.valor[i1], 129.16 - 53.42 + 4.01);
+  perto(e.contas.credito[i1], -53.42);
+});
+
+test("cruzamento: pagamento acha a conta pela matrícula + vencimento; parcela e conta repetida", () => {
+  const f1 = new C.LeituraFaturamento(), f2 = new C.LeituraFaturamento();
+  f1.adiciona(fat(1, "10/10/2026", "100,00"));
+  f1.adiciona(fat(2, "05/10/2026", "300,00", { categoria: "PUBLICA", cidade: "CORDEIRO" }));
+  f1.adiciona(fat(4, "05/10/2026", "50,00"));                       // não paga
+  f2.adiciona(fat(1, "10/10/2026", "100,00"));                      // mesma conta em outro arquivo: conta uma vez
+  const a = new C.Agregador();
+  const arr = (lig, venc, cred, valor, tipo = "1-NOTA FISCAL MENSAL") => ({ lig: String(lig), contrato: "1", vencimento: venc, credito: cred, valor,
+    util: "100-RESIDENCIAL NORMAL", zona: "14-RIO BONITO", tipo });
+  a.adiciona(arr(1, "10/10/2026", "08/10/2026", "60,00"));          // paga parte em outubro
+  a.adiciona(arr(1, "10/10/2026", "03/11/2026", "40,00"));          // e o resto em novembro
+  a.adiciona(arr(2, "05/10/2026", "05/10/2026", "300,00"));
+  a.adiciona(arr(2, "15/10/2026", "15/10/2026", "80,00", "3-PARCELA"));   // parcela: sem conta na fatura
+  a.adiciona({ ...arr(9, "10/10/2026", "08/10/2026", "70,00"), zona: "16-SAO GONCALO" });   // Leste: fora do cruzamento
+  const d = a.resultado(new Map());
+  const x = C.cruzaFaturamento([f1.exporta(), f2.exporta()], d.analise.pagamentos, d.meses);
+  assert.equal(x.diag.contas, 3);
+  assert.equal(x.diag.duplicadas, 1);
+  const totFat = x.fat.reduce((s, r) => s + r.valor, 0);
+  perto(totFat, 450);
+  assert.equal(x.fat.reduce((s, r) => s + r.matriculas, 0), 3);
+  const out = x.concil.find((c) => c.mes === "2026-10"), nov = x.concil.find((c) => c.mes === "2026-11");
+  perto(out.achou[1], 360);
+  perto(out.semConta[3], 80);
+  perto(out.achou.reduce((s, v) => s + v, 0) + out.semConta.reduce((s, v) => s + v, 0), 440);   // Leste não entra
+  perto(nov.achou[1], 40);
+  // coorte da referência set/26: 360 em out (2 contas pagas) e 40 em nov (nenhuma conta nova)
+  const co = (mes) => x.coorte.filter((r) => r.ref === "2026-09" && r.mes === mes);
+  perto(co("2026-10").reduce((s, r) => s + r.valor, 0), 360);
+  assert.equal(co("2026-10").reduce((s, r) => s + r.contas, 0), 2);
+  assert.equal(co("2026-11").reduce((s, r) => s + r.contas, 0), 0);
+  assert.equal(x.combos.find((c) => c.cidade === "CORDEIRO").grupo, "PUBLICO");
+  assert.equal(x.combos[0].sup, "INTERIOR");
+});
+
+test("cruzamento sem faturamento ou sem arrecadação não quebra", () => {
+  const vazio = C.cruzaFaturamento([], [], []);
+  assert.deepEqual(vazio.fat, []);
+  assert.equal(vazio.diag.contas, 0);
+  const f = new C.LeituraFaturamento();
+  f.adiciona(fat(1, "10/10/2026", "10,00"));
+  assert.equal(C.cruzaFaturamento([f.exporta()], undefined, []).fat.length, 1);
+});

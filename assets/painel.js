@@ -4,7 +4,10 @@
   const C = window.CALC, R = window.REGRAS;
   const $ = (id) => document.getElementById(id);
   const ARQ_AJUSTES = "ajustes_arrecadacao.json";
-  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", analise: "Análise", base: "Base", dados: "Dados" };
+  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", analise: "Análise", base: "Base", dados: "Dados",
+    fxa: "Faturamento x Arrecadação", conversao: "Conversão por referência", clientes: "Clientes e oportunidades", localidade: "Diagnóstico por localidade" };
+  const AREA_DA_ABA = { fxa: "analises", conversao: "analises", clientes: "analises", localidade: "analises" };   // as outras: Executivo
+  const ultimaDaArea = { executivo: "resumo", analises: "fxa" };
   const ABAS_PDF = ["resumo", "subcategoria", "perfil", "cidades", "escada"];     // Análise e Dados não entram no PDF
   const NOME_SUP = { INTERIOR: "Interior", LESTE: "Leste", [R.SEM_SUP]: "Sem SUP" };
   const DIGITADO = "__digitado";                      // opção do seletor de orçado: o valor digitado no painel
@@ -203,7 +206,7 @@
   }
 
   function listaArquivos(res) {
-    const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (linha da arrecadação)", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
+    const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (linha da arrecadação)", faturamento: "Faturamento (Fatura de ciclo)", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
     const linhas = res.arquivos.map((a) => `<tr>${td(esc(a.rel), "rot")}${td(USO[a.tipo] || a.tipo, "rot")}${td(a.registros != null ? fmt(a.registros) : "")}`
       + `${td(esc((a.meses || []).map(C.rotuloMes).join(", ")), "rot")}${td(esc(a.motivo || [a.puladas ? `${fmt(a.puladas)} linhas de mês que está no arquivo diário não foram usadas` : "", a.doCache ? "já lido antes (guardado neste navegador)" : ""].filter(Boolean).join("; ")), "rot")}</tr>`).join("");
     const d = res.dados, avisos = [];
@@ -216,6 +219,14 @@
     const ultimos = d.meses.map((m, i) => [m, descMes[i]]).filter(([, v]) => v).slice(-3);
     if (ultimos.length) avisos.push("Desconto comercial abatido (ligações que pagaram no mês, como no BI): "
       + ultimos.map(([m, v]) => `${C.rotuloMes(m)} ${rs(-v)}`).join("; ") + ".");
+    const fatArqs = res.arquivos.filter((a) => a.tipo === "faturamento");
+    if (fatArqs.length && res.cruzamento) {
+      const dg = res.cruzamento.diag;
+      avisos.push(`Faturamento: ${fatArqs.length} arquivo(s), ${fmt(dg.contas)} contas (referências ${esc([...new Set(fatArqs.flatMap((a) => a.meses || []))].sort().map(C.rotuloMes).join(", "))}).`
+        + (dg.fora.contas ? ` ${fmt(dg.fora.contas)} contas Em Análise ficaram de fora (${rs(dg.fora.valor)}).` : "")
+        + (dg.duplicadas ? ` ${fmt(dg.duplicadas)} contas repetidas em mais de um arquivo contaram uma vez.` : "")
+        + (dg.semChave ? ` ${fmt(dg.semChave)} linhas sem matrícula, vencimento, referência ou valor foram ignoradas.` : ""));
+    }
     if (d.descartadas.semCredito) avisos.push(`${fmt(d.descartadas.semCredito)} linhas sem Data Crédito foram ignoradas.`);
     if (d.descartadas.semValor) avisos.push(`${fmt(d.descartadas.semValor)} linhas sem Val. Autenticado foram ignoradas.`);
     E.htmlArquivos = `<table><thead><tr><th>Arquivo</th><th>Uso</th><th>Linhas</th><th>Meses</th><th>Observação</th></tr></thead><tbody>${linhas}</tbody></table>`
@@ -348,8 +359,9 @@
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
-    $("diasCard").hidden = E.aba === "dados" || E.aba === "base";
-    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados })[E.aba]();
+    $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || !!AREA_DA_ABA[E.aba];
+    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa,
+      conversao: () => {}, clientes: () => {}, localidade: () => {} })[E.aba]();
   }
 
   // "1 a 12", "1, 5 e 10", "0 (fins de semana e feriados) e 1 a 3"
@@ -841,6 +853,140 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   }
 
+  // ===== Área Análises — Faturamento x Arrecadação (somente Interior: é onde há faturamento) =====
+  const grupoCruz = (g) => R.GRUPO_NO_CRUZAMENTO[g] || g;
+  const SEL_MES_TODO = C.mascaraAte(C.MAX_DIA, true);          // mês de crédito inteiro (todos os dias)
+  let fxaMesEscolhido = "", fxaOrdem = { fxaCid: ["dif", -1], fxaSub: ["dif", -1] }, fxaLinhas = {};
+  function desenhaFxa() {
+    const cz = E.res.cruzamento, d = E.res.dados;
+    $("fxaCorpo").hidden = !cz;
+    if (!cz) {
+      $("fxaNota").textContent = "";
+      $("fxaAviso").innerHTML = '<p class="aviso-pdf">Nenhum arquivo de faturamento na pasta. Coloque os arquivos <b>Fatura de ciclo MM-AAAA.csv</b> numa subpasta (ex.: <code>Faturamento</code>) e clique em ↻ Atualizar. As abas do Executivo continuam funcionando sem eles.</p>';
+      $("fxaMes").innerHTML = ""; return;
+    }
+    const refs = [...new Set(cz.fat.map((r) => r.ref))].sort();
+    const meses = [...new Set([...refs, ...d.meses])].sort();
+    if (!meses.includes(fxaMesEscolhido)) fxaMesEscolhido = refs[refs.length - 1] || d.meses[d.meses.length - 1];
+    $("fxaMes").innerHTML = [...meses].reverse().map((m) => `<option value="${m}"${m === fxaMesEscolhido ? " selected" : ""}>${C.rotuloMes(m)}${refs.includes(m) ? "" : " (sem faturamento)"}</option>`).join("");
+    const M = fxaMesEscolhido, Mant = C.mesAnterior(M);
+    const filtroG = E.grupo ? grupoCruz(E.grupo) : "";
+    const okFat = (c) => (!E.cidade || c.cidade === E.cidade) && (!filtroG || c.grupo === filtroG);
+    const mkArr = Uint8Array.from(d.combos, (c) => (c.sup === "INTERIOR" && (!E.cidade || c.cidade === E.cidade) && (!filtroG || grupoCruz(c.grupo) === filtroG) ? 1 : 0));
+    const avisos = [];
+    if (E.sup && E.sup !== "INTERIOR") avisos.push(`O faturamento é só do Interior: o filtro Superintendência = ${nomeSup(E.sup)} não se aplica aqui (a comparação usa o Interior).`);
+    if (E.grupo === "PEQUENO COMERCIO") avisos.push("No cruzamento, Pequeno Comércio está junto com Comercial (o faturamento não separa).");
+    $("fxaAviso").innerHTML = avisos.map((a) => `<p class="aviso-pdf">${esc(a)}</p>`).join("");
+    const filtroTxt = ["Interior", E.cidade, filtroG].filter(Boolean).join(" · ");
+    const ultimoArr = d.meses[d.meses.length - 1], parcial = M === ultimoArr ? ` · arrecadação de ${C.rotuloMes(M)} até ${dataBR(d.ultimoCredito[M])} (mês em andamento)` : "";
+    $("fxaNota").textContent = `${filtroTxt} · faturado pela referência, arrecadado pelo mês de crédito${parcial}.`;
+    // séries por mês
+    const fatMes = (m) => {
+      const o = { valor: 0, credito: 0, contas: 0, matriculas: 0, tem: false };
+      for (const r of cz.fat) if (r.ref === m && okFat(cz.combos[r.c])) { o.valor += r.valor; o.credito += r.credito; o.contas += r.contas; o.matriculas += r.matriculas; o.tem = true; }
+      return o;
+    };
+    const arrMes = (m) => { const mi = idxMes(m); return mi >= 0 ? C.totalDoMes(d, mi, mkArr, SEL_MES_TODO) : null; };
+    const pagas = (m) => { let n = 0, v = 0; for (const r of cz.coorte) if (r.ref === m && okFat(cz.combos[r.c])) { n += r.contas; v += r.valor; } return { n, v }; };
+    const fA = fatMes(M), fB = fatMes(Mant), aA = arrMes(M), aB = arrMes(Mant), pg = pagas(M);
+    const varr = (a, b) => (b ? a / b - 1 : NaN);
+    const vtxt = (a, b) => (isFinite(varr(a, b)) ? `${varr(a, b) >= 0 ? "+" : ""}${pct(varr(a, b))} vs ${C.rotuloMes(Mant)}` : `sem ${C.rotuloMes(Mant)} para comparar`);
+    const card = (t, v, sub, neg) => `<div class="kpi"><span>${t}</span><b${neg ? ' class="neg"' : ""}>${v}</b><small>${sub}</small></div>`;
+    $("fxaKpis").innerHTML = [
+      card(`Faturado (ref. ${C.rotuloMes(M)})`, fA.tem ? milhoes(fA.valor) : "—", fA.tem ? `${vtxt(fA.valor, fB.tem ? fB.valor : 0)} · ${fmt(fA.contas)} contas · créditos ${rs(fA.credito)}` : `sem faturamento de ${C.rotuloMes(M)} na pasta`),
+      card(`Arrecadado (crédito ${C.rotuloMes(M)})`, aA ? milhoes(aA.valor) : "—", aA ? `${vtxt(aA.valor, aB ? aB.valor : 0)} · com desconto` : "sem arrecadação no mês"),
+      card("Diferença faturado − arrecadado", fA.tem && aA ? milhoes(fA.valor - aA.valor) : "—", "diferença entre indicadores de períodos diferentes; não é saldo devedor"),
+      card("Matrículas faturadas × pagantes", `${fA.tem ? fmt(fA.matriculas) : "—"} × ${aA ? fmt(aA.clientes) : "—"}`, `faturadas na referência × pagantes no mês de crédito`),
+      card(`Contas da ref. ${C.rotuloMes(M)} já pagas`, fA.tem && fA.contas ? pct(pg.n / fA.contas) : "—", fA.tem ? `${fmt(pg.n)} de ${fmt(fA.contas)} contas · ${rs(pg.v)} recebidos (mesmo vencimento, qualquer mês)` : "—"),
+      card("Ticket médio", `${fA.tem && fA.matriculas ? fmt(fA.valor / fA.matriculas, 2) : "—"} × ${aA && aA.clientes ? fmt(aA.valor / aA.clientes, 2) : "—"}`, "faturado por matrícula × arrecadado por pagante (R$)"),
+    ].join("");
+    // gráficos: últimos 14 meses até o mês escolhido
+    const janela = meses.filter((m) => m <= M).slice(-14);
+    const serieF = janela.map((m) => { const f = fatMes(m); return f.tem ? f.valor : null; });
+    const serieA = janela.map((m) => { const a = arrMes(m); return a ? a.valor : null; });
+    $("fxaG1").innerHTML = svgBarras(janela.map(C.rotuloMes), [[serieF, "b-fat"], [serieA, "b-at"]], curto);
+    const varS = (s) => s.map((v, i) => (i && v != null && s[i - 1] ? v / s[i - 1] - 1 : null));
+    $("fxaG2").innerHTML = svgLinhas(janela.map(C.rotuloMes), [[varS(serieF), "l-fat"], [varS(serieA), "l-at"]], (v) => pct(v));
+    $("fxaG3").innerHTML = svgBarras(janela.map(C.rotuloMes), [[janela.map((m) => { const f = fatMes(m); return f.tem ? f.matriculas : null; }), "b-fat"],
+      [janela.map((m) => { const a = arrMes(m); return a ? a.clientes : null; }), "b-at"]], (v) => fmt(v / 1000, 1) + " mil");
+    // tabelas por cidade e por subcategoria (mês escolhido)
+    const porLinha = (rotFat, rotArr) => {
+      const L = new Map(), cel = (k) => { let o = L.get(k); if (!o) { o = { nome: k, fat: 0, arr: 0, mf: 0, mp: 0 }; L.set(k, o); } return o; };
+      for (const r of cz.fat) if (r.ref === M && okFat(cz.combos[r.c])) { const o = cel(rotFat(cz.combos[r.c])); o.fat += r.valor; o.mf += r.matriculas; }
+      const mi = idxMes(M);
+      if (mi >= 0) for (const [k, l] of C.porGrupo(d, [mi], mkArr, SEL_MES_TODO, rotArr)) { const c = l.get(mi); if (c) { const o = cel(k); o.arr += c.valor; o.mp += c.clientes; } }
+      const totF = [...L.values()].reduce((x, o) => x + o.fat, 0);
+      return [...L.values()].map((o) => ({ ...o, dif: o.fat - o.arr, part: totF ? o.fat / totF : 0 }));
+    };
+    fxaLinhas.fxaCid = porLinha((c) => c.cidade, (c) => c.cidade);
+    fxaLinhas.fxaSub = porLinha((c) => c.grupo, (c) => grupoCruz(c.grupo));
+    desenhaTabelaFxa("fxaCid", "Cidade");
+    desenhaTabelaFxa("fxaSub", "Subcategoria");
+    // conciliação pelo vencimento (todos os meses de crédito da janela; Interior inteiro)
+    const TIPOS = ["Outros", "NF mensal", "NF avulsa", "Parcela"];
+    const lin = cz.concil.filter((c) => janela.includes(c.mes) && refs.length && c.mes >= refs[0]).map((c) => {
+      const tot = c.achou.reduce((x, v) => x + v, 0) + c.semConta.reduce((x, v) => x + v, 0);
+      const nf = c.achou[1] + c.achou[2], nfTot = nf + c.semConta[1] + c.semConta[2];
+      return `<tr>${td(C.rotuloMes(c.mes), "rot")}${td(fmt(tot))}${td(fmt(nf))}${td(nfTot ? pct(nf / nfTot) : "—")}${td(fmt(c.semConta[1] + c.semConta[2]))}${td(fmt(c.achou[3] + c.semConta[3]))}${td(fmt(c.achou[0] + c.semConta[0]))}</tr>`;
+    });
+    tabela("fxaConcil", ["Mês de crédito", "Arrecadado Interior (R$)", "NF mensal/avulsa que achou a conta", "% achou", "NF sem conta na fatura", "Parcelas (acordos)", "Outros tipos"], lin);
+    $("fxaConcilNota").textContent = `Valores sem o desconto comercial e sem os filtros de cidade/subcategoria. NF de um mês de crédito só acha a conta se a fatura daquela referência estiver na pasta (${refs.length ? `${C.rotuloMes(refs[0])} a ${C.rotuloMes(refs[refs.length - 1])}` : "nenhuma"}); ${TIPOS[3].toLowerCase()}s de acordos têm vencimento próprio e não se ligam a uma conta.`;
+  }
+  $("fxaMes").addEventListener("change", (e) => { fxaMesEscolhido = e.target.value; desenha(); });
+  const COLS_FXA = [["nome", null], ["fat", "Faturado (R$)"], ["arr", "Arrecadado (R$)"], ["dif", "Diferença (R$)"], ["part", "Part. no faturado"], ["mf", "Matrículas faturadas"], ["mp", "Matrículas pagantes"]];
+  function desenhaTabelaFxa(id, titulo) {
+    const [col, dir] = fxaOrdem[id], linhas = [...fxaLinhas[id]].sort((a, b) => (col === "nome" ? a.nome.localeCompare(b.nome, "pt-BR") : a[col] - b[col]) * dir);
+    const tot = linhas.reduce((t, o) => ({ fat: t.fat + o.fat, arr: t.arr + o.arr, mf: t.mf + o.mf, mp: t.mp + o.mp }), { fat: 0, arr: 0, mf: 0, mp: 0 });
+    $(id).innerHTML = `<thead><tr>${COLS_FXA.map(([k, t]) => `<th data-col="${k}" class="${k === col ? (dir > 0 ? "asc" : "desc") : ""}">${t || titulo}</th>`).join("")}</tr></thead><tbody>`
+      + linhas.map((o) => `<tr>${td(esc(o.nome), "rot")}${td(fmt(o.fat))}${td(fmt(o.arr))}${tdNum(o.dif, fmt)}${td(pct(o.part))}${td(fmt(o.mf))}${td(fmt(o.mp))}</tr>`).join("")
+      + `<tr class="total">${td("Total", "rot")}${td(fmt(tot.fat))}${td(fmt(tot.arr))}${tdNum(tot.fat - tot.arr, fmt)}${td(tot.fat ? "100,00%" : "")}${td(fmt(tot.mf))}${td(fmt(tot.mp))}</tr></tbody>`;
+  }
+  ["fxaCid", "fxaSub"].forEach((id) => $(id).addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-col]");
+    if (!th) return;
+    const [col, dir] = fxaOrdem[id];
+    fxaOrdem[id] = [th.dataset.col, th.dataset.col === col ? -dir : th.dataset.col === "nome" ? 1 : -1];
+    desenhaTabelaFxa(id, id === "fxaCid" ? "Cidade" : "Subcategoria");
+  }));
+  document.querySelectorAll("button[data-fxa-csv]").forEach((b) => b.addEventListener("click", () => {
+    const id = b.dataset.fxaCsv, n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ",");
+    const linhas = [[id === "fxaCid" ? "Cidade" : "Subcategoria", "Faturado", "Arrecadado", "Diferença", "Participação", "Matrículas faturadas", "Matrículas pagantes"].join(";"),
+      ...(fxaLinhas[id] || []).map((o) => [o.nome, n(o.fat), n(o.arr), n(o.dif), n(o.part * 100), o.mf, o.mp].join(";"))];
+    baixa("\ufeff" + linhas.join("\r\n"), `Faturamento_x_Arrecadacao_${id === "fxaCid" ? "cidades" : "subcategorias"}_${fxaMesEscolhido}.csv`);
+  }));
+  // gráficos simples (SVG): barras agrupadas e linhas; null = sem dado (não desenha)
+  function svgBarras(cats, series, rotulo) {
+    const larg = Math.max(720, cats.length * 80), alt = 260, base = 214, topo = 30;
+    const max = Math.max(1, ...series.flatMap(([v]) => v.filter((x) => x != null)));
+    const passo = larg / Math.max(1, cats.length), bw = Math.min(30, (passo * 0.7) / series.length);
+    let svg = `<svg viewBox="0 0 ${larg} ${alt}"><line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`;
+    cats.forEach((cat, i) => {
+      const cx = passo * i + passo / 2;
+      series.forEach(([v, cls], j) => {
+        if (v[i] == null) return;
+        const h = ((base - topo) * Math.max(0, v[i])) / max, x = cx + (j - series.length / 2) * (bw + 4) + 2;
+        svg += `<g><title>${cat}: ${rotulo(v[i])}</title><rect class="${cls}" x="${x}" y="${base - h}" width="${bw}" height="${h}" rx="2"/>`
+          + `<text class="r-${j ? "at" : "ant"}" x="${x + bw / 2}" y="${base - h - 4}">${rotulo(v[i])}</text></g>`;
+      });
+      svg += `<text class="x" x="${cx}" y="${base + 18}">${cat}</text>`;
+    });
+    return svg + "</svg>";
+  }
+  function svgLinhas(cats, series, rotulo) {
+    const larg = Math.max(720, cats.length * 80), alt = 240, topo = 24, baixo = 200;
+    const vals = series.flatMap(([v]) => v.filter((x) => x != null));
+    const max = Math.max(0.01, ...vals), min = Math.min(-0.01, ...vals), y = (v) => topo + ((max - v) / (max - min)) * (baixo - topo);
+    const passo = larg / Math.max(1, cats.length), x = (i) => passo * i + passo / 2;
+    let svg = `<svg viewBox="0 0 ${larg} ${alt}"><line x1="0" y1="${y(0)}" x2="${larg}" y2="${y(0)}" class="eixo"/>`;
+    series.forEach(([v, cls]) => {
+      const pts = v.map((p, i) => (p == null ? null : `${x(i)},${y(p)}`)).filter(Boolean);
+      if (pts.length > 1) svg += `<polyline class="${cls}" points="${pts.join(" ")}"/>`;
+      v.forEach((p, i) => { if (p != null) svg += `<g><title>${cats[i]}: ${rotulo(p)}</title><circle class="${cls}" cx="${x(i)}" cy="${y(p)}" r="4"/><text class="r-at" x="${x(i)}" y="${y(p) - 8}">${rotulo(p)}</text></g>`; });
+    });
+    cats.forEach((c, i) => { svg += `<text class="x" x="${x(i)}" y="${baixo + 26}">${c}</text>`; });
+    return svg + "</svg>";
+  }
+
   // ----- Dados: os números por trás do que está na tela -----
   function desenhaDados() {
     const d = E.res.dados, mi = idxMes(E.mes), cal = C.calendario(E.mes), mk = marcas();
@@ -867,11 +1013,16 @@
   // ===== abas =====
   function mostraAba(aba) {
     E.aba = aba;
-    document.querySelectorAll("#abas button").forEach((b) => b.classList.toggle("active", b.dataset.aba === aba));
+    const area = AREA_DA_ABA[aba] || "executivo";
+    ultimaDaArea[area] = aba;
+    document.querySelectorAll("#abas .areas button").forEach((b) => b.classList.toggle("active", b.dataset.area === area));
+    document.querySelectorAll("#abas .toggle").forEach((g) => { g.hidden = g.dataset.grupo !== area; });
+    document.querySelectorAll("#abas .toggle button").forEach((b) => b.classList.toggle("active", b.dataset.aba === aba));
     document.querySelectorAll(".painel-aba").forEach((p) => { p.hidden = p.dataset.painel !== aba; });
     desenha();
   }
-  document.querySelectorAll("#abas button").forEach((b) => b.addEventListener("click", () => mostraAba(b.dataset.aba)));
+  document.querySelectorAll("#abas .toggle button").forEach((b) => b.addEventListener("click", () => mostraAba(b.dataset.aba)));
+  document.querySelectorAll("#abas .areas button").forEach((b) => b.addEventListener("click", () => mostraAba(ultimaDaArea[b.dataset.area])));
 
   // ===== PDF: uma folha (ou mais, se a tabela for comprida) por aba, no visual escolhido =====
   const quadro = () => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));

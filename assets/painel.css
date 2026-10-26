@@ -247,3 +247,28 @@ body.bi .card h2 .opcao { color: #fff; }
 .base-acoes label.btn { cursor: pointer; }
 table.base-tabela { width: auto; min-width: 240px; margin-top: 12px; }
 @media (max-width: 720px) { .base-grade { grid-template-columns: minmax(0, 1fr); } }
+
+/* navegação em duas áreas: Executivo e Análises */
+.abas .areas { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.abas .areas button { padding: 8px 16px; border-radius: 10px; border: 1px solid var(--linha); background: #fff; color: var(--marinho); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; text-align: left; }
+.abas .areas button small { display: block; font-size: 11px; font-weight: 500; color: var(--azul-claro); }
+.abas .areas button.active { background: var(--marinho); color: #fff; border-color: var(--marinho); }
+.abas .areas button.active small { color: #C8D4EA; }
+body.bi .abas .areas button.active { background: var(--bi); border-color: var(--bi); }
+/* área Análises */
+.grade-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.grade-2 .card { margin: 0 0 16px; }
+.grafico .b-fat { fill: #E8A15A; }
+.grafico .l-fat { fill: none; stroke: #E8710A; stroke-width: 2.5; }
+.grafico circle.l-fat { fill: #E8710A; }
+.grafico .l-at { fill: none; stroke: #1A2740; stroke-width: 2.5; }
+.grafico circle.l-at { fill: #1A2740; }
+.legenda-g .cor-fat { background: #E8A15A; }
+table.ordenavel th[data-col] { cursor: pointer; }
+table.ordenavel th.asc::after { content: " ▲"; font-size: 9px; }
+table.ordenavel th.desc::after { content: " ▼"; font-size: 9px; }
+.card h2 .opcao select { font: inherit; font-size: 12.5px; padding: 3px 6px; border: 1px solid var(--linha); border-radius: 6px; }
+@media (max-width: 1100px) { .grade-2 { grid-template-columns: minmax(0, 1fr); } }
+
+#fxaKpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 720px) { #fxaKpis { grid-template-columns: minmax(0, 1fr); } }

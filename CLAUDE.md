@@ -6,5 +6,6 @@
 - Rode `node --test "tests/*.test.js"` antes de enviar.
 - Mudou o formato do que `LeituraArquivo.exporta()` devolve, ou a regra dos feriados fixos/móveis em `regras.js`? Aumente
   `CACHE_VERSAO` em `leitor.worker.js`, senão o navegador usa o cache antigo (o dia útil de cada linha fica guardado nele).
-  `FERIADOS_EXTRAS` já entra na chave do cache.
+  `FERIADOS_EXTRAS` já entra na chave do cache. O faturamento tem cache próprio: mudou `LeituraFaturamento.exporta()`?
+  Aumente `CACHE_FATURAMENTO` (a arrecadação não é relida).
 - Regras de negócio (cidades, subcategorias, feriados) ficam em `assets/regras.js`.

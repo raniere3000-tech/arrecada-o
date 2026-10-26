@@ -33,6 +33,34 @@
     const s = String(t == null ? "" : t).trim();
     return /^\d+(\.0+)?$/.test(s) ? String(parseInt(s, 10)) : s;
   }
+  // "set/26", "setembro/2026", "09/2026", "01/09/2026" ou Date → "2026-09" ("" se não reconhecer)
+  function refDeTexto(v) {
+    if (v instanceof Date) return dataISO(v).slice(0, 7);
+    const s = String(v == null ? "" : v).trim();
+    const iso = dataISO(s);
+    if (iso) return iso.slice(0, 7);
+    let m = /^(\d{1,2})\/(\d{4})$/.exec(s);
+    if (m && +m[1] >= 1 && +m[1] <= 12) return `${m[2]}-${m[1].padStart(2, "0")}`;
+    m = /^([A-Za-zçÇ]{3})[A-Za-zçÇ]*[\/\-\s.]*(\d{2}|\d{4})$/.exec(s);
+    if (m) {
+      const i = MESES_CURTOS.indexOf(chave(m[1]).toLowerCase().slice(0, 3));
+      if (i >= 0) return `${m[2].length === 2 ? "20" + m[2] : m[2]}-${String(i + 1).padStart(2, "0")}`;
+    }
+    return "";
+  }
+  const vencNum = (iso) => (iso ? +iso.replace(/-/g, "") : 0);   // "2026-10-10" → 20261010
+  // Texto com acento quebrado (UTF-8 lido como Windows-1252, ex.: "CORREÃ‡ÃƒO") → "CORREÇÃO"
+  function consertaAcento(t) {
+    const s = String(t == null ? "" : t);
+    if (!/[ÃÂ]/.test(s)) return s;
+    try {
+      const bytes = Uint8Array.from(s, (ch) => { const c = ch.charCodeAt(0); return c < 256 ? c : (CP1252_INV[c] || 63); });
+      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch (e) { return s; }
+  }
+  const CP1252_INV = { 0x20ac: 0x80, 0x201a: 0x82, 0x192: 0x83, 0x201e: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x2c6: 0x88, 0x2030: 0x89,
+    0x160: 0x8a, 0x2039: 0x8b, 0x152: 0x8c, 0x17d: 0x8e, 0x2018: 0x91, 0x2019: 0x92, 0x201c: 0x93, 0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96,
+    0x2014: 0x97, 0x2dc: 0x98, 0x2122: 0x99, 0x161: 0x9a, 0x203a: 0x9b, 0x153: 0x9c, 0x17e: 0x9e, 0x178: 0x9f };
   function rotuloMes(mes) {                             // "2026-10" → "out/2026"
     if (!mes) return "(sem data)";
     return `${MESES_CURTOS[+mes.slice(5, 7) - 1]}/${mes.slice(0, 4)}`;
@@ -127,6 +155,7 @@
       this.descartadas = { semCredito: 0, semValor: 0 };
       this.ultimaAtualizacao = "";
       this.nomes = new Map();                          // ligação → nome do cliente (só de quem tem pagamento ≥ R$ 200: aba Análise)
+      this.supDaZona = new Map();
     }
     // r: { lig, contrato, vencimento, credito, valor, util, zona, tipo, atualizacao, cliente } — texto como vem do arquivo
     adiciona(r) {
@@ -136,7 +165,7 @@
       if (!isFinite(valor)) { this.descartadas.semValor++; return; }
       const mes = credito.slice(0, 7), ordem = calendario(mes).ordem[credito];
       let M = this.meses.get(mes);
-      if (!M) { M = { V: new Map(), L: new Map(), ultimoCredito: "", linhas: 0 }; this.meses.set(mes, M); }
+      if (!M) { M = { V: new Map(), L: new Map(), P: new Map(), ultimoCredito: "", linhas: 0 }; this.meses.set(mes, M); }
       M.linhas++;
       if (credito > M.ultimoCredito) M.ultimoCredito = credito;
       const perfil = this.perfis ? (this.perfis.get(ligacao(r.lig) + "|" + ligacao(r.contrato)) || R.SEM_PERFIL) : R.SEM_PERFIL;
@@ -157,6 +186,15 @@
       const lig = chaveLig(r.lig), kl = (lig * COMBOS_ARQ + c) * DIAS_L + ordem;
       M.L.set(kl, (M.L.get(kl) || 0) + valor);
       if (valor >= VALOR_COM_NOME && r.cliente && !this.nomes.has(lig)) this.nomes.set(lig, String(r.cliente).trim().split("").join(""));   // split/join: cópia solta da linha
+      // pagamentos do Interior (onde há faturamento) por ligação + vencimento + tipo: base do cruzamento com a fatura
+      const zona = String(r.zona || "").trim();
+      let sup = this.supDaZona.get(zona);
+      if (sup === undefined) { sup = zonaInfo(zona)[1]; this.supDaZona.set(zona, sup); }
+      if (sup === "INTERIOR") {
+        const t = String(r.tipo || "").trim(), tipo = t.startsWith("1-") ? 1 : t.startsWith("2-") ? 2 : t.startsWith("3-") ? 3 : 0;
+        const kp = lig + "|" + vencNum(dataISO(r.vencimento)) + "|" + tipo;
+        M.P.set(kp, (M.P.get(kp) || 0) + valor);
+      }
       if (r.atualizacao) {
         const at = String(r.atualizacao).trim(), comp = dataISO(at) + at.slice(10);
         if (comp > this.ultimaAtualizacao) this.ultimaAtualizacao = comp;
@@ -171,7 +209,10 @@
         const L = { k: new Float64Array(M.L.size), d: new Uint8Array(M.L.size), v: new Float32Array(M.L.size) };
         i = 0;
         for (const [k, v] of M.L) { const d = k % DIAS_L; L.k[i] = (k - d) / DIAS_L; L.d[i] = d; L.v[i] = v; i++; }
-        meses[mes] = { V, L, ultimoCredito: M.ultimoCredito, linhas: M.linhas };
+        const P = { lig: new Float64Array(M.P.size), venc: new Int32Array(M.P.size), tipo: new Uint8Array(M.P.size), v: new Float64Array(M.P.size) };
+        i = 0;
+        for (const [k, v] of M.P) { const [l, vc, t] = k.split("|"); P.lig[i] = +l; P.venc[i] = +vc; P.tipo[i] = +t; P.v[i] = v; i++; }
+        meses[mes] = { V, L, P, ultimoCredito: M.ultimoCredito, linhas: M.linhas };
       }
       return { combos: this.cks.slice(), meses, descartadas: this.descartadas, ultimaAtualizacao: this.ultimaAtualizacao,
         // nomes em forma compacta: as ligações numa lista de números e os nomes num texto só
@@ -217,7 +258,7 @@
         meses.push(mes);
         usadas += X.linhas;
         let M = this.meses.get(mes);
-        if (!M) { M = { V: new Map(), partes: [], ultimoCredito: "" }; this.meses.set(mes, M); }
+        if (!M) { M = { V: new Map(), partes: [], pags: [], ultimoCredito: "" }; this.meses.set(mes, M); }
         if (X.ultimoCredito > M.ultimoCredito) M.ultimoCredito = X.ultimoCredito;
         const V = X.V;
         for (let i = 0; i < V.k.length; i++) {
@@ -227,6 +268,7 @@
           if (a) { a[0] += V.valor[i]; a[1] += V.contas[i]; a[2] += V.linhas[i]; } else M.V.set(nk, [V.valor[i], V.contas[i], V.linhas[i]]);
         }
         M.partes.push({ L: X.L, mapa });
+        if (X.P) M.pags.push(X.P);
       }
       this.linhas += usadas;
       this.descartadas.semCredito += exp.descartadas.semCredito;
@@ -249,7 +291,7 @@
       const meses = [...this.meses.keys()].sort();
       const VD = colunas(["mi", "d", "c", "valor", "contas"]), VE = colunas(["mi", "d", "c", "v", "valor"]);
       const CF = colunas(["mi", "ini", "len", "n", "desc"]), SE = colunas(["c", "m"]);
-      const descontoSemPagamento = {}, ultimoCredito = {}, entradas = [], descPorLig = [];
+      const descontoSemPagamento = {}, ultimoCredito = {}, entradas = [], descPorLig = [], pagamentos = [];
       meses.forEach((mes, mi) => {
         const M = this.meses.get(mes);
         ultimoCredito[mes] = M.ultimoCredito;
@@ -269,6 +311,7 @@
           L.set(nk, (L.get(nk) || 0) | (1 << P.d[i]));
         }
         entradas[mi] = M.partes;                       // aba Análise: as próprias listas dos arquivos (sem cópia)
+        pagamentos[mi] = M.pags;                       // cruzamento com o faturamento (Interior, por ligação + vencimento)
         M.partes = null;
         const dm = new Map();
         if (descontos && descontos.get(mes)) for (const [lig, v] of descontos.get(mes)) { const k = chaveLig(lig); dm.set(k, (dm.get(k) || 0) + v); }
@@ -309,7 +352,7 @@
         linhas: this.linhas, descartadas: this.descartadas, ultimaAtualizacao: this.ultimaAtualizacao,
         zonasSemSup: [...this.zonasSemSup.keys()], subSemClasse: [...this.subSemClasse.keys()],
         // fica no worker (não vai para a página): base dos rankings por ligação da aba Análise
-        analise: { entradas, descontos: descPorLig, nomes: this.nomes },
+        analise: { entradas, descontos: descPorLig, nomes: this.nomes, pagamentos },
       };
     }
   }
@@ -436,6 +479,111 @@
     return { linhas, desconto };
   }
 
+  // ---------- faturamento (Fatura de ciclo) ----------
+  // Uma linha por rubrica de cada conta. A conta é a matrícula + Data de Vencimento (o arquivo não tem nº da conta);
+  // o valor da conta é a soma de TODAS as rubricas, inclusive as negativas (créditos/abatimentos). Contas "Em Análise" saem.
+  class LeituraFaturamento {
+    constructor() {
+      this.contas = new Map();                         // "ligação|vencimento" → [valor, créditos, ref, combo, rubricas]
+      this.idxCk = new Map();
+      this.cks = [];
+      this.linhas = 0;
+      this.fora = { linhas: 0, valor: 0, contas: new Set() };
+      this.semChave = 0;
+      this.nomes = new Map();
+    }
+    // r: { lig, venc, ref, valor, cidade, categoria, situacao, cliente } — texto como vem do arquivo
+    adiciona(r) {
+      const valor = numeroBR(r.valor), venc = vencNum(dataISO(r.venc)), ref = refDeTexto(r.ref);
+      if (!r.lig || !venc || !ref || !isFinite(valor)) { this.semChave++; return; }
+      const lig = chaveLig(r.lig), k = lig + "|" + venc;
+      if (R.SITUACOES_FORA_DO_FATURAMENTO.includes(chave(r.situacao))) {
+        this.fora.linhas++; this.fora.valor += valor; this.fora.contas.add(k);
+        return;
+      }
+      this.linhas++;
+      let cat = chave(r.categoria);
+      cat = R.CATEGORIAS_FATURAMENTO[cat] || String(r.categoria || "").trim().toUpperCase() || R.SEM_CLASSIFICACAO;
+      const ck = String(r.cidade || "").trim().toUpperCase() + SEP + cat;
+      let c = this.idxCk.get(ck);
+      if (c === undefined) { c = this.cks.length; this.cks.push(ck); this.idxCk.set(ck, c); }
+      let a = this.contas.get(k);
+      if (!a) { a = [0, 0, +ref.replace("-", ""), c, 0]; this.contas.set(k, a); }
+      a[0] += valor;
+      if (valor < 0) a[1] += valor;
+      a[4]++;
+      if (r.cliente && !this.nomes.has(lig)) this.nomes.set(lig, consertaAcento(String(r.cliente).trim()).split("").join(""));
+    }
+    exporta() {
+      const n = this.contas.size;
+      const C_ = { lig: new Float64Array(n), venc: new Int32Array(n), ref: new Int32Array(n), c: new Uint16Array(n), valor: new Float64Array(n), credito: new Float64Array(n) };
+      let i = 0;
+      for (const [k, a] of this.contas) {
+        const p = k.indexOf("|");
+        C_.lig[i] = +k.slice(0, p); C_.venc[i] = +k.slice(p + 1); C_.valor[i] = a[0]; C_.credito[i] = a[1]; C_.ref[i] = a[2]; C_.c[i] = a[3]; i++;
+      }
+      const refs = [...new Set(C_.ref)].sort().map((x) => `${String(x).slice(0, 4)}-${String(x).slice(4)}`);
+      return { contas: C_, combos: this.cks.slice(), linhas: this.linhas, semChave: this.semChave, refs,
+        fora: { linhas: this.fora.linhas, valor: this.fora.valor, contas: this.fora.contas.size },
+        nomes: { lig: Float64Array.from(this.nomes.keys()), txt: [...this.nomes.values()].join(SEP) } };
+    }
+  }
+
+  // Cruzamento faturamento × arrecadação (Interior). Junta as contas de todos os arquivos de fatura (conta repetida em dois
+  // arquivos conta uma vez) e liga cada pagamento à conta de mesma matrícula + vencimento. Devolve só somas pequenas:
+  //  fat:     por referência × cidade × categoria: valor faturado, créditos, contas, matrículas
+  //  coorte:  por referência da conta × mês de crédito × cidade × categoria: valor pago e contas pagas pela 1ª vez
+  //  concil:  por mês de crédito × tipo de fatura: valor arrecadado que achou (ou não) a conta pelo vencimento
+  function cruzaFaturamento(exportsFat, pagamentos, mesesArrec) {
+    const combos = [], idxCombo = new Map(), comboDe = (ck) => {
+      let i = idxCombo.get(ck);
+      if (i === undefined) { i = combos.length; const [cidade, grupo] = ck.split(SEP); combos.push({ cidade, grupo, sup: zonaInfo(cidade)[1] }); idxCombo.set(ck, i); }
+      return i;
+    };
+    const conta = new Map();                           // "ligação|vencimento" → posição
+    const lig = [], venc = [], ref = [], cmb = [], valor = [], credito = [];
+    let duplicadas = 0, linhas = 0, semChave = 0;
+    const fora = { linhas: 0, valor: 0, contas: 0 };
+    for (const e of exportsFat) {
+      linhas += e.linhas; semChave += e.semChave; fora.linhas += e.fora.linhas; fora.valor += e.fora.valor; fora.contas += e.fora.contas;
+      const mapa = e.combos.map(comboDe), C_ = e.contas;
+      for (let i = 0; i < C_.lig.length; i++) {
+        const k = C_.lig[i] + "|" + C_.venc[i];
+        if (conta.has(k)) { duplicadas++; continue; }
+        conta.set(k, lig.length);
+        lig.push(C_.lig[i]); venc.push(C_.venc[i]); ref.push(C_.ref[i]); cmb.push(mapa[C_.c[i]]); valor.push(C_.valor[i]); credito.push(C_.credito[i]);
+      }
+    }
+    const refTxt = (x) => `${String(x).slice(0, 4)}-${String(x).slice(4)}`;
+    const fat = new Map(), ligsRef = new Map();
+    for (let p = 0; p < lig.length; p++) {
+      const k = ref[p] + "|" + cmb[p];
+      let f = fat.get(k);
+      if (!f) { f = { ref: refTxt(ref[p]), c: cmb[p], valor: 0, credito: 0, contas: 0, matriculas: 0 }; fat.set(k, f); ligsRef.set(k, new Set()); }
+      f.valor += valor[p]; f.credito += credito[p]; f.contas++;
+      ligsRef.get(k).add(lig[p]);
+    }
+    for (const [k, f] of fat) f.matriculas = ligsRef.get(k).size;
+    // pagamentos, em ordem de mês de crédito: a conta fica "paga" no 1º mês em que recebe pagamento
+    const pagaEm = new Int32Array(lig.length).fill(-1), coorte = new Map(), concil = [];
+    (pagamentos || []).forEach((partes, mi) => {
+      const cc = { mes: mesesArrec[mi], achou: [0, 0, 0, 0], semConta: [0, 0, 0, 0], linhasAchou: 0, linhasSem: 0 };
+      for (const P of partes || []) for (let i = 0; i < P.lig.length; i++) {
+        const p = conta.get(P.lig[i] + "|" + P.venc[i]);
+        if (p === undefined) { cc.semConta[P.tipo[i]] += P.v[i]; cc.linhasSem++; continue; }
+        cc.achou[P.tipo[i]] += P.v[i]; cc.linhasAchou++;
+        const k = ref[p] + "|" + mi + "|" + cmb[p];
+        let o = coorte.get(k);
+        if (!o) { o = { ref: refTxt(ref[p]), mes: mesesArrec[mi], c: cmb[p], valor: 0, contas: 0 }; coorte.set(k, o); }
+        o.valor += P.v[i];
+        if (pagaEm[p] < 0) { pagaEm[p] = mi; o.contas++; }
+      }
+      concil.push(cc);
+    });
+    return { combos, fat: [...fat.values()], coorte: [...coorte.values()], concil,
+      diag: { contas: lig.length, duplicadas, linhas, semChave, fora } };
+  }
+
   // ---------- aba Análise: rankings por ligação ----------
   // Valor de cada ligação nos dias marcados e nas combinações do filtro, menos o desconto dela (como nas abas), no mês
   // e no mês anterior. Cidade/subcategoria/perfil mostrados: os do maior pagamento da ligação no mês (ou no anterior).
@@ -527,7 +675,7 @@
   }
 
   return {
-    MAX_DIA, MESES_CURTOS, chave, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
+    MAX_DIA, MESES_CURTOS, chave, refDeTexto, vencNum, consertaAcento, LeituraFaturamento, cruzaFaturamento, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,

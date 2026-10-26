@@ -57,6 +57,13 @@
     "605-PROJETOS": ["SOCIAL", "SOCIAL"], "607-CAD UNICO": ["RESIDENCIAL", "RESIDENCIAL"],
   };
   const SEM_CLASSIFICACAO = "Sem classificação";
+  // Faturamento (Fatura de ciclo): a coluna Categoria → o mesmo grupo das subcategorias da arrecadação.
+  // Nos cruzamentos com o faturamento, o PEQUENO COMERCIO da arrecadação entra em COMERCIAL (o faturamento não separa).
+  const CATEGORIAS_FATURAMENTO = { PUBLICA: "PUBLICO", PUBLICO: "PUBLICO", RESIDENCIAL: "RESIDENCIAL", COMERCIAL: "COMERCIAL",
+    INDUSTRIAL: "INDUSTRIAL", SOCIAL: "SOCIAL", MISTA: "MISTA" };
+  const GRUPO_NO_CRUZAMENTO = { "PEQUENO COMERCIO": "COMERCIAL" };
+  // Faturamento: contas com esta Situacao Conta ficam de fora (pedido da área: desconsiderar só "Em Análise")
+  const SITUACOES_FORA_DO_FATURAMENTO = ["EMANALISE"];
   const SEM_PERFIL = "Sem perfil";
   // Ordem das linhas nas tabelas (o que não estiver aqui vem depois, em ordem alfabética)
   const ORDEM_SUBCATEGORIAS = ["COMERCIAL", "INDUSTRIAL", "PEQUENO COMERCIO", "PUBLICO", "RESIDENCIAL", "SOCIAL"];
@@ -89,6 +96,7 @@
     return (cacheFeriados[ano] = s);
   }
 
-  return { ZONAS, SUPS, SEM_SUP, SUBCATEGORIAS, SEM_CLASSIFICACAO, SEM_PERFIL, ORDEM_SUBCATEGORIAS, ORDEM_PERFIS,
+  return { CATEGORIAS_FATURAMENTO, GRUPO_NO_CRUZAMENTO, SITUACOES_FORA_DO_FATURAMENTO,
+    ZONAS, SUPS, SEM_SUP, SUBCATEGORIAS, SEM_CLASSIFICACAO, SEM_PERFIL, ORDEM_SUBCATEGORIAS, ORDEM_PERFIS,
     TIPOS_CONTA, FERIADOS_EXTRAS, feriados };
 });

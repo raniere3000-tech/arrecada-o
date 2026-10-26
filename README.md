@@ -4,6 +4,12 @@ Painel da arrecadação diária nos moldes do painel de faturamento: abre no nav
 arrecadação no próprio computador e reproduz o relatório do Power BI **Diário Arrecadação V4**. Nenhum arquivo é enviado
 para a internet: tudo é processado no navegador.
 
+## Navegação
+
+- **Executivo** (acompanhamento e resultado): Resumo, Subcategoria, Perfil de pagamento, Cidades, Escada, Análise, Base e Dados.
+- **Análises** (cruzamentos e oportunidades): Faturamento x Arrecadação; Conversão por referência, Clientes e oportunidades e
+  Diagnóstico por localidade (próximas etapas). O PDF é só do Executivo.
+
 ## Como usar
 
 1. Abra o site e clique em **📁 Conectar pasta**. Escolha a pasta da arrecadação; as subpastas também são lidas.
@@ -26,6 +32,7 @@ Os CSVs já lidos ficam guardados no navegador: na atualização do dia, só o a
 | `Base_Desconto - 25.05.xlsx` | colunas NUM_LIGACAO, REFERENCIA e DESCONTO | Desconto comercial |
 | `Cluster_Cliente_Lagos - 08.08.xlsx` | colunas NUM_LIGACAO, SEQ_RESPONSAVEL e CLUSTER SALDO | Perfil de pagamento |
 | Orçados (RF01T26, RF02T26, RF3T25…) | colunas Sup, Rubrica e um mês por coluna (`jan/26` ou `Soma de 01/10/2025`), com a linha da arrecadação: `(+) Arrecadação`, `05.01. Arrecadação` ou `ARRECADAÇÃO CRÉDITO` | Orçado mensal; o seletor **Orçado** do cabeçalho escolhe a planilha |
+| Faturamento (`Fatura de ciclo MM-AAAA.csv`) | CSV com N. da Ligacao, Rubrica, Valor Parcela, Referencia de Leitura e Data de Vencimento (sugestão: subpasta `Faturamento`) | Área **Análises**: faturamento × arrecadação (só Interior) |
 | `ajustes_arrecadacao.json` | gravado pelo painel | Orçado digitado e curva do orçado diário editada (vale para todos que usam a pasta) |
 
 Outras planilhas (Cadastro, Faturões…) são listadas em "Arquivos lidos e avisos" como não usadas.

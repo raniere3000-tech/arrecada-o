@@ -7,14 +7,14 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v16-20261022">
+<link rel="stylesheet" href="assets/painel.css?v=v17-20261026">
 </head>
 <body>
 
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v16</span></div>
+      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v17</span></div>
       <h1>Arrecadação Diária</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -46,7 +46,11 @@
 </header>
 
 <nav class="abas" id="abas" aria-label="Abas do painel" hidden>
-  <div class="toggle" role="tablist">
+  <div class="areas" role="tablist" aria-label="Áreas do painel">
+    <button type="button" class="active" data-area="executivo">Executivo <small>acompanhamento e resultado</small></button>
+    <button type="button" data-area="analises">Análises <small>cruzamentos e oportunidades</small></button>
+  </div>
+  <div class="toggle" role="tablist" data-grupo="executivo">
     <button type="button" class="active" data-aba="resumo">Resumo</button>
     <button type="button" data-aba="subcategoria">Subcategoria</button>
     <button type="button" data-aba="perfil">Perfil de pagamento</button>
@@ -55,6 +59,12 @@
     <button type="button" data-aba="analise">Análise</button>
     <button type="button" data-aba="base">Base</button>
     <button type="button" data-aba="dados">Dados</button>
+  </div>
+  <div class="toggle" role="tablist" data-grupo="analises" hidden>
+    <button type="button" data-aba="fxa">Faturamento x Arrecadação</button>
+    <button type="button" data-aba="conversao">Conversão por referência</button>
+    <button type="button" data-aba="clientes">Clientes e oportunidades</button>
+    <button type="button" data-aba="localidade">Diagnóstico por localidade</button>
   </div>
 </nav>
 
@@ -138,6 +148,39 @@
         <p class="nota">Até 100 ligações com aumento em relação ao mês anterior, nos mesmos dias úteis, da maior diferença para a menor. A lista para onde acaba o aumento: diferença zero ou negativa não entra.</p><div class="wrap"><table id="tTopAumentos" class="compacta ranking"></table></div></div>
       <div class="card"><h2>Top clientes — quedas em relação ao mês anterior <small class="analise-sub"></small><button type="button" class="btn sec csv" data-csv="tTopQuedas">Baixar CSV</button></h2>
         <p class="nota">Até 100 ligações com queda em relação ao mês anterior, nos mesmos dias úteis, da maior queda para a menor (inclui quem pagou no mês anterior e não pagou neste). A lista para onde acaba a queda: diferença zero ou positiva não entra.</p><div class="wrap"><table id="tTopQuedas" class="compacta ranking"></table></div></div>
+    </section>
+
+    <!-- ===== Área Análises ===== -->
+    <section class="painel-aba" data-painel="fxa" hidden>
+      <div class="card"><h2>Faturamento x Arrecadação <label class="opcao">Mês <select id="fxaMes"></select></label></h2>
+        <p class="nota" id="fxaNota"></p><div id="fxaAviso"></div></div>
+      <div id="fxaCorpo">
+        <div class="kpis" id="fxaKpis"></div>
+        <div class="card"><h2>Faturado × arrecadado por mês</h2>
+          <p class="nota">Faturado pelo mês de referência da conta; arrecadado pelo mês de crédito (com o desconto comercial). São períodos diferentes: a diferença não é saldo devedor.</p>
+          <div class="legenda-g"><span><i class="cor-fat"></i>Faturado (referência)</span><span><i class="cor-at"></i>Arrecadado (crédito)</span></div>
+          <div class="grafico" id="fxaG1"></div></div>
+        <div class="grade-2">
+          <div class="card"><h2>Variação mensal (%)</h2><div class="legenda-g"><span><i class="cor-fat"></i>Faturado</span><span><i class="cor-at"></i>Arrecadado</span></div><div class="grafico" id="fxaG2"></div></div>
+          <div class="card"><h2>Matrículas faturadas × pagantes</h2><div class="legenda-g"><span><i class="cor-fat"></i>Faturadas (referência)</span><span><i class="cor-at"></i>Pagantes (crédito)</span></div><div class="grafico" id="fxaG3"></div></div>
+        </div>
+        <div class="card"><h2>Por cidade <small>clique no título da coluna para ordenar · da maior diferença para a menor</small><button type="button" class="btn sec csv" data-fxa-csv="fxaCid">Baixar CSV</button></h2><div class="wrap"><table id="fxaCid" class="compacta ordenavel"></table></div></div>
+        <div class="card"><h2>Por subcategoria <small>no cruzamento, Pequeno Comércio entra em Comercial (o faturamento não separa)</small><button type="button" class="btn sec csv" data-fxa-csv="fxaSub">Baixar CSV</button></h2><div class="wrap"><table id="fxaSub" class="compacta ordenavel"></table></div></div>
+        <div class="card"><h2>Conciliação pelo vencimento <small>quanto da arrecadação do Interior encontrou a conta faturada (matrícula + data de vencimento)</small></h2><div class="wrap"><table id="fxaConcil" class="compacta"></table></div>
+          <p class="nota" id="fxaConcilNota"></p></div>
+      </div>
+    </section>
+    <section class="painel-aba" data-painel="conversao" hidden>
+      <div class="card"><h2>Conversão por referência</h2><p>Próxima etapa. Vai mostrar, para cada mês de referência do faturamento, quanto foi recebido no próprio mês e nos meses seguintes
+        (matriz por coorte), ligando cada pagamento à sua conta pela matrícula + data de vencimento. A base desse cruzamento já é montada na leitura: veja a conciliação na aba Faturamento x Arrecadação.</p></div>
+    </section>
+    <section class="painel-aba" data-painel="clientes" hidden>
+      <div class="card"><h2>Clientes e oportunidades</h2><p>Etapa seguinte: matrículas faturadas sem pagamento, queda recente de arrecadação, clientes que deixaram de pagar e busca do histórico de uma matrícula.
+        Sem uma base de contas em aberto, “faturado sem pagamento” será mostrado como situação a investigar, não como dívida confirmada.</p></div>
+    </section>
+    <section class="painel-aba" data-painel="localidade" hidden>
+      <div class="card"><h2>Diagnóstico por localidade</h2><p>Etapa seguinte: faturamento, arrecadação, matrículas e variações por cidade, subcategoria e superintendência, ranking dos desvios e gráfico de Pareto.
+        A comparação por cidade e subcategoria do mês já está na aba Faturamento x Arrecadação.</p></div>
     </section>
 
     <section class="painel-aba base" data-painel="base" hidden>
@@ -236,6 +279,25 @@
       <div class="card"><h2>Base</h2>
         <p>Extrai as linhas completas dos CSVs de arrecadação para uma lista de matrículas e os meses marcados (mês da Data Crédito), com todas as colunas do arquivo. Para cada mês vale a mesma regra do painel: o mês que está no arquivo diário sai só dele. Os arquivos dos meses escolhidos são relidos na hora, então pastas grandes podem levar alguns minutos.</p></div>
 
+      <div class="card"><h2>Faturamento x Arrecadação (área Análises)</h2>
+        <p>Usa os arquivos <b>Fatura de ciclo MM-AAAA.csv</b> (o mesmo do painel de faturamento, só Interior), reconhecidos pelas colunas abaixo, em qualquer subpasta (sugestão: <code>Faturamento</code>).</p>
+        <table class="explica"><thead><tr><th>Coluna do faturamento</th><th>Uso</th></tr></thead><tbody>
+          <tr><td>N. da Ligacao</td><td>Matrícula (mesma normalização da arrecadação: sem zeros à esquerda).</td></tr>
+          <tr><td>Data de Vencimento</td><td>Com a matrícula, identifica a conta (o arquivo não tem número da conta). É a chave que liga o pagamento à conta: na arrecadação, a coluna Vencimento.</td></tr>
+          <tr><td>Referencia de Leitura</td><td>Mês de referência da conta (ex.: set/26). O faturado é somado por ele.</td></tr>
+          <tr><td>Rubrica / Valor Parcela</td><td>O valor da conta é a soma de <b>todas</b> as rubricas, inclusive as negativas (créditos e abatimentos, mostrados à parte).</td></tr>
+          <tr><td>Situacao Conta</td><td>Contas “Em Análise” ficam de fora (contadas em “Arquivos lidos e avisos”).</td></tr>
+          <tr><td>Nome da Localidade / Categoria</td><td>Cidade e subcategoria (PUBLICA = Público…). Pequeno Comércio da arrecadação entra em Comercial nos cruzamentos.</td></tr>
+        </tbody></table>
+        <ul>
+          <li><b>Faturado</b>: soma das contas da referência. <b>Arrecadado</b>: Val. Autenticado do mês de crédito inteiro (todos os dias), menos o desconto comercial, só Interior.</li>
+          <li><b>Diferença</b> = faturado − arrecadado: compara indicadores de períodos diferentes; <b>não é saldo devedor</b>.</li>
+          <li><b>Matrículas faturadas</b>: distintas na referência. <b>Pagantes</b>: distintas com pagamento no mês de crédito (como no Resumo).</li>
+          <li><b>Contas da referência já pagas</b>: contas (matrícula + vencimento) que receberam algum pagamento com o mesmo vencimento em qualquer mês de crédito da pasta. Esta é uma ligação conta a conta (conciliação), não uma comparação de períodos.</li>
+          <li><b>Conciliação pelo vencimento</b>: do valor arrecadado no Interior no mês, quanto achou a conta. Parcelas de acordos (3-PARCELA) têm vencimento próprio e não se ligam a uma conta da fatura.</li>
+          <li>Conta com a mesma matrícula e vencimento em dois arquivos de fatura conta uma vez (as repetidas aparecem nos avisos).</li>
+        </ul></div>
+
       <div class="card"><h2>Diferenças em relação ao BI</h2>
         <ul>
           <li>Feriados: o painel considera São Jorge (23/04) e Consciência Negra (20/11) em todos os anos; o BI só os tinha em 2025.</li>
@@ -250,9 +312,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v16-20261022"></script>
-<script src="assets/calculos.js?v=v16-20261022"></script>
-<script>const VERSAO_SITE = "v16-20261022"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v16-20261022"></script>
+<script src="assets/regras.js?v=v17-20261026"></script>
+<script src="assets/calculos.js?v=v17-20261026"></script>
+<script>const VERSAO_SITE = "v17-20261026"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v17-20261026"></script>
 </body>
 </html>
