@@ -38,15 +38,26 @@ const ext = (nome) => (nome.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();
 
 // ---------- classificação ----------
 const COLS_ARRECADACAO = ["NLIGACAO", "DATACREDITO", "VALAUTENTICADO"];
-// Fatura de ciclo (faturamento): o mesmo arquivo do painel de faturamento, uma linha por rubrica de cada conta
-const COLS_FATURAMENTO = ["NDALIGACAO", "RUBRICA", "VALORPARCELA", "REFERENCIADELEITURA", "DATADEVENCIMENTO"];
-function ehFaturamento(linha) {
+// Fatura de ciclo (faturamento): o mesmo arquivo do painel de faturamento, uma linha por rubrica de cada conta.
+// Aceita as mesmas variações do painel de faturamento: nome da coluna da ligação, cabeçalho depois de "sep=;" ou de
+// linhas de título, e arquivo sem "Referencia de Leitura" (a referência sai do nome: "Fatura de ciclo 09-2026").
+const NOMES_LIG_FATURAMENTO = ["NDALIGACAO", "NLIGACAO", "NLIG", "LIGACAO", "MATRICULA"];
+const COLS_FATURAMENTO = ["RUBRICA", "VALORPARCELA", "DATADEVENCIMENTO"];
+function colunasFaturamento(linha) {                    // → { lig, faltam: [...] }
   const cols = linha.split(";").map(C.chave);
-  return COLS_FATURAMENTO.every((c) => cols.includes(c));
+  const lig = NOMES_LIG_FATURAMENTO.find((n) => cols.includes(n));
+  const faltam = COLS_FATURAMENTO.filter((c) => !cols.includes(c));
+  if (!lig) faltam.unshift("N. da Ligacao");
+  return { lig, faltam, ref: cols.includes("REFERENCIADELEITURA") };
 }
-async function cabecalhoCsv(file) {
-  const bytes = new Uint8Array(await file.slice(0, 16384).arrayBuffer());
-  return (ehUtf8(bytes) ? new TextDecoder("utf-8") : new TextDecoder("windows-1252")).decode(bytes).split(/\r?\n/)[0] || "";
+const ehFaturamento = (linha) => colunasFaturamento(linha).faltam.length === 0;
+function refDoNome(nome) {                               // "Fatura de ciclo 09-2026.csv" → "2026-09"
+  const m = /(?<!\d)(\d{2})[-/._ ](\d{4})(?!\d)/.exec(nome);
+  return m && +m[1] >= 1 && +m[1] <= 12 ? `${m[2]}-${m[1]}` : "";
+}
+async function primeirasLinhas(file) {                  // as 20 primeiras linhas (o cabeçalho pode vir depois de "sep=;" ou de títulos)
+  const bytes = new Uint8Array(await file.slice(0, 65536).arrayBuffer());
+  return (ehUtf8(bytes) ? new TextDecoder("utf-8") : new TextDecoder("windows-1252")).decode(bytes).split(/\r?\n/).slice(0, 20);
 }
 function ehUtf8(bytes) {                               // UTF-8 quando válido; senão Windows-1252 (padrão do sistema comercial)
   try { new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, 65536), { stream: true }); return true; }
@@ -80,9 +91,20 @@ async function classifica(item) {
   if (/^ajustes_arrecadacao/i.test(file.name)) return { tipo: "ajustes" };
   if (file.name.startsWith("~$")) return { tipo: "ignorado", motivo: "arquivo temporário do Excel" };
   if (e === "csv" || e === "txt") {
-    const cab = await cabecalhoCsv(file);
-    if (ehArrecadacao(cab)) return { tipo: C.chave(rel).includes("DIARI") ? "diaria" : "acumulada" };
-    if (ehFaturamento(cab)) return { tipo: "faturamento" };
+    const linhas = await primeirasLinhas(file);
+    if (ehArrecadacao(linhas[0] || "")) return { tipo: C.chave(rel).includes("DIARI") ? "diaria" : "acumulada" };
+    const iFat = linhas.findIndex(ehFaturamento);
+    if (iFat >= 0) {
+      if (C.chave(file.name).includes("AVULSO")) return { tipo: "ignorado", motivo: "serviço avulso: não entra no faturamento (os serviços já vêm nas rubricas da fatura)" };
+      const c = colunasFaturamento(linhas[iFat]);
+      if (!c.ref && !refDoNome(file.name)) return { tipo: "ignorado", motivo: "faturamento sem a coluna Referencia de Leitura e sem o mês no nome do arquivo (ex.: 09-2026)", erro: true };
+      return { tipo: "faturamento" };
+    }
+    // CSV numa pasta de faturamento que não foi reconhecido: diz o que falta
+    if (C.chave(rel).includes("FATURA")) {
+      const melhor = linhas.map(colunasFaturamento).sort((a, b) => a.faltam.length - b.faltam.length)[0];
+      return { tipo: "ignorado", erro: true, motivo: `parece faturamento, mas faltam as colunas: ${melhor ? melhor.faltam.join(", ") : "todas"} (1ª linha: ${String(linhas[0] || "").slice(0, 120)})` };
+    }
     return { tipo: "ignorado", motivo: "CSV sem as colunas Nº Ligação, Data Crédito e Val. Autenticado" };
   }
   if (!["xlsx", "xlsm", "xls", "xlsb"].includes(e)) return { tipo: "ignorado", motivo: "formato não usado" };
@@ -204,27 +226,28 @@ async function leCsv(file, aoLer, leitura) {
 
 // ---------- CSV do faturamento (Fatura de ciclo) ----------
 async function leFaturamento(file, aoLer) {
-  const leitura = new C.LeituraFaturamento();
+  const leitura = new C.LeituraFaturamento(), refNome = refDoNome(file.name);
   let idx = null;
   await linhasDoArquivo(file, (linha) => {
     const p = linha.split(";");
     if (!idx) {
+      if (!ehFaturamento(linha)) return;                // "sep=;" ou título antes do cabeçalho
       const ch = p.map(C.chave), pos = (c) => ch.indexOf(c);
-      idx = { lig: pos("NDALIGACAO"), venc: pos("DATADEVENCIMENTO"), ref: pos("REFERENCIADELEITURA"), val: pos("VALORPARCELA"),
+      idx = { lig: pos(colunasFaturamento(linha).lig), venc: pos("DATADEVENCIMENTO"), ref: pos("REFERENCIADELEITURA"), val: pos("VALORPARCELA"),
         cidade: pos("NOMEDALOCALIDADE"), cat: pos("CATEGORIA"), sit: pos("SITUACAOCONTA"), cliente: pos("NOMECLIENTE") };
       return;
     }
     const v = (j) => (j >= 0 ? p[j] : "");
-    leitura.adiciona({ lig: v(idx.lig), venc: v(idx.venc), ref: v(idx.ref), valor: v(idx.val), cidade: v(idx.cidade),
+    leitura.adiciona({ lig: v(idx.lig), venc: v(idx.venc), ref: idx.ref >= 0 ? v(idx.ref) : refNome, valor: v(idx.val), cidade: v(idx.cidade),
       categoria: v(idx.cat), situacao: v(idx.sit), cliente: v(idx.cliente) });
   }, aoLer);
-  if (!idx) throw new Error("arquivo vazio");
+  if (!idx) throw new Error("cabeçalho do faturamento não encontrado");
   return leitura.exporta();
 }
 
 // ---------- cache: o que cada CSV exportou fica no navegador (IndexedDB); arquivo igual não é lido de novo ----------
 const CACHE_VERSAO = 5;
-const CACHE_FATURAMENTO = 1;                           // cache do faturamento é separado: muda sem reler a arrecadação
+const CACHE_FATURAMENTO = 2;                           // cache do faturamento é separado: muda sem reler a arrecadação
 const banco = () => new Promise((ok, erro) => {
   const r = indexedDB.open("arrecadacao_cache", 1);
   r.onupgradeneeded = () => r.result.createObjectStore("arquivos");

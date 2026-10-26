@@ -240,6 +240,7 @@ test("referência e acentos do faturamento", () => {
   assert.equal(C.refDeTexto("09/2026"), "2026-09");
   assert.equal(C.refDeTexto("Soma de 01/10/2025".replace(/^Soma de /, "")), "2025-10");
   assert.equal(C.refDeTexto("xyz"), "");
+  assert.equal(C.refDeTexto("2026-08"), "2026-08");             // referência tirada do nome do arquivo
   assert.equal(C.vencNum("2026-10-10"), 20261010);
   assert.equal(C.consertaAcento("CORREÃ‡ÃƒO MONETÃ\u0081RIA"), "CORREÇÃO MONETÁRIA");   // como vem no arquivo real (com o \x81)
   assert.equal(C.consertaAcento("NORMAL"), "NORMAL");

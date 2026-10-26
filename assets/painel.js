@@ -862,7 +862,13 @@
     $("fxaCorpo").hidden = !cz;
     if (!cz) {
       $("fxaNota").textContent = "";
-      $("fxaAviso").innerHTML = '<p class="aviso-pdf">Nenhum arquivo de faturamento na pasta. Coloque os arquivos <b>Fatura de ciclo MM-AAAA.csv</b> numa subpasta (ex.: <code>Faturamento</code>) e clique em ↻ Atualizar. As abas do Executivo continuam funcionando sem eles.</p>';
+      // arquivos de faturamento que não foram reconhecidos ou deram erro: mostra o motivo, em vez de "nenhum arquivo"
+      const problemas = E.res.arquivos.filter((x) => x.tipo === "ignorado" && (C.chave(x.rel).includes("FATURA") || /faturamento/i.test(x.motivo || "")));
+      $("fxaAviso").innerHTML = problemas.length
+        ? `<p class="aviso-pdf">${fmt(problemas.length)} arquivo(s) de faturamento não puderam ser usados:</p><ul class="lista-problemas">`
+          + problemas.slice(0, 12).map((x) => `<li><b>${esc(x.rel)}</b>: ${esc(x.motivo)}</li>`).join("") + (problemas.length > 12 ? `<li>… e mais ${problemas.length - 12}</li>` : "")
+          + "</ul><p class=\"nota\">Se a mensagem não ajudar, me envie as 3 primeiras linhas de um desses arquivos (abra no Bloco de Notas).</p>"
+        : '<p class="aviso-pdf">Nenhum arquivo de faturamento na pasta. Coloque os arquivos <b>Fatura de ciclo MM-AAAA.csv</b> numa subpasta (ex.: <code>Faturamento</code>) e clique em ↻ Atualizar. As abas do Executivo continuam funcionando sem eles.</p>';
       $("fxaMes").innerHTML = ""; return;
     }
     const refs = [...new Set(cz.fat.map((r) => r.ref))].sort();

@@ -39,7 +39,9 @@
     const s = String(v == null ? "" : v).trim();
     const iso = dataISO(s);
     if (iso) return iso.slice(0, 7);
-    let m = /^(\d{1,2})\/(\d{4})$/.exec(s);
+    let m = /^(\d{4})-(\d{2})$/.exec(s);                    // já no formato "AAAA-MM"
+    if (m && +m[2] >= 1 && +m[2] <= 12) return s;
+    m = /^(\d{1,2})\/(\d{4})$/.exec(s);
     if (m && +m[1] >= 1 && +m[1] <= 12) return `${m[2]}-${m[1].padStart(2, "0")}`;
     m = /^([A-Za-zçÇ]{3})[A-Za-zçÇ]*[\/\-\s.]*(\d{2}|\d{4})$/.exec(s);
     if (m) {
