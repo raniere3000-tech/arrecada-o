@@ -315,11 +315,15 @@ test("faturamento: campos entre aspas, ano com 2 dígitos e motivo das linhas de
   assert.equal(C.dataISO("10/10/26"), "2026-10-10");
   assert.equal(C.dataISO('"10/10/2026"'), "2026-10-10");
   assert.equal(C.dataISO("10-10-2026"), "2026-10-10");
+  assert.equal(C.dataISO("2026/03/01"), "2026-03-01");          // como vem na Fatura de ciclo (ano/mês/dia)
+  assert.equal(C.dataISO("2026/3/1"), "2026-03-01");
   const f = new C.LeituraFaturamento();
   f.adiciona(fat(1, "10/10/26", "10,00"));
+  f.adiciona(fat(3, "2026/03/01", "5,00", { ref: "01/2026" }));
   f.adiciona(fat(2, "xx", "10,00"));
   const e = f.exporta();
-  assert.equal(e.contas.lig.length, 1);
+  assert.equal(e.contas.lig.length, 2);
   assert.equal(e.rejeitadas.venc, 1);
+  assert.deepEqual(e.refs, ["2026-01", "2026-09"]);
   assert.match(e.rejeitadas.exemplo, /vencimento "xx"/);
 });

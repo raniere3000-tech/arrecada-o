@@ -7,14 +7,14 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v19-20261026">
+<link rel="stylesheet" href="assets/painel.css?v=v20-20261026">
 </head>
 <body>
 
 <header class="top">
   <div class="top-linha">
     <div>
-      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v19</span></div>
+      <div class="eyebrow">Águas do Rio • Arrecadação <span class="versao" id="versao">v20</span></div>
       <h1>Arrecadação Diária</h1>
     </div>
     <div class="filtros" id="filtros">
@@ -283,7 +283,7 @@
         <p>Usa os arquivos <b>Fatura de ciclo MM-AAAA.csv</b> (o mesmo do painel de faturamento, só Interior), reconhecidos pelas colunas abaixo, em qualquer subpasta (sugestão: <code>Faturamento</code>).</p>
         <table class="explica"><thead><tr><th>Coluna do faturamento</th><th>Uso</th></tr></thead><tbody>
           <tr><td>N. da Ligacao</td><td>Matrícula (mesma normalização da arrecadação: sem zeros à esquerda).</td></tr>
-          <tr><td>Data de Vencimento</td><td>Com a matrícula, identifica a conta (o arquivo não tem número da conta). É a chave que liga o pagamento à conta: na arrecadação, a coluna Vencimento.</td></tr>
+          <tr><td>Data de Vencimento</td><td>Com a matrícula, identifica a conta (o arquivo não tem número da conta). É a chave que liga o pagamento à conta: na arrecadação, a coluna Vencimento. Aceita ano/mês/dia (2026/03/01, como vem na Fatura de ciclo) e dia/mês/ano.</td></tr>
           <tr><td>Referencia de Leitura</td><td>Mês de referência da conta (ex.: set/26). O faturado é somado por ele.</td></tr>
           <tr><td>Rubrica / Valor Parcela</td><td>O valor da conta é a soma de <b>todas</b> as rubricas, inclusive as negativas (créditos e abatimentos, mostrados à parte).</td></tr>
           <tr><td>Situacao Conta</td><td>Contas “Em Análise” ficam de fora (contadas em “Arquivos lidos e avisos”).</td></tr>
@@ -312,9 +312,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v19-20261026"></script>
-<script src="assets/calculos.js?v=v19-20261026"></script>
-<script>const VERSAO_SITE = "v19-20261026"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v19-20261026"></script>
+<script src="assets/regras.js?v=v20-20261026"></script>
+<script src="assets/calculos.js?v=v20-20261026"></script>
+<script>const VERSAO_SITE = "v20-20261026"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v20-20261026"></script>
 </body>
 </html>

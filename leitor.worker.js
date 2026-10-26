@@ -247,7 +247,7 @@ async function leFaturamento(file, aoLer) {
 
 // ---------- cache: o que cada CSV exportou fica no navegador (IndexedDB); arquivo igual não é lido de novo ----------
 const CACHE_VERSAO = 5;
-const CACHE_FATURAMENTO = 3;                           // cache do faturamento é separado: muda sem reler a arrecadação
+const CACHE_FATURAMENTO = 4;                           // cache do faturamento é separado: muda sem reler a arrecadação
 const banco = () => new Promise((ok, erro) => {
   const r = indexedDB.open("arrecadacao_cache", 1);
   r.onupgradeneeded = () => r.result.createObjectStore("arquivos");

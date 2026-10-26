@@ -27,8 +27,8 @@
     if (s.charCodeAt(0) === 34) s = s.replace(/^"|"$/g, "").trim();     // "10/10/2026" entre aspas
     let m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/.exec(s);
     if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-    m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
-    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)/.exec(s);       // ano/mês/dia: 2026-10-02, 2026/03/01 (faturamento)
+    if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
     m = /^(\d{1,2})\/(\d{1,2})\/(\d{2})(?!\d)/.exec(s);           // ano com 2 dígitos: 10/10/26
     return m ? `20${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : "";
   }
