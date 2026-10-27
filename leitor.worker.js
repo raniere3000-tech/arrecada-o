@@ -9,12 +9,14 @@ const avisa = (tipo, dados, transferir = []) => self.postMessage({ tipo, ...dado
 // Base dos rankings por ligação (aba Análise): fica aqui no worker; a página pede só as listas prontas
 let analise = null;
 let fontes = null;                                     // arquivos CSV lidos (com os meses de cada um), para a aba Base
-let contasFat = null;                                  // contas da fatura com o total pago (aba Clientes e oportunidades)
+let contasFat = null;
+let combosArr = null;                                  // cidade/subcategoria/SUP de cada combinação da arrecadação                                  // contas da fatura com o total pago (aba Clientes e oportunidades)
 
 self.onmessage = async (ev) => {
   if (ev.data.tipo === "analise") { respondeAnalise(ev.data); return; }
   if (ev.data.tipo === "clientes") { responde("clientes", ev.data.id, () => respondeClientes(ev.data)); return; }
   if (ev.data.tipo === "matricula") { responde("matricula", ev.data.id, () => respondeMatricula(ev.data)); return; }
+  if (ev.data.tipo === "comparativo") { responde("comparativo", ev.data.id, () => respondeComparativo(ev.data)); return; }
   if (ev.data.tipo === "cobranca") { responde("cobranca", ev.data.id, () => respondeCobranca(ev.data)); return; }
   if (ev.data.tipo === "extrair") { extraiBase(ev.data).catch((e) => avisa("extracao", { id: ev.data.id, erro: String((e && e.message) || e) })); return; }
   try {
@@ -22,6 +24,7 @@ self.onmessage = async (ev) => {
     analise = r.dados.analise;
     delete r.dados.analise;
     contasFat = r.cruzamento ? r.cruzamento.base : null;
+    combosArr = r.dados.combos;
     if (r.cruzamento) delete r.cruzamento.base;
     avisa("pronto", r, C.buffers(r.dados));          // as tabelas vão para a página sem cópia
   } catch (e) {
@@ -466,6 +469,27 @@ async function extraiBase({ id, ligs, meses, porMesArquivo }) {
   });
   const naoEncontradas = quer ? [...quer].filter((l) => !achadas.has(l)) : [];
   avisa("extracao", { id, saida, linhas, porMes, naoEncontradas, arquivos: arquivos.length, completa: !quer });
+}
+// Comparativo por mês: uma linha por matrícula e uma coluna de valor por mês (em branco = sem pagamento no mês).
+// O CSV é montado aqui, em blocos, porque pode ter centenas de milhares de linhas.
+function respondeComparativo({ mis, rotulos, marcas, nomesSup }) {
+  const r = C.valoresPorMes(analise, mis, marcas), k = r.k;
+  const n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ","), txt = (t) => String(t || "").replace(/[;\r\n]/g, " ");
+  const ordem = r.ligs.map((_, p) => p).sort((a, b) => r.ligs[a] - r.ligs[b]);
+  const blobs = [], partes = [], porMes = rotulos.map(() => ({ matriculas: 0, valor: 0 }));
+  let tam = 0;
+  for (const p of ordem) {
+    const c = combosArr[r.comb[p]] || {}, cols = [ligTxt(r.ligs[p]), txt(nomeDe(r.ligs[p])), nomesSup[c.sup] || c.sup || "", c.cidade || "", c.grupo || ""];
+    for (let j = 0; j < k; j++) {
+      if (r.pagou[p * k + j]) { cols.push(n(r.vals[p * k + j])); porMes[j].matriculas++; porMes[j].valor += r.vals[p * k + j]; } else cols.push("");
+    }
+    const linha = cols.join(";");
+    partes.push(linha); tam += linha.length + 2;
+    if (tam > 4e6) { blobs.push(new Blob([partes.join("\r\n") + "\r\n"])); partes.length = 0; tam = 0; }
+  }
+  if (partes.length) blobs.push(new Blob([partes.join("\r\n") + "\r\n"]));
+  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...rotulos.map((m) => `Arrecadado ${m}`)].join(";");
+  return { linhas: ordem.length, porMes, blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
 }
 // Base de cobrança: pagaram no mês A e não pagaram no mês B (nas combinações marcadas pelos filtros do cabeçalho)
 function respondeCobranca({ miA, miB, marcas }) {

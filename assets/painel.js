@@ -167,6 +167,7 @@
       else if (m.tipo === "clientes") recebeClientes(m);
       else if (m.tipo === "matricula") recebeMatricula(m);
       else if (m.tipo === "cobranca") recebeCobranca(m);
+      else if (m.tipo === "comparativo") recebeComparativo(m);
       else if (m.tipo === "extracao-progresso") { if (m.id === idBase) $("baseStatus").textContent = `${m.texto}… ${m.pct}%`; }
       else if (m.tipo === "extracao") recebeBase(m);
       else if (m.tipo === "erro") { fim(); setFonte("Erro na leitura: " + esc(m.mensagem)); console.error(m.detalhe); }
@@ -810,6 +811,37 @@
     if (!meses.includes(cobB)) cobB = E.mes;
     const opcoes = (sel) => meses.map((m) => `<option value="${m}"${m === sel ? " selected" : ""}>${C.rotuloMes(m)}</option>`).join("");
     $("cobA").innerHTML = opcoes(cobA); $("cobB").innerHTML = opcoes(cobB);
+    // comparativo por mês: padrão = os meses da base de cobrança
+    if (!mesesCmp || mesesCmp.some((m) => !meses.includes(m))) mesesCmp = [...new Set([cobA, cobB])];
+    $("cmpMeses").innerHTML = meses.map((m) => `<label><input type="checkbox" value="${m}"${mesesCmp.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("");
+  }
+  let mesesCmp = null, idCmp = 0;
+  $("cmpMeses").addEventListener("change", () => { mesesCmp = [...$("cmpMeses").querySelectorAll("input:checked")].map((i) => i.value); });
+  $("cmpNenhum").addEventListener("click", () => { mesesCmp = []; $("cmpMeses").querySelectorAll("input").forEach((i) => { i.checked = false; }); });
+  $("cmpGerar").addEventListener("click", () => {
+    if (!mesesCmp || !mesesCmp.length) { toast("Marque pelo menos um mês.", true); return; }
+    const meses = [...mesesCmp].sort();
+    $("cmpGerar").disabled = true;
+    $("cmpStatus").textContent = "Montando o comparativo…";
+    $("cmpResultado").innerHTML = "";
+    worker.postMessage({ tipo: "comparativo", id: ++idCmp, mis: meses.map(idxMes), rotulos: meses.map(C.rotuloMes), marcas: marcas(), nomesSup: NOME_SUP, meses });
+    cmpPedido = meses;
+  });
+  let cmpPedido = [];
+  function recebeComparativo(m) {
+    if (m.id !== idCmp) return;
+    $("cmpGerar").disabled = false;
+    if (m.erro) { $("cmpStatus").textContent = "Erro: " + m.erro; return; }
+    const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
+    $("cmpStatus").textContent = `${fmt(m.linhas)} matrículas com pagamento em pelo menos um dos meses · ${filtro}.`;
+    const nome = `Comparativo_por_mes_${cmpPedido[0]}${cmpPedido.length > 1 ? "_a_" + cmpPedido[cmpPedido.length - 1] : ""}.csv`;
+    $("cmpResultado").innerHTML = `<table class="compacta base-tabela"><thead><tr><th>Mês</th><th>Matrículas com pagamento</th><th>Arrecadado (R$)</th></tr></thead><tbody>`
+      + cmpPedido.map((mes, j) => `<tr>${td(C.rotuloMes(mes), "rot")}${td(fmt(m.porMes[j].matriculas))}${td(fmt(m.porMes[j].valor))}</tr>`).join("")
+      + `<tr class="total">${td("Matrículas (linhas do arquivo)", "rot")}${td(fmt(m.linhas))}${td("")}</tr></tbody></table>`
+      + `<div class="base-acoes"><button type="button" class="btn" id="cmpBaixar">Baixar comparativo (CSV)</button></div>`
+      + (m.linhas > 1048000 ? '<p class="nota">Atenção: passa de 1 milhão de linhas, o limite de uma planilha do Excel. Use os filtros do cabeçalho para dividir.</p>' : "");
+    $("cmpBaixar").onclick = () => baixa(m.blob, nome);
+    if (m.linhas) baixa(m.blob, nome);
   }
   let cobA = "", cobB = "", idCob = 0;
   const modoBase = () => document.querySelector('input[name="baseModo"]:checked').value;

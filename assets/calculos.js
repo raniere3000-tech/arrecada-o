@@ -853,6 +853,26 @@
     }
     return out.sort((a, b) => b.valor - a.valor);
   }
+  // Comparativo por mês: cada matrícula (nas combinações marcadas) com pagamento em algum dos meses mis, e o valor pago em
+  // cada um (Val. Autenticado). pagou[p * k + j] = 1 se a matrícula p teve pagamento no mês j (valor em branco quando 0).
+  function valoresPorMes(an, mis, marcas) {
+    const k = mis.length, pos = new Map(), ligs = [], comb = [], maior = [], vals = [], pagou = [];
+    mis.forEach((mi, j) => {
+      for (const { L, mapa } of (mi >= 0 && an.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
+        const cl = L.k[i] % COMBOS_ARQ, c = mapa[cl];
+        if (marcas && !marcas[c]) continue;
+        const l = (L.k[i] - cl) / COMBOS_ARQ;
+        let p = pos.get(l);
+        if (p === undefined) {
+          p = ligs.length; pos.set(l, p); ligs.push(l); comb.push(c); maior.push(-Infinity);
+          for (let t = 0; t < k; t++) { vals.push(0); pagou.push(0); }
+        }
+        vals[p * k + j] += L.v[i]; pagou[p * k + j] = 1;
+        if (L.v[i] > maior[p]) { maior[p] = L.v[i]; comb[p] = c; }
+      }
+    });
+    return { k, ligs, comb, vals: Float64Array.from(vals), pagou: Uint8Array.from(pagou) };
+  }
   // Histórico de uma matrícula: arrecadação de cada mês (todas as combinações) e cada conta da fatura com os pagamentos dela
   function historicoMatricula(an, base, l) {
     const meses = an.entradas.map((partes, m) => {
@@ -942,7 +962,7 @@
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
-    clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram,
+    clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes,
     MASCARA_MES, comparaGrupos, mesesMesmosUteis, fracaoAteDias, pareto,
   };
 });

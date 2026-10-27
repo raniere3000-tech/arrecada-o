@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v28-20261027">
+<link rel="stylesheet" href="assets/painel.css?v=v29-20261027">
 </head>
 <body>
 
@@ -288,6 +288,15 @@
           <button type="button" class="btn" id="cobGerar">Gerar base de cobrança</button><span class="salvo" id="cobStatus"></span></div>
         <div id="cobResultado"></div>
       </div>
+      <div class="card"><h2>Comparativo por mês</h2>
+        <p class="nota">Uma linha por matrícula com as mesmas colunas da base de cobrança e <b>uma coluna de valor arrecadado para cada mês marcado</b>
+          (Val. Autenticado; em branco = sem pagamento no mês). Entram todas as matrículas com pagamento em pelo menos um dos meses.
+          <b>Os filtros do cabeçalho valem aqui.</b></p>
+        <div class="base-meses" id="cmpMeses"></div>
+        <div class="base-acoes"><button type="button" class="btn sec" id="cmpNenhum">Desmarcar</button>
+          <button type="button" class="btn" id="cmpGerar">Gerar comparativo</button><span class="salvo" id="cmpStatus"></span></div>
+        <div id="cmpResultado"></div>
+      </div>
     </section>
 
     <section class="painel-aba dados" data-painel="dados" hidden>
@@ -429,6 +438,7 @@
           <li><b>Voltaram a pagar</b>: pagaram nos dias marcados do mês escolhido e não tiveram nenhum pagamento nos 3 meses anteriores (mês inteiro).</li>
           <li>Valores de arrecadação aqui: Val. Autenticado, sem o desconto comercial. Os filtros do cabeçalho valem (faturamento: só Interior).</li>
           <li><b>Base de cobrança</b> (aba Base): matrículas com algum pagamento no 1º mês escolhido e nenhum pagamento no 2º (até o último crédito da pasta), nos filtros do cabeçalho; valor = Val. Autenticado pago no 1º mês.</li>
+          <li><b>Comparativo por mês</b> (aba Base): uma linha por matrícula com pagamento em algum dos meses marcados e uma coluna com o Val. Autenticado de cada mês (em branco = não pagou), nos filtros do cabeçalho.</li>
           <li><b>Buscar matrícula</b>: arrecadação de cada mês (com o desconto à parte) e cada conta da fatura com o valor pago e o mês do pagamento.</li>
         </ul></div>
 
@@ -446,9 +456,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v28-20261027"></script>
-<script src="assets/calculos.js?v=v28-20261027"></script>
-<script>const VERSAO_SITE = "v28-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v28-20261027"></script>
+<script src="assets/regras.js?v=v29-20261027"></script>
+<script src="assets/calculos.js?v=v29-20261027"></script>
+<script>const VERSAO_SITE = "v29-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v29-20261027"></script>
 </body>
 </html>

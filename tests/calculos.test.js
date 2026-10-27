@@ -438,3 +438,20 @@ test("base de cobrança: pagaram num mês e não pagaram em outro", () => {
   assert.deepEqual(interior.map((x) => x.lig), [1]);
   assert.equal(C.pagaramNaoPagaram(d.analise, jun, -1, C.marcaCombos(d, {})).length, 3);       // mês B sem dados: todos de jun
 });
+
+test("comparativo por mês: uma coluna por mês, em branco onde não pagou", () => {
+  const a = new C.Agregador();
+  a.adiciona(linha(1, "01/06/2026", "100,00")); a.adiciona(linha(1, "02/06/2026", "20,00"));
+  a.adiciona(linha(2, "01/06/2026", "50,00")); a.adiciona(linha(2, "01/10/2026", "40,00"));
+  a.adiciona(linha(3, "01/10/2026", "70,00"));
+  a.adiciona({ ...linha(4, "01/06/2026", "90,00"), zona: "16-SAO GONCALO" });
+  const d = a.resultado(new Map()), mis = ["2026-06", "2026-10"].map((m) => d.meses.indexOf(m));
+  const r = C.valoresPorMes(d.analise, mis, C.marcaCombos(d, {}));
+  assert.equal(r.k, 2);
+  assert.deepEqual([...r.ligs].sort(), [1, 2, 3, 4]);
+  const lin = (l) => { const p = r.ligs.indexOf(l); return [0, 1].map((j) => (r.pagou[p * 2 + j] ? r.vals[p * 2 + j] : null)); };
+  assert.deepEqual(lin(1), [120, null]);
+  assert.deepEqual(lin(2), [50, 40]);
+  assert.deepEqual(lin(3), [null, 70]);
+  assert.deepEqual(C.valoresPorMes(d.analise, mis, C.marcaCombos(d, { sup: "LESTE" })).ligs, [4]);
+});
