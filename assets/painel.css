@@ -296,6 +296,7 @@ tr.alerta td { background: #FFF4E5; }
 .opcao-base { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 600; color: var(--azul); }
 .opcao-base select { font: inherit; font-weight: 400; padding: 4px 6px; border: 1px solid var(--linha); border-radius: 6px; }
 textarea:disabled { opacity: .5; }
+#crCard h2 .opcao-rec-tipo { margin-left: auto; }
 .lista-rolavel { max-height: 520px; overflow: auto; }
 .lista-rolavel thead th { position: sticky; top: 0; z-index: 1; }
 @media (max-width: 720px) { #dgKpis { grid-template-columns: minmax(0, 1fr); } }

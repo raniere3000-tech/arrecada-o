@@ -9,11 +9,15 @@ const avisa = (tipo, dados, transferir = []) => self.postMessage({ tipo, ...dado
 // Base dos rankings por ligação (aba Análise): fica aqui no worker; a página pede só as listas prontas
 let analise = null;
 let fontes = null;                                     // arquivos CSV lidos (com os meses de cada um), para a aba Base
-let contasFat = null;
-let combosArr = null;
+let contasFat = null;                                  // contas da fatura com o total pago (aba Clientes e oportunidades)
+let combosArr = null;                                  // cidade/subcategoria/SUP de cada combinação da arrecadação
 let fontesFat = null;                                  // arquivos de faturamento lidos (com as referências de cada um)
-let cadastroFat = null;
-let receber = null, combosFat = null;                 // contas a receber (Map matrícula → resumo) e combinações da fatura                                // endereço, grupo, rota e situação da ligação da referência mais recente                                  // cidade/subcategoria/SUP de cada combinação da arrecadação                                  // contas da fatura com o total pago (aba Clientes e oportunidades)
+let cadastroFat = null;                                // endereço, grupo, rota e situação da ligação da referência mais recente
+let combosFat = null;                                  // combinações (cidade, categoria) da fatura
+// contas a receber: duas bases possíveis na pasta, a total e a só de notas fiscais ("NFC" no nome do arquivo);
+// cada uma é um Map matrícula → resumo. As consultas dizem qual usar (recTipo: "nfc" ou "total").
+let receberBases = { total: null, nfc: null };
+const recBase = (tipo) => receberBases[tipo] || null;
 
 self.onmessage = async (ev) => {
   if (ev.data.tipo === "analise") { respondeAnalise(ev.data); return; }
@@ -30,8 +34,8 @@ self.onmessage = async (ev) => {
     combosArr = r.dados.combos;
     combosFat = r.cruzamento ? r.cruzamento.combos : null;
     grupoFat = null;                                   // refeito na 1ª consulta desta pasta
-    receber = r.receberMapa || null;
-    delete r.receberMapa;
+    receberBases = r.receberMapas;
+    delete r.receberMapas;
     if (r.cruzamento) delete r.cruzamento.base;
     avisa("pronto", r, C.buffers(r.dados));          // as tabelas vão para a página sem cópia
   } catch (e) {
@@ -85,7 +89,7 @@ const nomeDe = (l) => analise.nomes.get(l) || (contasFat && contasFat.nomes.get(
 const ligTxt = (l) => (l < 1e10 ? String(l) : "(não numérica)");
 // aba Clientes e oportunidades: listas completas (a página mostra as primeiras e baixa o resto em CSV)
 function respondeClientes(o) {
-  const r = C.clientesOportunidades(analise, contasFat, o);
+  const r = C.clientesOportunidades(analise, contasFat, o), receber = recBase(o.recTipo);
   if (receber) {
     // faturado sem pagamento: a matrícula está na base de contas a receber com saldo vencido? (confirma o "a investigar")
     const conf = { confirmadas: 0, valorFat: 0, saldo: 0, fora: 0, valorFora: 0 };
@@ -121,7 +125,8 @@ function grupoFatDe(l) {
   }
   return grupoFat.get(l);
 }
-function respondeMatricula({ lig }) {
+function respondeMatricula({ lig, recTipo }) {
+  const receber = recBase(recTipo);
   const l = C.chaveLig(lig);
   return { lig: l < 1e10 ? String(l) : String(lig).trim(), ...C.historicoMatricula(analise, contasFat, l), receber: (receber && receber.get(l)) || null };
 }
@@ -420,18 +425,24 @@ async function processa(itens) {
     }
   }
 
-  // contas a receber: vale a base mais recente (data no nome do arquivo ou de modificação)
-  let receberMapa = null, receberInfo = null;
-  const bases = arquivos.filter((a) => a.tipo === "receber").map((a) => ({ a, data: dataDoArquivo(a.file) })).sort((x, y) => y.data.localeCompare(x.data) || y.a.file.lastModified - x.a.file.lastModified);
-  for (const [i, { a, data }] of bases.entries()) {
-    if (i > 0) { Object.assign(a, { tipo: "ignorado", motivo: `base de contas a receber mais antiga: vale a de ${bases[0].data.split("-").reverse().join("/")} (${bases[0].a.rel})` }); continue; }
-    try {
-      avisa("progresso", { pct: 15, texto: `Lendo contas a receber: ${a.rel}` });
-      const r = await leReceber(a);
-      receberMapa = r.mapa;
-      a.registros = r.linhas;
-      receberInfo = { arquivo: a.rel, data, linhas: r.linhas, matriculas: r.mapa.size };
-    } catch (e) { Object.assign(a, { tipo: "ignorado", motivo: "contas a receber: não foi possível ler: " + ((e && e.message) || e), erro: true }); }
+  // contas a receber: até duas bases, a total e a só de notas fiscais ("NFC" no nome); de cada tipo vale a mais recente
+  // (data no nome do arquivo ou de modificação)
+  const receberMapas = { total: null, nfc: null }, receberInfo = { total: null, nfc: null };
+  for (const tipo of ["total", "nfc"]) {
+    const bases = arquivos.filter((a) => a.tipo === "receber" && (C.chave(a.file.name).includes("NFC") ? "nfc" : "total") === tipo)
+      .map((a) => ({ a, data: dataDoArquivo(a.file) })).sort((x, y) => y.data.localeCompare(x.data) || y.a.file.lastModified - x.a.file.lastModified);
+    const nome = tipo === "nfc" ? "contas a receber só de notas fiscais (NFC)" : "contas a receber total";
+    for (const [i, { a, data }] of bases.entries()) {
+      if (i > 0) { Object.assign(a, { tipo: "ignorado", motivo: `base de ${nome} mais antiga: vale a de ${bases[0].data.split("-").reverse().join("/")} (${bases[0].a.rel})` }); continue; }
+      try {
+        avisa("progresso", { pct: 15, texto: `Lendo ${nome}: ${a.rel}` });
+        const r = await leReceber(a);
+        receberMapas[tipo] = r.mapa;
+        a.registros = r.linhas;
+        a.recTipo = tipo;
+        receberInfo[tipo] = { arquivo: a.rel, data, linhas: r.linhas, matriculas: r.mapa.size };
+      } catch (e) { Object.assign(a, { tipo: "ignorado", motivo: `${nome}: não foi possível ler: ` + ((e && e.message) || e), erro: true }); }
+    }
   }
 
   const agregador = new C.Agregador();
@@ -514,7 +525,7 @@ async function processa(itens) {
     cruzamento = C.cruzaFaturamento(exportsFat, dados.analise.pagamentos, dados.meses);
   }
   return {
-    dados, orcados, cruzamento, receberInfo, receberMapa,
+    dados, orcados, cruzamento, receberInfo, receberMapas,
     temPerfil: perfis.size > 0, temDesconto: descontos.size > 0,
     mesesDiaria: [...mesesDiaria].sort(),
     mesesDesconto: [...descontos.keys()].sort(),
@@ -579,8 +590,8 @@ async function extraiBase({ id, ligs, meses, porMesArquivo }) {
 }
 // Comparativo por mês: uma linha por matrícula e uma coluna de valor por mês (em branco = sem pagamento no mês).
 // O CSV é montado aqui, em blocos, porque pode ter centenas de milhares de linhas.
-async function respondeComparativo({ mis, rotulos, marcas, nomesSup, comFat, comRec }) {
-  const r = C.valoresPorMes(analise, mis, marcas), k = r.k, ex = await colunasExtras(comFat, comRec);
+async function respondeComparativo({ mis, rotulos, marcas, nomesSup, comFat, comRec, recTipo }) {
+  const r = C.valoresPorMes(analise, mis, marcas), k = r.k, ex = await colunasExtras(comFat, comRec, recTipo);
   const txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " ");
   const ordem = r.ligs.map((_, p) => p).sort((a, b) => r.ligs[a] - r.ligs[b]);
   const blobs = [], partes = [], porMes = rotulos.map(() => ({ matriculas: 0, valor: 0 }));
@@ -601,8 +612,8 @@ async function respondeComparativo({ mis, rotulos, marcas, nomesSup, comFat, com
   return { linhas: ordem.length, porMes, ...ex.info(), blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
 }
 // Base de oportunidades: pagaram no mês A e não pagaram no mês B (nas combinações marcadas pelos filtros do cabeçalho)
-async function respondeOportunidades({ miA, miB, marcas, comFat, comRec }) {
-  const lista = C.pagaramNaoPagaram(analise, miA, miB, marcas), ex = await colunasExtras(comFat, comRec);
+async function respondeOportunidades({ miA, miB, marcas, comFat, comRec, recTipo }) {
+  const lista = C.pagaramNaoPagaram(analise, miA, miB, marcas), ex = await colunasExtras(comFat, comRec, recTipo);
   for (const x of lista) {
     const e = ex.de(x.lig);
     x.fat = e.fat; x.rec = e.rec;
@@ -614,8 +625,8 @@ async function respondeOportunidades({ miA, miB, marcas, comFat, comRec }) {
 //  fat: Endereço da ligação, Grupo, Rota (e Situação da ligação, só quando a base de contas a receber não entra)
 //  rec: Saldo total vencido (sem o a vencer) e SIT_LIG, no fim do arquivo. SIT_LIG é uma coluna só: a da base de contas a
 //       receber; sem a matrícula nela, a do faturamento escrita no mesmo padrão.
-async function colunasExtras(comFat, comRec) {
-  const rec = !!(comRec && receber), todo = comFat || rec ? await leCadastroFat() : null, cad = comFat ? todo : null;
+async function colunasExtras(comFat, comRec, recTipo) {
+  const receber = recBase(recTipo), rec = !!(comRec && receber), todo = comFat || rec ? await leCadastroFat() : null, cad = comFat ? todo : null;
   const cabFat = cad ? ["Endereço da ligação", "Grupo", "Rota", ...(rec ? [] : ["Situação da ligação"])] : [];
   const cabRec = rec ? ["Saldo total vencido", "SIT_LIG"] : [];
   let nCad = 0, nRec = 0;

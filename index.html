@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v32-20261027">
+<link rel="stylesheet" href="assets/painel.css?v=v33-20261027">
 </head>
 <body>
 
@@ -223,7 +223,7 @@
           <span class="nota" id="clBuscaStatus"></span></div>
         <div id="clHist"></div></div>
       <div class="kpis" id="clKpis"></div>
-      <div class="card" id="crCard"><h2>Contas a receber <small id="crBase"></small></h2>
+      <div class="card" id="crCard"><h2>Contas a receber <small id="crBase"></small> <label class="opcao opcao-rec-tipo">Contas a receber <select class="sel-rec"><option value="nfc">Apenas NFC</option><option value="total">Total (com parcelas e NFA)</option></select></label></h2>
         <p class="nota" id="crNota"></p>
         <div id="crCorpo">
           <div class="kpis" id="crKpis"></div>
@@ -303,6 +303,7 @@
           <button type="button" class="btn" id="opGerar">Gerar base de oportunidades</button><span class="salvo" id="opStatus"></span></div>
         <label class="base-opcao"><input type="checkbox" id="opFat" class="opcao-fat" checked> <span class="rot-fat">Incluir dados do faturamento</span></label>
         <label class="base-opcao"><input type="checkbox" id="opRec" class="opcao-rec" checked> <span class="rot-rec">Incluir dados das contas a receber</span></label>
+        <div class="base-acoes"><label class="opcao-base opcao-rec-tipo">Contas a receber <select class="sel-rec"><option value="nfc">Apenas NFC</option><option value="total">Total (com parcelas e NFA)</option></select></label></div>
         <div id="opResultado"></div>
       </div>
       <div class="card"><h2>Comparativo por mês</h2>
@@ -312,6 +313,7 @@
         <div class="base-meses" id="cmpMeses"></div>
         <label class="base-opcao"><input type="checkbox" id="cmpFat" class="opcao-fat" checked> <span class="rot-fat">Incluir dados do faturamento</span></label>
         <label class="base-opcao"><input type="checkbox" id="cmpRec" class="opcao-rec" checked> <span class="rot-rec">Incluir dados das contas a receber</span></label>
+        <div class="base-acoes"><label class="opcao-base opcao-rec-tipo">Contas a receber <select class="sel-rec"><option value="nfc">Apenas NFC</option><option value="total">Total (com parcelas e NFA)</option></select></label></div>
         <div class="base-acoes"><button type="button" class="btn sec" id="cmpNenhum">Desmarcar</button>
           <button type="button" class="btn" id="cmpGerar">Gerar comparativo</button><span class="salvo" id="cmpStatus"></span></div>
         <div id="cmpResultado"></div>
@@ -329,8 +331,9 @@
           <tr><td>Desconto comercial</td><td>Planilha com NUM_LIGACAO, REFERENCIA e DESCONTO</td><td>Desconto de cada ligação no mês da REFERENCIA.</td></tr>
           <tr><td>Perfil do cliente</td><td>Planilha com NUM_LIGACAO, SEQ_RESPONSAVEL e CLUSTER SALDO</td><td>Adimplente, Inadimplente ou Nunca Pagou de cada ligação + contrato.</td></tr>
           <tr><td>Contas a receber</td><td>Planilha com NUM_LIGACAO, Saldo total e FAIXA_DESCRICAO (uma linha por matrícula e faixa de atraso), em qualquer pasta;
-            sugestão: subpasta “Contas a Receber”, com a data no nome (ex.: Contas a receber 27-10-2026.xlsx)</td><td>Saldo vencido e a vencer de cada matrícula (aba Clientes e
-            oportunidades e bases da aba Base). Com mais de uma, vale a mais recente (data no nome do arquivo ou de modificação).</td></tr>
+            sugestão: subpasta “Contas a Receber”, com a data no nome. Duas bases: a total (ex.: Contas a receber 27-10-2026.xlsx) e a só de notas fiscais, com
+            <b>NFC</b> no nome (ex.: Contas a receber - NFC - 27-10-2026.xlsx)</td><td>Saldo vencido e a vencer de cada matrícula (aba Clientes e oportunidades e bases da aba Base);
+            o seletor <b>Contas a receber</b> escolhe Apenas NFC ou Total (com parcelas e NFA). De cada tipo vale a mais recente (data no nome do arquivo ou de modificação).</td></tr>
           <tr><td>Orçado (RF)</td><td>Planilha com Sup, Rubrica e um mês por coluna, com a linha “(+) Arrecadação”, “05.01. Arrecadação” ou “ARRECADAÇÃO CRÉDITO”</td><td>Orçado mensal por superintendência; o seletor <b>Orçado</b> escolhe a planilha.</td></tr>
           <tr><td>ajustes_arrecadacao.json</td><td>Gravado pelo próprio painel</td><td>Orçado digitado, curva do orçado diário editada e o mês de início da média. Vale para todos que usam a pasta.</td></tr>
         </tbody></table>
@@ -460,7 +463,9 @@
           <li><b>Voltaram a pagar</b>: pagaram nos dias marcados do mês escolhido e não tiveram nenhum pagamento nos 3 meses anteriores (mês inteiro).</li>
           <li>Valores de arrecadação aqui: Val. Autenticado, sem o desconto comercial. Os filtros do cabeçalho valem (faturamento: só Interior).</li>
           <li><b>Base de oportunidades</b> (aba Base): matrículas com algum pagamento no 1º mês escolhido e nenhum pagamento no 2º (até o último crédito da pasta), nos filtros do cabeçalho; valor = Val. Autenticado pago no 1º mês.</li>
-          <li><b>Contas a receber</b>: a base informada (vencidas e a vencer, por matrícula e faixa de atraso) é a posição do dia em que foi extraída. Saldo vencido =
+          <li><b>Contas a receber</b>: a base informada (vencidas e a vencer, por matrícula e faixa de atraso) é a posição do dia em que foi extraída. Com as duas bases na pasta,
+            o seletor <b>Apenas NFC</b> usa a que tem “NFC” no nome (só notas fiscais) e <b>Total</b> a outra (com parcelas e faturas avulsas, NFA); a escolha vale para a aba
+            Clientes e oportunidades e para as bases da aba Base, e fica guardada neste navegador. Saldo vencido =
             todas as faixas menos “00 - A Vencer”. Ela confirma o faturado sem pagamento por matrícula (a base não traz o vencimento de cada conta).
             “Pagaram no mês” = devedoras com algum pagamento no mês escolhido; “sem pagamento há 3 meses” = nenhum pagamento no mês e nos 2 anteriores.
             Os filtros de superintendência e cidade usam a cidade da base; o de subcategoria, a da conta mais recente da fatura.</li>
@@ -488,9 +493,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v32-20261027"></script>
-<script src="assets/calculos.js?v=v32-20261027"></script>
-<script>const VERSAO_SITE = "v32-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v32-20261027"></script>
+<script src="assets/regras.js?v=v33-20261027"></script>
+<script src="assets/calculos.js?v=v33-20261027"></script>
+<script>const VERSAO_SITE = "v33-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v33-20261027"></script>
 </body>
 </html>

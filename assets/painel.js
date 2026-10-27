@@ -190,6 +190,7 @@
   function carrega(res, nomePasta) {
     E.res = res;
     chaveCl = ""; clRes = null;                      // Clientes e oportunidades: recalcula com a pasta nova
+    ajustaRecTipo();
     const d = res.dados;
     const nArr = res.arquivos.filter((a) => a.tipo === "diaria" || a.tipo === "acumulada").length;
     listaArquivos(res);
@@ -220,7 +221,7 @@
   }
   function listaArquivos(res) {
     const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (linha da arrecadação)", faturamento: "Faturamento (Fatura de ciclo)", receber: "Contas a receber", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
-    const linhas = res.arquivos.map((a) => `<tr>${td(esc(a.rel), "rot")}${td(USO[a.tipo] || a.tipo, "rot")}${td(a.registros != null ? fmt(a.registros) : "")}`
+    const linhas = res.arquivos.map((a) => `<tr>${td(esc(a.rel), "rot")}${td((USO[a.tipo] || a.tipo) + (a.recTipo ? (a.recTipo === "nfc" ? " (apenas NFC)" : " (total)") : ""), "rot")}${td(a.registros != null ? fmt(a.registros) : "")}`
       + `${td(esc((a.meses || []).map(C.rotuloMes).join(", ")), "rot")}${td(esc(a.motivo || [a.puladas ? `${fmt(a.puladas)} linhas de mês que está no arquivo diário não foram usadas` : "", rejeicao(a), a.doCache ? "já lido antes (guardado neste navegador)" : ""].filter(Boolean).join("; ")), "rot")}</tr>`).join("");
     const d = res.dados, avisos = [];
     if (!res.temDesconto) avisos.push("Planilha de desconto comercial não encontrada: a arrecadação aparece sem o desconto.");
@@ -822,12 +823,12 @@
         ? `Incluir dados do faturamento (endereço da ligação, grupo, rota e situação da ligação), da referência ${C.rotuloMes(refs[refs.length - 1])}`
         : "Incluir dados do faturamento: sem faturamento aproveitado na pasta";
     });
-    const ri = E.res.receberInfo;
+    const ri = recInfo();
     document.querySelectorAll(".opcao-rec").forEach((cx) => {
       cx.disabled = !ri;
       if (!ri) cx.checked = false;
       cx.parentElement.querySelector(".rot-rec").textContent = ri
-        ? `Incluir dados das contas a receber (Saldo total vencido e SIT_LIG, no fim do arquivo), base de ${dataBR(ri.data)}`
+        ? `Incluir dados das contas a receber (Saldo total vencido e SIT_LIG, no fim do arquivo), base ${recNome()} de ${dataBR(ri.data)}`
         : "Incluir dados das contas a receber: nenhuma base de contas a receber na pasta";
     });
     $("cmpMeses").innerHTML = meses.map((m) => `<label><input type="checkbox" value="${m}"${mesesCmp.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("");
@@ -842,7 +843,7 @@
     $("cmpStatus").textContent = "Montando o comparativo…";
     $("cmpResultado").innerHTML = "";
     worker.postMessage({ tipo: "comparativo", id: ++idCmp, mis: meses.map(idxMes), rotulos: meses.map(C.rotuloMes), marcas: marcas(), nomesSup: NOME_SUP, meses,
-      comFat: $("cmpFat").checked, comRec: $("cmpRec").checked });
+      comFat: $("cmpFat").checked, comRec: $("cmpRec").checked, recTipo: E.recTipo });
     cmpPedido = meses;
   });
   let cmpPedido = [];
@@ -937,9 +938,9 @@
     $("opGerar").disabled = true;
     $("opStatus").textContent = "Cruzando os meses…";
     $("opResultado").innerHTML = "";
-    worker.postMessage({ tipo: "oportunidades", id: ++idOp, miA: idxMes(opA), miB: idxMes(opB), marcas: marcas(), comFat: $("opFat").checked, comRec: $("opRec").checked });
+    worker.postMessage({ tipo: "oportunidades", id: ++idOp, miA: idxMes(opA), miB: idxMes(opB), marcas: marcas(), comFat: $("opFat").checked, comRec: $("opRec").checked, recTipo: E.recTipo });
   });
-  const textoReceber = (n) => (n != null ? ` Contas a receber (base de ${dataBR(E.res.receberInfo.data)}): ${fmt(n)} matrículas com saldo na base.` : "");
+  const textoReceber = (n) => (n != null ? ` Contas a receber (base ${recNome()} de ${dataBR(recInfo().data)}): ${fmt(n)} matrículas com saldo na base.` : "");
   const textoCadastro = (c) => (c ? ` Dados do faturamento da referência ${C.rotuloMes(c.ref)} (${c.arquivos.join(", ")}): ${fmt(c.comCadastro)} matrículas encontradas.` : "");
   function recebeOportunidades(m) {
     if (m.id !== idOp) return;
@@ -1330,13 +1331,13 @@
     if (!cz) avisos.push("Sem faturamento aproveitado na pasta: só as listas de deixaram e voltaram a pagar e a arrecadação da matrícula.");
     else if (E.sup && E.sup !== "INTERIOR") avisos.push(`O faturamento é só do Interior: com Superintendência = ${nomeSup(E.sup)}, o faturado sem pagamento fica vazio.`);
     $("clAviso").innerHTML = avisos.map((a) => `<p class="aviso-pdf">${esc(a)}</p>`).join("");
-    const chave = [E.mes, E.sel, E.sup, E.cidade, E.grupo, dias].join("|");
+    const chave = [E.mes, E.sel, E.sup, E.cidade, E.grupo, dias, E.recTipo].join("|");
     if (chave === chaveCl && clRes) { desenhaListasCl(); return; }
     chaveCl = chave; clRes = null;
     $("clKpis").innerHTML = '<p class="nota">Calculando…</p>';
     ["clFaixas", "clRefs", "clCid", "clSem", "clDeixaram", "clVoltaram"].forEach((id) => { $(id).innerHTML = ""; });
     worker.postMessage({ tipo: "clientes", id: ++idCl, mi, marcas: marcas(), sel: E.sel, aceitaFat: cz ? cz.combos.map((c) => (okFat(c) ? 1 : 0)) : [],
-      hoje: isoNum(hojeIso), corte: isoNum(corteIso), inicio: isoNum(d.meses[0] + "-01"), meses: d.meses, filtroRec: { sup: E.sup, cidade: E.cidade, grupoFat: filtroG } });
+      hoje: isoNum(hojeIso), corte: isoNum(corteIso), inicio: isoNum(d.meses[0] + "-01"), meses: d.meses, filtroRec: { sup: E.sup, cidade: E.cidade, grupoFat: filtroG }, recTipo: E.recTipo });
   }
   function recebeClientes(m) {
     if (m.id !== idCl) return;
@@ -1442,13 +1443,35 @@
       ...clRes.voltaram.map((x) => { const c = comboArr(x.c); return [x.lig, txt(x.nome), c.cidade, c.grupo, n(x.valor)].join(";"); })];
     baixa("﻿" + linhas.join("\r\n"), `Clientes_${tipo}_${E.mes}.csv`);
   }));
+  // Contas a receber: qual base usar ("nfc" = só notas fiscais; "total" = com parcelas e NFA). Um seletor em cada lugar
+  // (Clientes e oportunidades e as bases da aba Base), sempre com o mesmo valor; a escolha fica guardada neste navegador.
+  const recInfo = () => (E.res && E.res.receberInfo && E.res.receberInfo[E.recTipo]) || null;
+  const recNome = () => (E.recTipo === "nfc" ? "apenas NFC" : "total (com parcelas e NFA)");
+  function ajustaRecTipo() {
+    const ri = (E.res && E.res.receberInfo) || {};
+    let t = E.recTipo;
+    if (!t) try { t = localStorage.getItem("arrecadacao_rec_tipo") || ""; } catch (e) { t = ""; }
+    if (!ri[t]) t = ri.nfc ? "nfc" : ri.total ? "total" : t || "nfc";   // a escolhida não está na pasta: usa a que houver
+    E.recTipo = t;
+    document.querySelectorAll(".sel-rec").forEach((sl) => {
+      [...sl.options].forEach((o) => { o.disabled = !ri[o.value]; o.textContent = (o.value === "nfc" ? "Apenas NFC" : "Total (com parcelas e NFA)") + (ri[o.value] ? "" : " — sem base na pasta"); });
+      sl.value = t;
+      sl.disabled = !ri.nfc && !ri.total;
+    });
+  }
+  document.querySelectorAll(".sel-rec").forEach((sl) => sl.addEventListener("change", () => {
+    E.recTipo = sl.value;
+    try { localStorage.setItem("arrecadacao_rec_tipo", sl.value); } catch (e) { /* sem armazenamento */ }
+    ajustaRecTipo();
+    desenha();
+  }));
   // bloco "Contas a receber" (base de contas vencidas e a vencer informada na pasta)
   function desenhaReceber(rc) {
-    const ri = E.res.receberInfo;
-    if (rc) $("clNotaBase").innerHTML = `Com a base de contas a receber de ${dataBR(ri.data)}, o <b>faturado sem pagamento</b> é conferido por matrícula: está na base com saldo vencido`
+    const ri = recInfo();
+    if (rc) $("clNotaBase").innerHTML = `Com a base de contas a receber ${recNome()} de ${dataBR(ri.data)}, o <b>faturado sem pagamento</b> é conferido por matrícula: está na base com saldo vencido`
       + " (confirmado) ou não está (provável pagamento por acordo, com outro vencimento, ou conta já quitada). A base não traz o vencimento de cada conta.";
     $("crCorpo").hidden = !rc;
-    $("crBase").textContent = ri ? `base de ${dataBR(ri.data)} · ${ri.arquivo}` : "";
+    $("crBase").textContent = ri ? `base ${recNome()} de ${dataBR(ri.data)} · ${ri.arquivo}` : "";
     if (!rc) {
       $("crNota").innerHTML = "Nenhuma base de contas a receber na pasta. Coloque a planilha (colunas NUM_LIGACAO, Saldo total e FAIXA_DESCRICAO) em qualquer pasta, de preferência numa"
         + " subpasta “Contas a Receber”, com a data no nome (ex.: Contas a receber 27-10-2026.xlsx), e clique em Atualizar.";
@@ -1487,12 +1510,12 @@
   }
   // histórico da matrícula: o que a base de contas a receber diz dela
   function histReceber(x) {
-    const ri = E.res.receberInfo;
+    const ri = recInfo();
     if (!ri) return "";
-    if (!x) return `<p class="nota">Não está na base de contas a receber de ${dataBR(ri.data)}.</p>`;
+    if (!x) return `<p class="nota">Não está na base de contas a receber ${recNome()} de ${dataBR(ri.data)}.</p>`;
     const linhas = [...x.faixas].sort((a, b) => a.num - b.num).map((f) => `<tr>${td(esc(f.txt), "rot")}${td(fmt(f.contas))}${td(fmt(f.saldo, 2))}</tr>`)
       .concat(`<tr class="total">${td("Total", "rot")}${td(fmt(x.contasV + x.contasAV))}${td(fmt(x.vencido + x.aVencer, 2))}</tr>`);
-    return `<h3>Contas a receber (base de ${dataBR(ri.data)})</h3><p class="nota">Situação: ${esc(x.sitLig)} · ${esc(x.tipo)} · contato: ${esc(x.contato)} · `
+    return `<h3>Contas a receber (base ${recNome()} de ${dataBR(ri.data)})</h3><p class="nota">Situação: ${esc(x.sitLig)} · ${esc(x.tipo)} · contato: ${esc(x.contato)} · `
       + `saldo vencido ${rs(x.vencido)} em ${fmt(x.contasV)} contas${x.aVencer ? ` · a vencer ${rs(x.aVencer)}` : ""}</p>`
       + `<div class="wrap"><table class="compacta base-tabela"><thead><tr><th>Faixa</th><th>Contas</th><th>Saldo (R$)</th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`;
   }
@@ -1501,7 +1524,7 @@
     const l = $("clBusca").value.trim();
     if (!l) return;
     $("clBuscaStatus").textContent = "Buscando…";
-    worker.postMessage({ tipo: "matricula", id: ++idMat, lig: l });
+    worker.postMessage({ tipo: "matricula", id: ++idMat, lig: l, recTipo: E.recTipo });
   }
   $("clBuscar").addEventListener("click", buscaMatricula);
   $("clBusca").addEventListener("keydown", (e) => { if (e.key === "Enter") buscaMatricula(); });

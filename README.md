@@ -10,6 +10,8 @@ para a internet: tudo é processado no navegador.
   completas por matrículas ou a base completa dos meses marcados, a base de oportunidades: pagaram num mês e não pagaram em outro;
   e o comparativo por mês: uma linha por matrícula e uma coluna de valor por mês; as duas podem trazer endereço,
   grupo e rota do faturamento mais recente e, no fim, o saldo vencido e a SIT_LIG da base de contas a receber).
+- **Contas a receber**: até duas bases na pasta, a total e a só de notas fiscais (com “NFC” no nome); o seletor “Apenas NFC” /
+  “Total (com parcelas e NFA)” escolhe qual usar em Clientes e oportunidades e nas bases da aba Base.
 - **Análises** (cruzamentos e oportunidades): Faturamento x Arrecadação; Fat. x Arrec. — mesmo vencimento; Conversão por
   referência (matriz por coorte: quanto de cada referência foi recebido em M, M+1, ...); Diagnóstico por localidade (comparação
   por cidade/subcategoria/superintendência nos mesmos dias úteis, quedas, altas, Pareto e projeção de fechamento pelos meses com
