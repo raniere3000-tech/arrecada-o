@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v30-20261027">
+<link rel="stylesheet" href="assets/painel.css?v=v31-20261027">
 </head>
 <body>
 
@@ -216,13 +216,28 @@
           <span class="opcoes-cv"><label class="opcao">Contas vencidas há mais de <select id="clCorte"><option value="10">10 dias</option><option value="30" selected>30 dias</option>
             <option value="60">60 dias</option><option value="90">90 dias</option><option value="180">180 dias</option></select></label></span></h2>
         <p class="nota" id="clNota"></p><div id="clAviso"></div>
-        <p class="nota">Sem uma base de contas a receber, <b>faturado sem pagamento</b> é situação <b>a investigar</b>, não dívida confirmada: a conta pode ter sido
+        <p class="nota" id="clNotaBase">Sem uma base de contas a receber, <b>faturado sem pagamento</b> é situação <b>a investigar</b>, não dívida confirmada: a conta pode ter sido
           paga por acordo (parcela), com outro vencimento, ou antes do primeiro mês de arrecadação da pasta.</p></div>
       <div class="card"><h2>Buscar matrícula</h2>
         <div class="busca-mat"><input type="text" id="clBusca" placeholder="Nº da ligação (matrícula)" inputmode="numeric"><button type="button" class="btn" id="clBuscar">Buscar</button>
           <span class="nota" id="clBuscaStatus"></span></div>
         <div id="clHist"></div></div>
       <div class="kpis" id="clKpis"></div>
+      <div class="card" id="crCard"><h2>Contas a receber <small id="crBase"></small></h2>
+        <p class="nota" id="crNota"></p>
+        <div id="crCorpo">
+          <div class="kpis" id="crKpis"></div>
+          <div class="grade-2">
+            <div><h3>Por faixa de atraso</h3><div class="wrap"><table id="crFaixas" class="compacta"></table></div></div>
+            <div><h3>Por situação da ligação</h3><div class="wrap"><table id="crSit" class="compacta"></table></div>
+              <h3>Por contato disponível</h3><div class="wrap"><table id="crContato" class="compacta"></table></div></div>
+          </div>
+          <h3>Por cidade</h3><div class="wrap"><table id="crCid" class="compacta"></table></div>
+          <h3>Maiores devedores <small>os 100 de maior saldo vencido · clique na matrícula para ver o histórico</small>
+            <button type="button" class="btn sec csv" data-cl-csv="receber">Baixar CSV (todos)</button></h3>
+          <div class="wrap lista-rolavel"><table id="crLista" class="compacta clicavel"></table></div>
+        </div>
+      </div>
       <div class="grade-2">
         <div class="card"><h2>Faturado sem pagamento por tempo de vencido</h2><div class="wrap"><table id="clFaixas" class="compacta"></table></div></div>
         <div class="card"><h2>Faturado sem pagamento por referência</h2><div class="wrap"><table id="clRefs" class="compacta"></table></div></div>
@@ -287,6 +302,7 @@
         <div class="base-acoes"><label class="opcao-base">Pagaram em <select id="cobA"></select></label><label class="opcao-base">e não pagaram em <select id="cobB"></select></label>
           <button type="button" class="btn" id="cobGerar">Gerar base de cobrança</button><span class="salvo" id="cobStatus"></span></div>
         <label class="base-opcao"><input type="checkbox" id="cobFat" class="opcao-fat" checked> <span class="rot-fat">Incluir dados do faturamento</span></label>
+        <label class="base-opcao"><input type="checkbox" id="cobRec" class="opcao-rec" checked> <span class="rot-rec">Incluir saldo das contas a receber</span></label>
         <div id="cobResultado"></div>
       </div>
       <div class="card"><h2>Comparativo por mês</h2>
@@ -295,6 +311,7 @@
           <b>Os filtros do cabeçalho valem aqui.</b></p>
         <div class="base-meses" id="cmpMeses"></div>
         <label class="base-opcao"><input type="checkbox" id="cmpFat" class="opcao-fat" checked> <span class="rot-fat">Incluir dados do faturamento</span></label>
+        <label class="base-opcao"><input type="checkbox" id="cmpRec" class="opcao-rec" checked> <span class="rot-rec">Incluir saldo das contas a receber</span></label>
         <div class="base-acoes"><button type="button" class="btn sec" id="cmpNenhum">Desmarcar</button>
           <button type="button" class="btn" id="cmpGerar">Gerar comparativo</button><span class="salvo" id="cmpStatus"></span></div>
         <div id="cmpResultado"></div>
@@ -311,6 +328,9 @@
           <tr><td>Arrecadação acumulada</td><td>O mesmo CSV em qualquer outra pasta (um arquivo por mês, R1, R4…)</td><td>Os meses anteriores.</td></tr>
           <tr><td>Desconto comercial</td><td>Planilha com NUM_LIGACAO, REFERENCIA e DESCONTO</td><td>Desconto de cada ligação no mês da REFERENCIA.</td></tr>
           <tr><td>Perfil do cliente</td><td>Planilha com NUM_LIGACAO, SEQ_RESPONSAVEL e CLUSTER SALDO</td><td>Adimplente, Inadimplente ou Nunca Pagou de cada ligação + contrato.</td></tr>
+          <tr><td>Contas a receber</td><td>Planilha com NUM_LIGACAO, Saldo total e FAIXA_DESCRICAO (uma linha por matrícula e faixa de atraso), em qualquer pasta;
+            sugestão: subpasta “Contas a Receber”, com a data no nome (ex.: Contas a receber 27-10-2026.xlsx)</td><td>Saldo vencido e a vencer de cada matrícula (aba Clientes e
+            oportunidades e bases da aba Base). Com mais de uma, vale a mais recente (data no nome do arquivo ou de modificação).</td></tr>
           <tr><td>Orçado (RF)</td><td>Planilha com Sup, Rubrica e um mês por coluna, com a linha “(+) Arrecadação”, “05.01. Arrecadação” ou “ARRECADAÇÃO CRÉDITO”</td><td>Orçado mensal por superintendência; o seletor <b>Orçado</b> escolhe a planilha.</td></tr>
           <tr><td>ajustes_arrecadacao.json</td><td>Gravado pelo próprio painel</td><td>Orçado digitado, curva do orçado diário editada e o mês de início da média. Vale para todos que usam a pasta.</td></tr>
         </tbody></table>
@@ -440,6 +460,10 @@
           <li><b>Voltaram a pagar</b>: pagaram nos dias marcados do mês escolhido e não tiveram nenhum pagamento nos 3 meses anteriores (mês inteiro).</li>
           <li>Valores de arrecadação aqui: Val. Autenticado, sem o desconto comercial. Os filtros do cabeçalho valem (faturamento: só Interior).</li>
           <li><b>Base de cobrança</b> (aba Base): matrículas com algum pagamento no 1º mês escolhido e nenhum pagamento no 2º (até o último crédito da pasta), nos filtros do cabeçalho; valor = Val. Autenticado pago no 1º mês.</li>
+          <li><b>Contas a receber</b>: a base informada (vencidas e a vencer, por matrícula e faixa de atraso) é a posição do dia em que foi extraída. Saldo vencido =
+            todas as faixas menos “00 - A Vencer”. Ela confirma o faturado sem pagamento por matrícula (a base não traz o vencimento de cada conta).
+            “Pagaram no mês” = devedoras com algum pagamento no mês escolhido; “sem pagamento há 3 meses” = nenhum pagamento no mês e nos 2 anteriores.
+            Os filtros de superintendência e cidade usam a cidade da base; o de subcategoria, a da conta mais recente da fatura.</li>
           <li><b>Dados do faturamento nas bases de cobrança e comparativo</b> (aba Base): Endereço da ligação, Grupo, Rota e Situação da ligação, do(s) arquivo(s) de
             faturamento da referência mais recente da pasta (1ª linha da matrícula no arquivo). Em branco = matrícula sem conta nessa referência (ex.: Leste).</li>
           <li><b>Comparativo por mês</b> (aba Base): uma linha por matrícula com pagamento em algum dos meses marcados e uma coluna com o Val. Autenticado de cada mês (em branco = não pagou), nos filtros do cabeçalho.</li>
@@ -460,9 +484,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v30-20261027"></script>
-<script src="assets/calculos.js?v=v30-20261027"></script>
-<script>const VERSAO_SITE = "v30-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v30-20261027"></script>
+<script src="assets/regras.js?v=v31-20261027"></script>
+<script src="assets/calculos.js?v=v31-20261027"></script>
+<script>const VERSAO_SITE = "v31-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v31-20261027"></script>
 </body>
 </html>

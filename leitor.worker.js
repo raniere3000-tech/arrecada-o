@@ -12,7 +12,8 @@ let fontes = null;                                     // arquivos CSV lidos (co
 let contasFat = null;
 let combosArr = null;
 let fontesFat = null;                                  // arquivos de faturamento lidos (com as referências de cada um)
-let cadastroFat = null;                                // endereço, grupo, rota e situação da ligação da referência mais recente                                  // cidade/subcategoria/SUP de cada combinação da arrecadação                                  // contas da fatura com o total pago (aba Clientes e oportunidades)
+let cadastroFat = null;
+let receber = null, combosFat = null;                 // contas a receber (Map matrícula → resumo) e combinações da fatura                                // endereço, grupo, rota e situação da ligação da referência mais recente                                  // cidade/subcategoria/SUP de cada combinação da arrecadação                                  // contas da fatura com o total pago (aba Clientes e oportunidades)
 
 self.onmessage = async (ev) => {
   if (ev.data.tipo === "analise") { respondeAnalise(ev.data); return; }
@@ -27,6 +28,10 @@ self.onmessage = async (ev) => {
     delete r.dados.analise;
     contasFat = r.cruzamento ? r.cruzamento.base : null;
     combosArr = r.dados.combos;
+    combosFat = r.cruzamento ? r.cruzamento.combos : null;
+    grupoFat = null;                                   // refeito na 1ª consulta desta pasta
+    receber = r.receberMapa || null;
+    delete r.receberMapa;
     if (r.cruzamento) delete r.cruzamento.base;
     avisa("pronto", r, C.buffers(r.dados));          // as tabelas vão para a página sem cópia
   } catch (e) {
@@ -81,12 +86,50 @@ const ligTxt = (l) => (l < 1e10 ? String(l) : "(não numérica)");
 // aba Clientes e oportunidades: listas completas (a página mostra as primeiras e baixa o resto em CSV)
 function respondeClientes(o) {
   const r = C.clientesOportunidades(analise, contasFat, o);
+  if (receber) {
+    // faturado sem pagamento: a matrícula está na base de contas a receber com saldo vencido? (confirma o "a investigar")
+    const conf = { confirmadas: 0, valorFat: 0, saldo: 0, fora: 0, valorFora: 0 };
+    for (const x of r.semPagamento.lista) {
+      const rc = receber.get(x.lig);
+      x.saldo = rc && rc.vencido > 0 ? rc.vencido : null;
+      if (x.saldo) { conf.confirmadas++; conf.valorFat += x.valor; conf.saldo += x.saldo; } else { conf.fora++; conf.valorFora += x.valor; }
+    }
+    r.semPagamento.confirmacao = conf;
+    for (const x of r.deixaram) { const rc = receber.get(x.lig); x.saldo = rc && rc.vencido > 0 ? rc.vencido : null; }
+    const f = o.filtroRec || {}, sup = supDaCidade();
+    const aceita = (x) => (!f.sup || sup.get(x.cidade) === f.sup) && (!f.cidade || x.cidade === f.cidade) && (!f.grupoFat || grupoFatDe(x.lig) === f.grupoFat);
+    r.receber = C.analisaReceber(receber, analise, o.mi, aceita, o.meses);
+    for (const x of r.receber.lista) { x.nome = x.nome || nomeDe(x.lig); x.lig = ligTxt(x.lig); }
+  }
   for (const lista of [r.deixaram, r.voltaram, r.semPagamento.lista]) for (const x of lista) { x.nome = nomeDe(x.lig); x.lig = ligTxt(x.lig); }
   return { ...r, temFatura: !!contasFat };
 }
+// cidade → superintendência (pela tabela de zonas); subcategoria da fatura de cada matrícula (conta mais recente)
+let supCidade = null, grupoFat = null;
+function supDaCidade() {
+  if (!supCidade) supCidade = new Map(Object.values(R.ZONAS).map(([cidade, sup]) => [cidade, sup]));
+  return supCidade;
+}
+function grupoFatDe(l) {
+  if (!grupoFat) {
+    grupoFat = new Map();
+    const refDe = new Map();
+    if (contasFat) for (let p = 0; p < contasFat.lig.length; p++) {
+      const k = contasFat.lig[p];
+      if ((refDe.get(k) || 0) <= contasFat.ref[p]) { refDe.set(k, contasFat.ref[p]); grupoFat.set(k, (combosFat[contasFat.cmb[p]] || {}).grupo); }
+    }
+  }
+  return grupoFat.get(l);
+}
+// colunas das contas a receber nas bases de cobrança e comparativo
+const CAB_RECEBER = ["Saldo vencido", "Contas vencidas", "A vencer", "Faixa mais antiga", "Situação (contas a receber)", "Contato"];
+const colsReceber = (l, n) => {
+  const x = receber && receber.get(l);
+  return x ? [n(x.vencido), x.contasV, n(x.aVencer), x.faixaMaxTxt, x.sitLig, x.contato] : ["", "", "", "", "", ""];
+};
 function respondeMatricula({ lig }) {
   const l = C.chaveLig(lig);
-  return { lig: l < 1e10 ? String(l) : String(lig).trim(), ...C.historicoMatricula(analise, contasFat, l) };
+  return { lig: l < 1e10 ? String(l) : String(lig).trim(), ...C.historicoMatricula(analise, contasFat, l), receber: (receber && receber.get(l)) || null };
 }
 
 const ext = (nome) => (nome.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();
@@ -138,6 +181,7 @@ function achaCabecalho(linhas, colunas) {
   return null;
 }
 const COLS_DESCONTO = ["NUMLIGACAO", "DESCONTO", "REFERENCIA"];
+const COLS_RECEBER = ["NUMLIGACAO", "SALDOTOTAL", "FAIXADESCRICAO"];   // contas a receber (vencidas e a vencer, por faixa de atraso)
 const COLS_PERFIL = ["NUMLIGACAO", "SEQRESPONSAVEL", "CLUSTERSALDO"];
 const COLS_ORCADO = ["SUP", "RUBRICA"];
 
@@ -169,11 +213,12 @@ async function classifica(item) {
   for (const aba of livro.SheetNames) {
     const linhas = linhasDaAba(livro, aba);
     const guarda = inteira ? { livro } : {};
+    if (achaCabecalho(linhas, COLS_RECEBER)) return { tipo: "receber", aba };
     if (achaCabecalho(linhas, COLS_PERFIL)) return { tipo: "perfil", aba, ...guarda };
     if (achaCabecalho(linhas, COLS_DESCONTO)) return { tipo: "desconto", aba, ...guarda };
     if (achaCabecalho(linhas, COLS_ORCADO)) return { tipo: "orcado", aba };
   }
-  return { tipo: "ignorado", motivo: "planilha não usada pelo painel (não é desconto, perfil do cliente nem orçado)" };
+  return { tipo: "ignorado", motivo: "planilha não usada pelo painel (não é desconto, perfil do cliente, orçado nem contas a receber)" };
 }
 
 // ---------- planilhas ----------
@@ -188,6 +233,29 @@ async function lePerfil(arq, mapa) {
     if (!mapa.has(k)) { mapa.set(k, String(l[c] == null ? "" : l[c]).trim() || "Sem perfil"); n++; }   // repetida: vale a 1ª (como no BI)
   }
   return n;
+}
+// data da base de contas a receber: do nome do arquivo (27-10-2026, 2026-10-27, 27.10.2026) ou a data de modificação
+function dataDoArquivo(file) {
+  let m = /(\d{4})[-_.](\d{2})[-_.](\d{2})/.exec(file.name);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = /(\d{2})[-_.](\d{2})[-_.](\d{4})/.exec(file.name);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return new Date(file.lastModified).toISOString().slice(0, 10);
+}
+async function leReceber(arq) {
+  const linhas = linhasDaAba(leLivro(await arq.file.arrayBuffer()), arq.aba);
+  const cab = achaCabecalho(linhas, COLS_RECEBER), ix = (c) => cab.ch.indexOf(c);
+  const col = { lig: ix("NUMLIGACAO"), nome: ix("NOMCLIENTE"), contas: ix("CONTASTOTAIS"), saldo: ix("SALDOTOTAL"), faixa: ix("FAIXADESCRICAO"),
+    sitLig: ix("SITLIG"), tipo: ix("TIPOLIGACAO"), contato: ix("CONTATO"), cidade: ix("CIDADE") };
+  const regs = [];
+  for (let i = cab.i + 1; i < linhas.length; i++) {
+    const l = linhas[i];
+    if (!l || l[col.lig] == null || l[col.lig] === "") continue;
+    const v = (k) => (col[k] >= 0 && l[col[k]] != null ? l[col[k]] : "");
+    regs.push({ lig: String(v("lig")), nome: v("nome"), contas: String(v("contas")), saldo: typeof v("saldo") === "number" ? String(v("saldo")).replace(".", ",") : String(v("saldo")), faixa: v("faixa"),
+      sitLig: v("sitLig"), tipo: v("tipo"), contato: v("contato"), cidade: v("cidade") });
+  }
+  return { mapa: C.montaReceber(regs), linhas: regs.length };
 }
 async function leDesconto(arq, mapa) {
   const linhas = linhasDaAba(arq.livro || leLivro(await arq.file.arrayBuffer()), arq.aba);
@@ -358,6 +426,20 @@ async function processa(itens) {
     }
   }
 
+  // contas a receber: vale a base mais recente (data no nome do arquivo ou de modificação)
+  let receberMapa = null, receberInfo = null;
+  const bases = arquivos.filter((a) => a.tipo === "receber").map((a) => ({ a, data: dataDoArquivo(a.file) })).sort((x, y) => y.data.localeCompare(x.data) || y.a.file.lastModified - x.a.file.lastModified);
+  for (const [i, { a, data }] of bases.entries()) {
+    if (i > 0) { Object.assign(a, { tipo: "ignorado", motivo: `base de contas a receber mais antiga: vale a de ${bases[0].data.split("-").reverse().join("/")} (${bases[0].a.rel})` }); continue; }
+    try {
+      avisa("progresso", { pct: 15, texto: `Lendo contas a receber: ${a.rel}` });
+      const r = await leReceber(a);
+      receberMapa = r.mapa;
+      a.registros = r.linhas;
+      receberInfo = { arquivo: a.rel, data, linhas: r.linhas, matriculas: r.mapa.size };
+    } catch (e) { Object.assign(a, { tipo: "ignorado", motivo: "contas a receber: não foi possível ler: " + ((e && e.message) || e), erro: true }); }
+  }
+
   const agregador = new C.Agregador();
   const diarias = arquivos.filter((a) => a.tipo === "diaria"), acumuladas = arquivos.filter((a) => a.tipo === "acumulada");
   // o perfil entra na leitura de cada linha: trocar a planilha de perfil invalida o cache
@@ -438,7 +520,7 @@ async function processa(itens) {
     cruzamento = C.cruzaFaturamento(exportsFat, dados.analise.pagamentos, dados.meses);
   }
   return {
-    dados, orcados, cruzamento,
+    dados, orcados, cruzamento, receberInfo, receberMapa,
     temPerfil: perfis.size > 0, temDesconto: descontos.size > 0,
     mesesDiaria: [...mesesDiaria].sort(),
     mesesDesconto: [...descontos.keys()].sort(),
@@ -503,9 +585,9 @@ async function extraiBase({ id, ligs, meses, porMesArquivo }) {
 }
 // Comparativo por mês: uma linha por matrícula e uma coluna de valor por mês (em branco = sem pagamento no mês).
 // O CSV é montado aqui, em blocos, porque pode ter centenas de milhares de linhas.
-async function respondeComparativo({ mis, rotulos, marcas, nomesSup, comFat }) {
+async function respondeComparativo({ mis, rotulos, marcas, nomesSup, comFat, comRec }) {
   const r = C.valoresPorMes(analise, mis, marcas), k = r.k, cad = comFat ? await leCadastroFat() : null;
-  let comCadastro = 0;
+  let comCadastro = 0, comReceber = 0;
   const n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ","), txt = (t) => String(t || "").replace(/[;\r\n]/g, " ");
   const ordem = r.ligs.map((_, p) => p).sort((a, b) => r.ligs[a] - r.ligs[b]);
   const blobs = [], partes = [], porMes = rotulos.map(() => ({ matriculas: 0, valor: 0 }));
@@ -513,6 +595,7 @@ async function respondeComparativo({ mis, rotulos, marcas, nomesSup, comFat }) {
   for (const p of ordem) {
     const c = combosArr[r.comb[p]] || {}, cols = [ligTxt(r.ligs[p]), txt(nomeDe(r.ligs[p])), nomesSup[c.sup] || c.sup || "", c.cidade || "", c.grupo || ""];
     if (cad) { const f = cad.mapa.get(r.ligs[p]); if (f) comCadastro++; cols.push(...(f || ["", "", "", ""]).map(txt)); }
+    if (comRec && receber) { if (receber.has(r.ligs[p])) comReceber++; cols.push(...colsReceber(r.ligs[p], n)); }
     for (let j = 0; j < k; j++) {
       if (r.pagou[p * k + j]) { cols.push(n(r.vals[p * k + j])); porMes[j].matriculas++; porMes[j].valor += r.vals[p * k + j]; } else cols.push("");
     }
@@ -521,19 +604,22 @@ async function respondeComparativo({ mis, rotulos, marcas, nomesSup, comFat }) {
     if (tam > 4e6) { blobs.push(new Blob([partes.join("\r\n") + "\r\n"])); partes.length = 0; tam = 0; }
   }
   if (partes.length) blobs.push(new Blob([partes.join("\r\n") + "\r\n"]));
-  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...(cad ? CAB_CADASTRO : []), ...rotulos.map((m) => `Arrecadado ${m}`)].join(";");
-  return { linhas: ordem.length, porMes, cadastro: cad && { ref: cad.ref, arquivos: cad.arquivos, comCadastro }, blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
+  const rec = !!(comRec && receber);
+  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...(cad ? CAB_CADASTRO : []), ...(rec ? CAB_RECEBER : []), ...rotulos.map((m) => `Arrecadado ${m}`)].join(";");
+  return { linhas: ordem.length, porMes, cadastro: cad && { ref: cad.ref, arquivos: cad.arquivos, comCadastro }, comReceber: rec ? comReceber : null, blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
 }
 // Base de cobrança: pagaram no mês A e não pagaram no mês B (nas combinações marcadas pelos filtros do cabeçalho)
-async function respondeCobranca({ miA, miB, marcas, comFat }) {
+async function respondeCobranca({ miA, miB, marcas, comFat, comRec }) {
   const lista = C.pagaramNaoPagaram(analise, miA, miB, marcas), cad = comFat ? await leCadastroFat() : null;
-  let comCadastro = 0;
+  let comCadastro = 0, comReceber = 0;
   for (const x of lista) {
     if (cad) { x.fat = cad.mapa.get(x.lig) || null; if (x.fat) comCadastro++; }
+    if (comRec && receber) { if (receber.has(x.lig)) comReceber++; x.rec = colsReceber(x.lig, nBR); }
     x.nome = nomeDe(x.lig); x.lig = ligTxt(x.lig);
   }
-  return { lista, cadastro: cad && { ref: cad.ref, arquivos: cad.arquivos, comCadastro } };
+  return { lista, cadastro: cad && { ref: cad.ref, arquivos: cad.arquivos, comCadastro }, comReceber: comRec && receber ? comReceber : null };
 }
+const nBR = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ",");
 const CAB_CADASTRO = ["Endereço da ligação", "Grupo", "Rota", "Situação da ligação"];
 async function linhasDoArquivo(file, aoLinha, aoLer) {
   const leitor = file.stream().getReader();

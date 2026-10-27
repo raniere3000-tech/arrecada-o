@@ -455,3 +455,29 @@ test("comparativo por mês: uma coluna por mês, em branco onde não pagou", () 
   assert.deepEqual(lin(3), [null, 70]);
   assert.deepEqual(C.valoresPorMes(d.analise, mis, C.marcaCombos(d, { sup: "LESTE" })).ligs, [4]);
 });
+
+test("contas a receber: saldo por matrícula e faixa, cruzado com a arrecadação", () => {
+  const reg = (lig, faixa, contas, saldo, extra = {}) => ({ lig, nome: "FULANO", contas, saldo, faixa, sitLig: "Ativa", tipo: "Hidrometrado",
+    contato: "CPF", cidade: "RIO BONITO", ...extra });
+  const rec = C.montaReceber([
+    reg(1, "00 - A Vencer", 1, 50), reg(1, "01 - 30 Dias", 1, 100), reg(1, "366 Dias >>", 10, 1000),
+    reg(2, "31 - 60 Dias", 2, 200, { sitLig: "Cortada", cidade: "CORDEIRO" }),
+    reg(3, "00 - A Vencer", 1, 80),                                        // só a vencer: não é devedora
+  ]);
+  assert.equal(C.faixaNum("366 Dias >>"), 366); assert.equal(C.faixaNum("00 - A Vencer"), 0);
+  const m1 = rec.get(1);
+  perto(m1.vencido, 1100); perto(m1.aVencer, 50); assert.equal(m1.contasV, 11); assert.equal(m1.faixaMaxTxt, "366 Dias >>");
+  // arrecadação: a 1 pagou em out/26; a 2 pagou só em jun/26
+  const a = new C.Agregador();
+  a.adiciona(linha(1, "01/10/2026", "30,00")); a.adiciona(linha(2, "01/06/2026", "40,00")); a.adiciona(linha(9, "01/07/2026", "1,00"));
+  const d = a.resultado(new Map()), mi = d.meses.indexOf("2026-10");
+  const r = C.analisaReceber(rec, d.analise, mi, () => true, d.meses);
+  assert.equal(r.tot.matriculas, 3); assert.equal(r.tot.devedoras, 2); perto(r.tot.vencido, 1300); perto(r.tot.aVencer, 130);
+  assert.deepEqual([r.pagaram.matriculas, r.pagaram.vencido, r.pagaram.valor], [1, 1100, 30]);
+  assert.deepEqual([r.sem3.matriculas, r.sem3.vencido], [1, 200]);           // a 2: último pagamento em jun (antes de ago)
+  assert.deepEqual(r.porFaixa.map((f) => f.num), [0, 1, 31, 366]);
+  assert.equal(r.porSit[0].nome, "Ativa"); perto(r.porSit[0].saldo, 1100);
+  assert.deepEqual(r.lista.map((x) => x.lig), [1, 2, 3]);
+  assert.equal(r.lista[1].ultimo, d.meses.indexOf("2026-06"));
+  assert.equal(C.analisaReceber(rec, d.analise, mi, (x) => x.cidade === "CORDEIRO", d.meses).tot.matriculas, 1);
+});

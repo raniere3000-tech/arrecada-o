@@ -189,6 +189,7 @@
 
   function carrega(res, nomePasta) {
     E.res = res;
+    chaveCl = ""; clRes = null;                      // Clientes e oportunidades: recalcula com a pasta nova
     const d = res.dados;
     const nArr = res.arquivos.filter((a) => a.tipo === "diaria" || a.tipo === "acumulada").length;
     listaArquivos(res);
@@ -218,7 +219,7 @@
     return `${fmt(a.semChave)} linhas descartadas (${motivos}). Ex.: ${r.exemplo}`;
   }
   function listaArquivos(res) {
-    const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (linha da arrecadação)", faturamento: "Faturamento (Fatura de ciclo)", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
+    const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (linha da arrecadação)", faturamento: "Faturamento (Fatura de ciclo)", receber: "Contas a receber", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
     const linhas = res.arquivos.map((a) => `<tr>${td(esc(a.rel), "rot")}${td(USO[a.tipo] || a.tipo, "rot")}${td(a.registros != null ? fmt(a.registros) : "")}`
       + `${td(esc((a.meses || []).map(C.rotuloMes).join(", ")), "rot")}${td(esc(a.motivo || [a.puladas ? `${fmt(a.puladas)} linhas de mês que está no arquivo diário não foram usadas` : "", rejeicao(a), a.doCache ? "já lido antes (guardado neste navegador)" : ""].filter(Boolean).join("; ")), "rot")}</tr>`).join("");
     const d = res.dados, avisos = [];
@@ -821,6 +822,14 @@
         ? `Incluir dados do faturamento (endereço da ligação, grupo, rota e situação da ligação), da referência ${C.rotuloMes(refs[refs.length - 1])}`
         : "Incluir dados do faturamento: sem faturamento aproveitado na pasta";
     });
+    const ri = E.res.receberInfo;
+    document.querySelectorAll(".opcao-rec").forEach((cx) => {
+      cx.disabled = !ri;
+      if (!ri) cx.checked = false;
+      cx.parentElement.querySelector(".rot-rec").textContent = ri
+        ? `Incluir saldo das contas a receber (saldo vencido, contas, a vencer, faixa mais antiga, situação e contato), base de ${dataBR(ri.data)}`
+        : "Incluir saldo das contas a receber: nenhuma base de contas a receber na pasta";
+    });
     $("cmpMeses").innerHTML = meses.map((m) => `<label><input type="checkbox" value="${m}"${mesesCmp.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("");
   }
   let mesesCmp = null, idCmp = 0;
@@ -832,7 +841,8 @@
     $("cmpGerar").disabled = true;
     $("cmpStatus").textContent = "Montando o comparativo…";
     $("cmpResultado").innerHTML = "";
-    worker.postMessage({ tipo: "comparativo", id: ++idCmp, mis: meses.map(idxMes), rotulos: meses.map(C.rotuloMes), marcas: marcas(), nomesSup: NOME_SUP, meses, comFat: $("cmpFat").checked });
+    worker.postMessage({ tipo: "comparativo", id: ++idCmp, mis: meses.map(idxMes), rotulos: meses.map(C.rotuloMes), marcas: marcas(), nomesSup: NOME_SUP, meses,
+      comFat: $("cmpFat").checked, comRec: $("cmpRec").checked });
     cmpPedido = meses;
   });
   let cmpPedido = [];
@@ -841,7 +851,7 @@
     $("cmpGerar").disabled = false;
     if (m.erro) { $("cmpStatus").textContent = "Erro: " + m.erro; return; }
     const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
-    $("cmpStatus").textContent = `${fmt(m.linhas)} matrículas com pagamento em pelo menos um dos meses · ${filtro}.${textoCadastro(m.cadastro)}`;
+    $("cmpStatus").textContent = `${fmt(m.linhas)} matrículas com pagamento em pelo menos um dos meses · ${filtro}.${textoCadastro(m.cadastro)}${textoReceber(m.comReceber)}`;
     const nome = `Comparativo_por_mes_${cmpPedido[0]}${cmpPedido.length > 1 ? "_a_" + cmpPedido[cmpPedido.length - 1] : ""}.csv`;
     $("cmpResultado").innerHTML = `<table class="compacta base-tabela"><thead><tr><th>Mês</th><th>Matrículas com pagamento</th><th>Arrecadado (R$)</th></tr></thead><tbody>`
       + cmpPedido.map((mes, j) => `<tr>${td(C.rotuloMes(mes), "rot")}${td(fmt(m.porMes[j].matriculas))}${td(fmt(m.porMes[j].valor))}</tr>`).join("")
@@ -927,8 +937,9 @@
     $("cobGerar").disabled = true;
     $("cobStatus").textContent = "Cruzando os meses…";
     $("cobResultado").innerHTML = "";
-    worker.postMessage({ tipo: "cobranca", id: ++idCob, miA: idxMes(cobA), miB: idxMes(cobB), marcas: marcas(), comFat: $("cobFat").checked });
+    worker.postMessage({ tipo: "cobranca", id: ++idCob, miA: idxMes(cobA), miB: idxMes(cobB), marcas: marcas(), comFat: $("cobFat").checked, comRec: $("cobRec").checked });
   });
+  const textoReceber = (n) => (n != null ? ` Contas a receber (base de ${dataBR(E.res.receberInfo.data)}): ${fmt(n)} matrículas com saldo na base.` : "");
   const textoCadastro = (c) => (c ? ` Dados do faturamento da referência ${C.rotuloMes(c.ref)} (${c.arquivos.join(", ")}): ${fmt(c.comCadastro)} matrículas encontradas.` : "");
   function recebeCobranca(m) {
     if (m.id !== idCob) return;
@@ -937,14 +948,18 @@
     const d = E.res.dados, l = m.lista, total = l.reduce((a, x) => a + x.valor, 0), A = C.rotuloMes(cobA), B = C.rotuloMes(cobB);
     const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
     const ultB = d.ultimoCredito[cobB];
-    $("cobStatus").textContent = `${fmt(l.length)} matrículas pagaram em ${A} e não pagaram em ${B}${ultB && cobB === d.meses[d.meses.length - 1] ? ` (até ${dataBR(ultB)})` : ""} · ${filtro} · ${rs(total)} pagos em ${A}.${textoCadastro(m.cadastro)}`;
+    $("cobStatus").textContent = `${fmt(l.length)} matrículas pagaram em ${A} e não pagaram em ${B}${ultB && cobB === d.meses[d.meses.length - 1] ? ` (até ${dataBR(ultB)})` : ""} · ${filtro} · ${rs(total)} pagos em ${A}.${textoCadastro(m.cadastro)}${textoReceber(m.comReceber)}`;
     const porCid = new Map();
     for (const x of l) { const c = d.combos[x.c] || {}, o = porCid.get(c.cidade) || { n: 0, v: 0 }; o.n++; o.v += x.valor; porCid.set(c.cidade, o); }
     const cids = [...porCid.entries()].sort((a, b) => b[1].v - a[1].v);
-    const n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ","), txt = (t) => String(t || "").replace(/;/g, ",");
-    const cad = !!m.cadastro, CAB_CAD = ["Endereço da ligação", "Grupo", "Rota", "Situação da ligação"];
-    const csv = "\ufeff" + [["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...(cad ? CAB_CAD : []), `Valor pago em ${A}`, `Dias com pagamento em ${A}`].join(";"),
-      ...l.map((x) => { const c = d.combos[x.c] || {}; return [x.lig, txt(x.nome), nomeSup(c.sup), c.cidade, c.grupo, ...(cad ? (x.fat || ["", "", "", ""]).map(txt) : []), n(x.valor), x.dias].join(";"); })].join("\r\n");
+    const n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ","), txt = (t) => (t == null ? "" : String(t)).replace(/;/g, ",");
+    const cad = !!m.cadastro, rec = m.comReceber != null, CAB_CAD = ["Endereço da ligação", "Grupo", "Rota", "Situação da ligação"];
+    const CAB_REC = ["Saldo vencido", "Contas vencidas", "A vencer", "Faixa mais antiga", "Situação (contas a receber)", "Contato"];
+    const csv = "\ufeff" + [["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...(cad ? CAB_CAD : []), ...(rec ? CAB_REC : []), `Valor pago em ${A}`, `Dias com pagamento em ${A}`].join(";"),
+      ...l.map((x) => {
+        const c = d.combos[x.c] || {};
+        return [x.lig, txt(x.nome), nomeSup(c.sup), c.cidade, c.grupo, ...(cad ? (x.fat || ["", "", "", ""]).map(txt) : []), ...(rec ? x.rec.map(txt) : []), n(x.valor), x.dias].join(";");
+      })].join("\r\n");
     const nome = `Base_cobranca_pagou_${cobA}_nao_pagou_${cobB}.csv`;
     $("cobResultado").innerHTML = (cids.length ? `<table class="compacta base-tabela"><thead><tr><th>Cidade</th><th>Matrículas</th><th>Pago em ${A} (R$)</th></tr></thead><tbody>`
       + cids.map(([c, o]) => `<tr>${td(esc(c || "—"), "rot")}${td(fmt(o.n))}${td(fmt(o.v))}</tr>`).join("")
@@ -1322,7 +1337,7 @@
     $("clKpis").innerHTML = '<p class="nota">Calculando…</p>';
     ["clFaixas", "clRefs", "clCid", "clSem", "clDeixaram", "clVoltaram"].forEach((id) => { $(id).innerHTML = ""; });
     worker.postMessage({ tipo: "clientes", id: ++idCl, mi, marcas: marcas(), sel: E.sel, aceitaFat: cz ? cz.combos.map((c) => (okFat(c) ? 1 : 0)) : [],
-      hoje: isoNum(hojeIso), corte: isoNum(corteIso), inicio: isoNum(d.meses[0] + "-01") });
+      hoje: isoNum(hojeIso), corte: isoNum(corteIso), inicio: isoNum(d.meses[0] + "-01"), meses: d.meses, filtroRec: { sup: E.sup, cidade: E.cidade, grupoFat: filtroG } });
   }
   function recebeClientes(m) {
     if (m.id !== idCl) return;
@@ -1349,7 +1364,10 @@
       card("Pagam, mas têm conta sem pagamento", r.temFatura ? fmt(sp.matriculas - sp.semNenhum) : "—", r.temFatura ? `matrículas · ${rs(sp.valor - sp.valorSemNenhum)} · verificar vencimento ou acordo` : "—"),
       card("Deixaram de pagar", r.temHist ? fmt(r.deixaram.length) : "—", r.temHist ? `matrículas · ${rs(somaD)} por mês, em média, nos dias marcados` : "faltam os 3 meses anteriores na pasta"),
       card("Voltaram a pagar", r.temHist ? fmt(r.voltaram.length) : "—", r.temHist ? `matrículas · ${rs(somaV)} no mês` : "faltam os 3 meses anteriores na pasta"),
-      card("Maior faturado sem pagamento", cids.length ? esc(cids[0].nome) : "—", cids.length ? `${rs(cids[0].valor)} · ${pct(cids[0].valor / sp.valor)} do total` : "—"),
+      sp.confirmacao
+        ? card("Confirmados na base de contas a receber", fmt(sp.confirmacao.confirmadas), `de ${fmt(sp.matriculas)} matrículas com faturado sem pagamento · saldo vencido ${rs(sp.confirmacao.saldo)}`
+          + ` · ${fmt(sp.confirmacao.fora)} fora da base (${rs(sp.confirmacao.valorFora)}): provável pagamento por acordo ou outro vencimento`)
+        : card("Maior faturado sem pagamento", cids.length ? esc(cids[0].nome) : "—", cids.length ? `${rs(cids[0].valor)} · ${pct(cids[0].valor / sp.valor)} do total` : "—"),
     ].join("");
     // faixas, referências e cidades
     const linTotal = `<tr class="total">${td("Total", "rot")}${td(fmt(sp.contas))}${td(fmt(sp.valor))}${td(sp.valor ? "100,00%" : "")}</tr>`;
@@ -1364,20 +1382,22 @@
       + `<tr class="total">${td("Total", "rot")}${td(fmt(sp.matriculas))}${td(fmt(sp.contas))}${td(fmt(sp.valor))}${td(sp.valor ? "100,00%" : "")}</tr></tbody>`;
     // listas
     const ult = (x) => (x.ultimo >= 0 ? C.rotuloMes(d.meses[x.ultimo]) : "nenhum na pasta");
-    tabela("clSem", ["Matrícula", "Nome", "Cidade", "Subcategoria", "Contas", "Valor (R$)", "Ref. mais antiga", "Venc. mais antigo", "Último pagamento"],
+    const comRec = !!r.receber, tdSaldo = (x) => (comRec ? td(x.saldo ? fmt(x.saldo, 2) : "não está na base") : "");
+    tabela("clSem", ["Matrícula", "Nome", "Cidade", "Subcategoria", "Contas", "Valor (R$)", "Ref. mais antiga", "Venc. mais antigo", "Último pagamento", ...(comRec ? ["Saldo vencido na base (R$)"] : [])],
       sp.lista.slice(0, 100).map((x) => {
         const c = comboFat(x.c);
-        return `<tr>${tdLig(x.lig)}${td(esc(x.nome), "rot")}${td(esc(c.cidade), "rot")}${td(esc(c.grupo), "rot")}${td(fmt(x.contas))}${td(fmt(x.valor, 2))}${td(refRot(x.refMin))}${td(numData(x.vencMin))}${td(ult(x))}</tr>`;
+        return `<tr>${tdLig(x.lig)}${td(esc(x.nome), "rot")}${td(esc(c.cidade), "rot")}${td(esc(c.grupo), "rot")}${td(fmt(x.contas))}${td(fmt(x.valor, 2))}${td(refRot(x.refMin))}${td(numData(x.vencMin))}${td(ult(x))}${tdSaldo(x)}</tr>`;
       }));
     const m3 = [3, 2, 1].map((n) => C.rotuloMes(C.mesAnterior(E.mes, n)));
     $("clNotaD").textContent = r.temHist
       ? `${fmt(r.deixaram.length)} matrículas pagaram nos dias úteis ${rotuloSel(E.sel)} de ${m3.join(", ")} e ainda não pagaram nesses dias em ${C.rotuloMes(E.mes)}.`
       : "Faltam na pasta os 3 meses anteriores ao mês escolhido.";
-    tabela("clDeixaram", ["Matrícula", "Nome", "Cidade", "Subcategoria", ...m3.map((m) => m + " (R$)"), "Média (R$)"],
+    tabela("clDeixaram", ["Matrícula", "Nome", "Cidade", "Subcategoria", ...m3.map((m) => m + " (R$)"), "Média (R$)", ...(comRec ? ["Saldo vencido na base (R$)"] : [])],
       r.deixaram.slice(0, 100).map((x) => {
         const c = comboArr(x.c);
-        return `<tr>${tdLig(x.lig)}${td(esc(x.nome), "rot")}${td(esc(c.cidade), "rot")}${td(esc(c.grupo), "rot")}${td(fmt(x.m3, 2))}${td(fmt(x.m2, 2))}${td(fmt(x.m1, 2))}${td(fmt(x.media, 2))}</tr>`;
+        return `<tr>${tdLig(x.lig)}${td(esc(x.nome), "rot")}${td(esc(c.cidade), "rot")}${td(esc(c.grupo), "rot")}${td(fmt(x.m3, 2))}${td(fmt(x.m2, 2))}${td(fmt(x.m1, 2))}${td(fmt(x.media, 2))}${tdSaldo(x)}</tr>`;
       }));
+    desenhaReceber(r.receber);
     $("clNotaV").textContent = r.temHist
       ? `${fmt(r.voltaram.length)} matrículas pagaram nos dias úteis ${rotuloSel(E.sel)} de ${C.rotuloMes(E.mes)} sem nenhum pagamento em ${m3.join(", ")}.`
       : "Faltam na pasta os 3 meses anteriores ao mês escolhido.";
@@ -1394,7 +1414,7 @@
     clOrdem = [th.dataset.col, th.dataset.col === clOrdem[0] ? -clOrdem[1] : th.dataset.col === "nome" ? 1 : -1];
     desenhaListasCl();
   });
-  ["clSem", "clDeixaram", "clVoltaram"].forEach((id) => $(id).addEventListener("click", (e) => {
+  ["clSem", "clDeixaram", "clVoltaram", "crLista"].forEach((id) => $(id).addEventListener("click", (e) => {
     const a = e.target.closest("a.lig");
     if (!a) return;
     e.preventDefault();
@@ -1408,17 +1428,75 @@
     const m3 = [3, 2, 1].map((k) => C.rotuloMes(C.mesAnterior(E.mes, k)));
     const txt = (t) => String(t).replace(/;/g, ",");
     let linhas;
-    if (tipo === "sem") linhas = [["Matrícula", "Nome", "Cidade", "Subcategoria", "Contas", "Valor", "Ref. mais antiga", "Venc. mais antigo", "Último pagamento"].join(";"),
+    const rec = !!clRes.receber, sd = (x) => (rec ? [x.saldo ? n(x.saldo) : ""] : []), ult = (u) => (u >= 0 ? C.rotuloMes(d.meses[u]) : "nenhum na pasta");
+    if (tipo === "sem") linhas = [["Matrícula", "Nome", "Cidade", "Subcategoria", "Contas", "Valor", "Ref. mais antiga", "Venc. mais antigo", "Último pagamento", ...(rec ? ["Saldo vencido na base"] : [])].join(";"),
       ...clRes.semPagamento.lista.map((x) => {
         const c = comboFat(x.c);
-        return [x.lig, txt(x.nome), c.cidade, c.grupo, x.contas, n(x.valor), refRot(x.refMin), numData(x.vencMin), x.ultimo >= 0 ? C.rotuloMes(d.meses[x.ultimo]) : "nenhum na pasta"].join(";");
+        return [x.lig, txt(x.nome), c.cidade, c.grupo, x.contas, n(x.valor), refRot(x.refMin), numData(x.vencMin), ult(x.ultimo), ...sd(x)].join(";");
       })];
-    else if (tipo === "deixaram") linhas = [["Matrícula", "Nome", "Cidade", "Subcategoria", ...m3, "Média"].join(";"),
-      ...clRes.deixaram.map((x) => { const c = comboArr(x.c); return [x.lig, txt(x.nome), c.cidade, c.grupo, n(x.m3), n(x.m2), n(x.m1), n(x.media)].join(";"); })];
+    else if (tipo === "deixaram") linhas = [["Matrícula", "Nome", "Cidade", "Subcategoria", ...m3, "Média", ...(rec ? ["Saldo vencido na base"] : [])].join(";"),
+      ...clRes.deixaram.map((x) => { const c = comboArr(x.c); return [x.lig, txt(x.nome), c.cidade, c.grupo, n(x.m3), n(x.m2), n(x.m1), n(x.media), ...sd(x)].join(";"); })];
+    else if (tipo === "receber") linhas = [["Matrícula", "Nome", "Cidade", "Situação da ligação", "Tipo de ligação", "Contato", "Contas vencidas", "Saldo vencido", "Contas a vencer", "A vencer",
+      "Faixa mais antiga", "Último pagamento", `Pago em ${C.rotuloMes(E.mes)}`].join(";"),
+      ...clRes.receber.lista.map((x) => [x.lig, txt(x.nome), x.cidade, x.sitLig, x.tipo, x.contato, x.contasV, n(x.vencido), x.contasAV, n(x.aVencer), x.faixaMaxTxt, ult(x.ultimo), x.noMes ? n(x.noMes) : ""].join(";"))];
     else linhas = [["Matrícula", "Nome", "Cidade", "Subcategoria", C.rotuloMes(E.mes)].join(";"),
       ...clRes.voltaram.map((x) => { const c = comboArr(x.c); return [x.lig, txt(x.nome), c.cidade, c.grupo, n(x.valor)].join(";"); })];
     baixa("﻿" + linhas.join("\r\n"), `Clientes_${tipo}_${E.mes}.csv`);
   }));
+  // bloco "Contas a receber" (base de contas vencidas e a vencer informada na pasta)
+  function desenhaReceber(rc) {
+    const ri = E.res.receberInfo;
+    if (rc) $("clNotaBase").innerHTML = `Com a base de contas a receber de ${dataBR(ri.data)}, o <b>faturado sem pagamento</b> é conferido por matrícula: está na base com saldo vencido`
+      + " (confirmado) ou não está (provável pagamento por acordo, com outro vencimento, ou conta já quitada). A base não traz o vencimento de cada conta.";
+    $("crCorpo").hidden = !rc;
+    $("crBase").textContent = ri ? `base de ${dataBR(ri.data)} · ${ri.arquivo}` : "";
+    if (!rc) {
+      $("crNota").innerHTML = "Nenhuma base de contas a receber na pasta. Coloque a planilha (colunas NUM_LIGACAO, Saldo total e FAIXA_DESCRICAO) em qualquer pasta, de preferência numa"
+        + " subpasta “Contas a Receber”, com a data no nome (ex.: Contas a receber 27-10-2026.xlsx), e clique em Atualizar.";
+      return;
+    }
+    const t = rc.tot, M = C.rotuloMes(E.mes), d = E.res.dados;
+    const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
+    $("crNota").textContent = `${filtro} · posição de ${dataBR(ri.data)}: ${fmt(t.matriculas)} matrículas na base (${fmt(ri.matriculas)} sem filtros). `
+      + `Saldo vencido = todas as faixas menos “00 - A Vencer”. Pagamentos de ${M} até ${dataBR(d.ultimoCredito[E.mes])}.`;
+    const ano = rc.porFaixa.filter((f) => f.num >= 366).reduce((a, f) => a + f.saldo, 0);
+    const cort = rc.porSit.find((x) => /CORTAD/i.test(x.nome));
+    const card = (tt, v, sub) => `<div class="kpi"><span>${tt}</span><b>${v}</b><small>${sub}</small></div>`;
+    $("crKpis").innerHTML = [
+      card("Saldo vencido", milhoes(t.vencido), `${fmt(t.contasV)} contas · ${fmt(t.devedoras)} matrículas`),
+      card("A vencer (vencendo hoje)", milhoes(t.aVencer), `${fmt(t.contasAV)} contas`),
+      card("Vencido há mais de 1 ano", milhoes(ano), `${t.vencido ? pct(ano / t.vencido) : "—"} do saldo vencido`),
+      card(`Devedoras que pagaram em ${M}`, fmt(rc.pagaram.matriculas), `${rs(rc.pagaram.valor)} pagos no mês · ainda devem ${rs(rc.pagaram.vencido)}`),
+      card("Devedoras sem pagamento há 3 meses ou mais", fmt(rc.sem3.matriculas), `saldo vencido ${rs(rc.sem3.vencido)} · nada em ${M} nem nos 2 meses anteriores`),
+      card("Ligações cortadas", cort ? fmt(cort.matriculas) : "0", cort ? `saldo vencido ${rs(cort.saldo)} · ${pct(cort.saldo / t.vencido)} do total` : "—"),
+    ].join("");
+    const linhaTot = (n, c, v, extra = "") => `<tr class="total">${td("Total", "rot")}${td(fmt(n))}${td(fmt(c))}${td(fmt(v))}${extra}</tr>`;
+    const totFaixa = rc.porFaixa.reduce((a, f) => a + f.saldo, 0);
+    tabela("crFaixas", ["Faixa", "Matrículas", "Contas", "Saldo (R$)", "% do saldo"],
+      rc.porFaixa.map((f) => `<tr>${td(esc(f.nome), "rot")}${td(fmt(f.matriculas))}${td(fmt(f.contas))}${td(fmt(f.saldo))}${td(totFaixa ? pct(f.saldo / totFaixa) : "")}</tr>`)
+        .concat(`<tr class="total">${td("Total (vencido + a vencer)", "rot")}${td(fmt(t.matriculas))}${td(fmt(t.contasV + t.contasAV))}${td(fmt(totFaixa))}${td("100,00%")}</tr>`));
+    const grupoTab = (id, titulo, lista) => tabela(id, [titulo, "Matrículas", "Contas vencidas", "Saldo vencido (R$)", "A vencer (R$)", "% do vencido"],
+      lista.map((o) => `<tr>${td(esc(o.nome), "rot")}${td(fmt(o.matriculas))}${td(fmt(o.contas))}${td(fmt(o.saldo))}${td(fmt(o.aVencer))}${td(t.vencido ? pct(o.saldo / t.vencido) : "")}</tr>`)
+        .concat(linhaTot(t.matriculas, t.contasV, t.vencido, `${td(fmt(t.aVencer))}${td("100,00%")}`)));
+    grupoTab("crSit", "Situação", rc.porSit);
+    grupoTab("crContato", "Contato", rc.porContato);
+    grupoTab("crCid", "Cidade", rc.porCidade);
+    const ult = (u) => (u >= 0 ? C.rotuloMes(d.meses[u]) : "nenhum na pasta");
+    tabela("crLista", ["Matrícula", "Nome", "Cidade", "Situação", "Contato", "Contas vencidas", "Saldo vencido (R$)", "A vencer (R$)", "Faixa mais antiga", "Último pagamento", `Pago em ${M} (R$)`],
+      rc.lista.slice(0, 100).map((x) => `<tr>${tdLig(x.lig)}${td(esc(x.nome), "rot")}${td(esc(x.cidade), "rot")}${td(esc(x.sitLig), "rot")}${td(esc(x.contato), "rot")}`
+        + `${td(fmt(x.contasV))}${td(fmt(x.vencido, 2))}${td(x.aVencer ? fmt(x.aVencer, 2) : "")}${td(esc(x.faixaMaxTxt), "rot")}${td(ult(x.ultimo))}${td(x.noMes ? fmt(x.noMes, 2) : "")}</tr>`));
+  }
+  // histórico da matrícula: o que a base de contas a receber diz dela
+  function histReceber(x) {
+    const ri = E.res.receberInfo;
+    if (!ri) return "";
+    if (!x) return `<p class="nota">Não está na base de contas a receber de ${dataBR(ri.data)}.</p>`;
+    const linhas = [...x.faixas].sort((a, b) => a.num - b.num).map((f) => `<tr>${td(esc(f.txt), "rot")}${td(fmt(f.contas))}${td(fmt(f.saldo, 2))}</tr>`)
+      .concat(`<tr class="total">${td("Total", "rot")}${td(fmt(x.contasV + x.contasAV))}${td(fmt(x.vencido + x.aVencer, 2))}</tr>`);
+    return `<h3>Contas a receber (base de ${dataBR(ri.data)})</h3><p class="nota">Situação: ${esc(x.sitLig)} · ${esc(x.tipo)} · contato: ${esc(x.contato)} · `
+      + `saldo vencido ${rs(x.vencido)} em ${fmt(x.contasV)} contas${x.aVencer ? ` · a vencer ${rs(x.aVencer)}` : ""}</p>`
+      + `<div class="wrap"><table class="compacta base-tabela"><thead><tr><th>Faixa</th><th>Contas</th><th>Saldo (R$)</th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`;
+  }
   // histórico de uma matrícula
   function buscaMatricula() {
     const l = $("clBusca").value.trim();
@@ -1432,10 +1510,10 @@
   function recebeMatricula(m) {
     if (m.id !== idMat) return;
     if (m.erro) { $("clBuscaStatus").textContent = "Erro: " + m.erro; return; }
-    const d = E.res.dados, nada = !m.meses.length && !m.faturas.length && !m.semConta.length;
+    const d = E.res.dados, nada = !m.meses.length && !m.faturas.length && !m.semConta.length && !m.receber;
     $("clBuscaStatus").textContent = nada ? `Matrícula ${m.lig} não encontrada na arrecadação nem no faturamento da pasta.` : "";
     if (nada) { $("clHist").innerHTML = ""; return; }
-    const loc = m.meses.length ? comboArr(m.meses[m.meses.length - 1].c) : comboFat(m.faturas[m.faturas.length - 1].c);
+    const loc = m.meses.length ? comboArr(m.meses[m.meses.length - 1].c) : m.faturas.length ? comboFat(m.faturas[m.faturas.length - 1].c) : { cidade: m.receber.cidade, grupo: "" };
     const totArr = m.meses.reduce((a, x) => a + x.valor, 0), totDesc = m.meses.reduce((a, x) => a + x.desconto, 0);
     const linMes = m.meses.map((x) => `<tr>${td(C.rotuloMes(d.meses[x.mi]), "rot")}${td(fmt(x.valor, 2))}${td(x.desconto ? fmt(-x.desconto, 2) : "")}${td(fmt(x.valor - x.desconto, 2))}${td(fmt(x.dias))}</tr>`)
       .concat(`<tr class="total">${td("Total", "rot")}${td(fmt(totArr, 2))}${td(totDesc ? fmt(-totDesc, 2) : "")}${td(fmt(totArr - totDesc, 2))}${td("")}</tr>`);
@@ -1444,13 +1522,14 @@
       + `${td(f.pagamentos.length ? fmt(f.pago, 2) : "")}${td([...new Set(f.pagamentos.map((p) => C.rotuloMes(d.meses[p.mi])))].join(", "), "rot")}${td(sit(f), "rot")}</tr>`);
     const linSem = m.semConta.map((p) => `<tr>${td(C.rotuloMes(d.meses[p.mi]), "rot")}${td(numData(p.venc))}${td(TIPO_PAG[p.tipo] || "outro", "rot")}${td(fmt(p.v, 2))}</tr>`);
     const tab = (cab, linhas) => `<div class="wrap"><table class="compacta"><thead><tr>${cab.map((c) => `<th>${c}</th>`).join("")}</tr></thead><tbody>${linhas.join("")}</tbody></table></div>`;
-    $("clHist").innerHTML = `<p class="hist-tit"><b>${esc(m.lig)}</b>${m.nome ? " — " + esc(m.nome) : ""} · ${esc(loc.cidade)} · ${esc(loc.grupo)}</p><div class="grade-2">`
+    const nomeM = m.nome || (m.receber && m.receber.nome) || "";
+    $("clHist").innerHTML = `<p class="hist-tit"><b>${esc(m.lig)}</b>${nomeM ? " — " + esc(nomeM) : ""} · ${esc(loc.cidade)}${loc.grupo ? " · " + esc(loc.grupo) : ""}</p><div class="grade-2">`
       + `<div><h3>Arrecadação por mês (crédito)</h3>${m.meses.length ? tab(["Mês", "Val. Autenticado (R$)", "Desconto (R$)", "Arrecadação (R$)", "Dias com pagamento"], linMes)
         : '<p class="nota">Nenhum pagamento na arrecadação da pasta.</p>'}</div>`
       + `<div><h3>Contas da fatura (Interior)</h3>${m.faturas.length ? tab(["Referência", "Vencimento", "Faturado (R$)", "Pago (R$)", "Pago em", "Situação"], linFat)
         : '<p class="nota">Nenhuma conta nos arquivos de faturamento da pasta.</p>'}`
       + (linSem.length ? `<h3>Pagamentos sem conta na fatura da pasta</h3>${tab(["Mês do crédito", "Vencimento", "Tipo", "Valor (R$)"], linSem)}` : "")
-      + "</div></div>";
+      + "</div></div>" + histReceber(m.receber);
   }
 
   // ----- Diagnóstico por localidade -----

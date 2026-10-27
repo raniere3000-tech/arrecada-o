@@ -873,6 +873,63 @@
     });
     return { k, ligs, comb, vals: Float64Array.from(vals), pagou: Uint8Array.from(pagou) };
   }
+  // ---------- Contas a receber (base de contas vencidas e a vencer, por matrícula × faixa de atraso) ----------
+  // Faixa "00 - A Vencer" = 0; "01 - 30 Dias" = 1; "366 Dias >>" = 366 (o 1º número do texto ordena as faixas)
+  const faixaNum = (t) => { const m = /\d+/.exec(String(t || "")); return m ? +m[0] : 9999; };
+  // registros: [{ lig, nome, contas, saldo, faixa, sitLig, tipo, contato, cidade }] → Map matrícula → resumo
+  function montaReceber(registros) {
+    const mapa = new Map();
+    for (const r of registros) {
+      const l = chaveLig(r.lig), saldo = numeroBR(r.saldo), contas = +numeroBR(r.contas) || 0, n = faixaNum(r.faixa);
+      if (!r.lig || !isFinite(saldo)) continue;
+      let x = mapa.get(l);
+      if (!x) {
+        x = { lig: l, nome: String(r.nome || "").trim(), cidade: String(r.cidade || "").trim().toUpperCase(), sitLig: String(r.sitLig || "").trim(),
+          tipo: String(r.tipo || "").trim(), contato: String(r.contato || "").trim(), vencido: 0, aVencer: 0, contasV: 0, contasAV: 0, faixaMax: -1, faixaMaxTxt: "", faixas: [] };
+        mapa.set(l, x);
+      }
+      if (n === 0) { x.aVencer += saldo; x.contasAV += contas; }
+      else { x.vencido += saldo; x.contasV += contas; if (n > x.faixaMax) { x.faixaMax = n; x.faixaMaxTxt = String(r.faixa).trim(); } }
+      x.faixas.push({ txt: String(r.faixa || "").trim(), num: n, contas, saldo });
+    }
+    return mapa;
+  }
+  // Análise da base nos filtros (aceita(resumo) → bool), com a arrecadação: pagou no mês mi? último mês com pagamento?
+  // meses: os meses da arrecadação (índice = mi); sem3 = devedoras sem pagamento no mês e nos 2 meses de calendário anteriores
+  function analisaReceber(rec, an, mi, aceita, meses) {
+    const sel = [...rec.values()].filter(aceita), quer = new Map(sel.map((x) => [x.lig, { ultimo: -1, noMes: 0 }]));
+    an.entradas.forEach((partes, m) => {
+      for (const { L } of partes || []) for (let i = 0; i < L.k.length; i++) {
+        const q = quer.get(Math.floor(L.k[i] / COMBOS_ARQ));
+        if (!q) continue;
+        if (m > q.ultimo) q.ultimo = m;
+        if (m === mi) q.noMes += L.v[i];
+      }
+    });
+    const soma = (mapa, k, x, f) => {
+      let o = mapa.get(k);
+      if (!o) { o = { nome: k, matriculas: 0, contas: 0, saldo: 0, ...f }; mapa.set(k, o); }
+      return o;
+    };
+    const tot = { matriculas: 0, devedoras: 0, vencido: 0, aVencer: 0, contasV: 0, contasAV: 0 }, pagaram = { matriculas: 0, vencido: 0, valor: 0 }, sem3 = { matriculas: 0, vencido: 0 };
+    const porFaixa = new Map(), porCidade = new Map(), porSit = new Map(), porContato = new Map(), lista = [];
+    for (const x of sel) {
+      const q = quer.get(x.lig);
+      tot.matriculas++; tot.vencido += x.vencido; tot.aVencer += x.aVencer; tot.contasV += x.contasV; tot.contasAV += x.contasAV;
+      if (x.vencido > 0) tot.devedoras++;
+      if (q.noMes > 0 && x.vencido > 0) { pagaram.matriculas++; pagaram.vencido += x.vencido; pagaram.valor += q.noMes; }
+      if (x.vencido > 0 && (q.ultimo < 0 || numMes(meses[q.ultimo]) < numMes(meses[mi]) - 2)) { sem3.matriculas++; sem3.vencido += x.vencido; }
+      for (const f of x.faixas) { const o = soma(porFaixa, f.txt, x, { num: f.num }); o.matriculas++; o.contas += f.contas; o.saldo += f.saldo; }
+      for (const [mapa, k] of [[porCidade, x.cidade], [porSit, x.sitLig], [porContato, x.contato]]) {
+        const o = soma(mapa, k || "—", x, { aVencer: 0 });
+        o.matriculas++; o.contas += x.contasV; o.saldo += x.vencido; o.aVencer += x.aVencer;
+      }
+      lista.push({ ...x, faixas: undefined, ultimo: q.ultimo, noMes: q.noMes });
+    }
+    const ord = (m) => [...m.values()].sort((a, b) => b.saldo - a.saldo);
+    return { tot, pagaram, sem3, porFaixa: [...porFaixa.values()].sort((a, b) => a.num - b.num), porCidade: ord(porCidade), porSit: ord(porSit),
+      porContato: ord(porContato), lista: lista.sort((a, b) => b.vencido - a.vencido) };
+  }
   // Histórico de uma matrícula: arrecadação de cada mês (todas as combinações) e cada conta da fatura com os pagamentos dela
   function historicoMatricula(an, base, l) {
     const meses = an.entradas.map((partes, m) => {
@@ -962,7 +1019,7 @@
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
-    clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes,
+    clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes, faixaNum, montaReceber, analisaReceber,
     MASCARA_MES, comparaGrupos, mesesMesmosUteis, fracaoAteDias, pareto,
   };
 });
