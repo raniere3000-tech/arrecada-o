@@ -5,7 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const ARQ_AJUSTES = "ajustes_arrecadacao.json";
   const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", analise: "Análise", base: "Base", dados: "Dados",
-    fxa: "Faturamento x Arrecadação", fxv: "Fat. x Arrec. — mesmo vencimento", conversao: "Conversão por referência", clientes: "Clientes e oportunidades", localidade: "Diagnóstico por localidade" };
+    fxa: "Faturamento x Arrecadação", fxv: "Fat. x Arrec. — mesmo vencimento", conversao: "Conversão por referência", localidade: "Diagnóstico por localidade", clientes: "Clientes e oportunidades" };
   const AREA_DA_ABA = { fxa: "analises", fxv: "analises", conversao: "analises", clientes: "analises", localidade: "analises" };   // as outras: Executivo
   const ultimaDaArea = { executivo: "resumo", analises: "fxa" };
   const ABAS_PDF = ["resumo", "subcategoria", "perfil", "cidades", "escada"];     // Análise e Dados não entram no PDF
