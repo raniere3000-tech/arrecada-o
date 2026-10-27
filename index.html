@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v23-20261027">
+<link rel="stylesheet" href="assets/painel.css?v=v24-20261027">
 </head>
 <body>
 
@@ -216,8 +216,25 @@
         Sem uma base de contas em aberto, “faturado sem pagamento” será mostrado como situação a investigar, não como dívida confirmada.</p></div>
     </section>
     <section class="painel-aba" data-painel="localidade" hidden>
-      <div class="card"><h2>Diagnóstico por localidade</h2><p>Etapa seguinte: faturamento, arrecadação, matrículas e variações por cidade, subcategoria e superintendência, ranking dos desvios e gráfico de Pareto.
-        A comparação por cidade e subcategoria do mês já está na aba Faturamento x Arrecadação.</p></div>
+      <div class="card"><h2>Diagnóstico por localidade
+          <span class="opcoes-cv">
+            <label class="opcao">Nível <select id="dgNivel"><option value="cidade">Cidade</option><option value="grupo">Subcategoria</option>
+              <option value="sup">Superintendência</option><option value="cidgrupo">Cidade × subcategoria</option></select></label>
+            <label class="opcao">Comparar com <select id="dgBase"><option value="ant">Mês anterior</option><option value="ano">Mesmo mês do ano anterior</option>
+              <option value="media3">Média dos 3 meses anteriores</option></select></label>
+            <label class="opcao">Projeção <select id="dgMetodo"><option value="uteis">Meses com os mesmos dias úteis</option><option value="curva">Curva do orçado</option></select></label>
+          </span></h2>
+        <p class="nota" id="dgNota"></p><div id="dgAviso"></div></div>
+      <div class="kpis" id="dgKpis"></div>
+      <div class="card"><h2>Por localidade <small>clique no título da coluna para ordenar</small><button type="button" class="btn sec csv" id="dgCsv">Baixar CSV</button></h2>
+        <div class="wrap"><table id="dgTab" class="compacta ordenavel"></table></div><p class="nota" id="dgNotaTab"></p></div>
+      <div class="grade-2">
+        <div class="card"><h2>Maiores quedas</h2><p class="nota" id="dgNotaQ"></p><div class="grafico" id="dgQuedas"></div></div>
+        <div class="card"><h2>Maiores altas</h2><p class="nota" id="dgNotaA"></p><div class="grafico" id="dgAltas"></div></div>
+      </div>
+      <div class="card"><h2>Pareto das quedas</h2><p class="nota" id="dgNotaP"></p>
+        <div class="legenda-g"><span><i class="cor-neg"></i>Queda (R$)</span><span><i class="cor-at"></i>% acumulado da queda total</span></div>
+        <div class="grafico" id="dgPareto"></div></div>
     </section>
 
     <section class="painel-aba base" data-painel="base" hidden>
@@ -356,6 +373,20 @@
           <li>Referência anterior ao primeiro mês de arrecadação da pasta: os pagamentos dos meses que faltam não aparecem (a linha é marcada).</li>
         </ul></div>
 
+      <div class="card"><h2>Diagnóstico por localidade</h2>
+        <p>Compara o mês escolhido no cabeçalho com outro período, <b>nos mesmos dias úteis marcados</b> (como nas abas do Executivo), por cidade, subcategoria,
+          superintendência ou cidade × subcategoria. Arrecadação com o desconto comercial, como no Resumo.</p>
+        <ul>
+          <li><b>Comparar com</b>: mês anterior, mesmo mês do ano anterior ou média dos 3 meses anteriores (média simples de valor, clientes e contas).</li>
+          <li><b>Projeção — meses com os mesmos dias úteis</b>: nos meses anteriores do mesmo ano com o mesmo número de dias úteis do mês escolhido, calcula que parte
+            do mês inteiro entrou até os dias marcados (média simples dos meses). Projeção = arrecadado nos dias marcados ÷ essa parte. Calculada para cada localidade;
+            localidade sem histórico usa a parte do total. Sem mês igual no ano: usa os últimos 12 meses com o mesmo número de dias úteis e, se não houver, os meses anteriores do ano.</li>
+          <li><b>Projeção — curva do orçado</b>: parte do mês que a curva do orçado (aba Resumo) prevê para os dias marcados; a mesma para todas as localidades.</li>
+          <li><b>Orçado</b>: só existe por superintendência, então aparece no nível Superintendência e nos cards quando Cidade e Subcategoria = Todas.</li>
+          <li><b>Faturado e matrículas faturadas</b>: só Interior, da referência igual ao mês escolhido, nos níveis Cidade e Superintendência.</li>
+          <li><b>Pareto</b>: localidades com queda, da maior para a menor, e quantas somam 80% da queda total.</li>
+        </ul></div>
+
       <div class="card"><h2>Diferenças em relação ao BI</h2>
         <ul>
           <li>Feriados: o painel considera São Jorge (23/04) e Consciência Negra (20/11) em todos os anos; o BI só os tinha em 2025.</li>
@@ -370,9 +401,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v23-20261027"></script>
-<script src="assets/calculos.js?v=v23-20261027"></script>
-<script>const VERSAO_SITE = "v23-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v23-20261027"></script>
+<script src="assets/regras.js?v=v24-20261027"></script>
+<script src="assets/calculos.js?v=v24-20261027"></script>
+<script>const VERSAO_SITE = "v24-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v24-20261027"></script>
 </body>
 </html>

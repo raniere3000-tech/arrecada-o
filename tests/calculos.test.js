@@ -350,3 +350,31 @@ test("faturamento: campos entre aspas, ano com 2 dígitos e motivo das linhas de
   assert.deepEqual(e.refs, ["2026-01", "2026-09"]);
   assert.match(e.rejeitadas.exemplo, /vencimento "xx"/);
 });
+
+test("diagnóstico: comparação nos mesmos dias, fração do mês pelos meses com os mesmos dias úteis e Pareto", () => {
+  const a = new C.Agregador();
+  // agosto e setembro/2026 (21 dias úteis, como outubro): dia útil 1 = 60% e 30% do mês
+  a.adiciona(linha(1, "03/08/2026", "60,00")); a.adiciona(linha(2, "04/08/2026", "40,00"));
+  a.adiciona(linha(1, "01/09/2026", "30,00")); a.adiciona(linha(2, "02/09/2026", "70,00"));
+  a.adiciona(linha(1, "01/10/2026", "50,00"));
+  const d = a.resultado(new Map()), tudo = C.marcaCombos(d, {}), dia1 = 1 << 1, mi = (m) => d.meses.indexOf(m);
+  const mm = C.mesesMesmosUteis(d, "2026-10");
+  assert.deepEqual(mm, { meses: ["2026-08", "2026-09"], criterio: "iguais" });
+  const fr = C.fracaoAteDias(d, mm.meses, tudo, dia1, () => "T");
+  perto(fr.get("T"), (0.6 + 0.3) / 2);
+  perto(C.fracaoAteDias(d, mm.meses, tudo, C.MASCARA_MES, () => "T").get("T"), 1);
+  // projeção de outubro pelo dia útil 1: 50 ÷ 0,45
+  perto(50 / fr.get("T"), 111.111111, 1e-4);
+  const cg = C.comparaGrupos(d, mi("2026-10"), [mi("2026-09")], tudo, dia1, (c) => c.cidade);
+  assert.equal(cg.length, 1);
+  perto(cg[0].atual.valor, 50); perto(cg[0].base.valor, 30);
+  const media = C.comparaGrupos(d, mi("2026-10"), [mi("2026-08"), mi("2026-09")], tudo, dia1, (c) => c.cidade)[0];
+  perto(media.base.valor, 45); perto(media.base.clientes, 1);
+  assert.equal(C.comparaGrupos(d, mi("2026-10"), [-1], tudo, dia1, (c) => c.cidade)[0].base, null);   // mês sem dados
+  const p = C.pareto([{ rot: "a", v: 50 }, { rot: "c", v: 20 }, { rot: "b", v: 30 }, { rot: "d", v: -5 }]);
+  assert.deepEqual(p.itens.map((x) => x.rot), ["a", "b", "c"]);
+  perto(p.itens[1].acum, 0.8);
+  assert.equal(p.n80, 2);
+  perto(p.total, 100);
+  assert.equal(C.pareto([]).n80, 0);
+});

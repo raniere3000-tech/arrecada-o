@@ -748,10 +748,63 @@
     return t > 0 ? w.map((v) => v / t) : w;
   }
 
+  // ---------- Diagnóstico por localidade ----------
+  const MASCARA_MES = mascaraAte(MAX_DIA, true);       // todos os dias do mês (úteis e fins de semana/feriados)
+  // Por localidade (grupoDe): o mês mi e a média dos meses de comparação, nos mesmos dias marcados (desconto incluído)
+  function comparaGrupos(dados, mi, misBase, marcas, sel, grupoDe) {
+    const base = misBase.filter((m) => m >= 0), g = porGrupo(dados, [mi, ...base], marcas, sel, grupoDe), out = [];
+    const zero = { valor: 0, contas: 0, clientes: 0 };
+    for (const [rot, l] of g) {
+      const a = l.get(mi) || zero, b = { valor: 0, contas: 0, clientes: 0 };
+      for (const m of base) { const c = l.get(m) || zero; b.valor += c.valor; b.contas += c.contas; b.clientes += c.clientes; }
+      if (base.length) { b.valor /= base.length; b.contas /= base.length; b.clientes /= base.length; }
+      out.push({ rot, atual: { valor: a.valor, contas: a.contas, clientes: a.clientes }, base: base.length ? b : null });
+    }
+    return out;
+  }
+  // Meses da projeção pelo método "mesmos dias úteis": meses anteriores do mesmo ano com o mesmo nº de dias úteis.
+  // Sem nenhum: os dos últimos 12 meses com o mesmo nº; depois, os anteriores do ano; por fim, os últimos 12 meses.
+  function mesesMesmosUteis(dados, mes) {
+    const U = calendario(mes).uteis, ano = mes.slice(0, 4), antes = dados.meses.filter((m) => m < mes);
+    const doAno = antes.filter((m) => m.slice(0, 4) === ano), ult12 = antes.filter((m) => m >= mesAnterior(mes, 12));
+    const iguais = (l) => l.filter((m) => calendario(m).uteis === U);
+    if (iguais(doAno).length) return { meses: iguais(doAno), criterio: "iguais" };
+    if (iguais(ult12).length) return { meses: iguais(ult12), criterio: "iguais12" };
+    if (doAno.length) return { meses: doAno, criterio: "ano" };
+    return { meses: ult12, criterio: "ult12" };
+  }
+  // Fração do mês que costuma entrar até os dias marcados: média, nos meses dados, de (arrecadado nos dias marcados ÷
+  // arrecadado no mês inteiro), por localidade. Map rótulo → fração (só localidades com arrecadação nesses meses).
+  function fracaoAteDias(dados, meses, marcas, sel, grupoDe) {
+    const idx = meses.map((m) => dados.meses.indexOf(m)).filter((m) => m >= 0);
+    const ate = porGrupo(dados, idx, marcas, sel, grupoDe), mes = porGrupo(dados, idx, marcas, MASCARA_MES, grupoDe), res = new Map();
+    for (const [rot, lm] of mes) {
+      const la = ate.get(rot);
+      let s = 0, n = 0;
+      for (const mi of idx) {
+        const t = lm.get(mi);
+        if (!t || t.valor <= 0) continue;
+        const a = la && la.get(mi);
+        s += (a ? a.valor : 0) / t.valor; n++;
+      }
+      if (n) res.set(rot, s / n);
+    }
+    return res;
+  }
+  // Pareto: itens {rot, v} (v > 0), do maior para o menor, com a participação acumulada; n80 = quantos somam 80%
+  function pareto(itens) {
+    const l = itens.filter((x) => x.v > 0).sort((a, b) => b.v - a.v), tot = l.reduce((a, x) => a + x.v, 0);
+    let ac = 0, n80 = 0;
+    const out = l.map((x) => { ac += x.v; return { ...x, acum: tot ? ac / tot : 0 }; });
+    for (const x of out) { n80++; if (x.acum >= 0.8 - 1e-9) break; }
+    return { itens: out, total: tot, n80: out.length ? n80 : 0 };
+  }
+
   return {
     MAX_DIA, MESES_CURTOS, chave, separaCsv, refDeTexto, vencNum, consertaAcento, LeituraFaturamento, cruzaFaturamento, matrizConversao, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
+    MASCARA_MES, comparaGrupos, mesesMesmosUteis, fracaoAteDias, pareto,
   };
 });

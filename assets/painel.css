@@ -280,6 +280,15 @@ table.ordenavel th.desc::after { content: " ▼"; font-size: 9px; }
 .card h2 .opcoes-cv { margin-left: auto; display: inline-flex; gap: 14px; flex-wrap: wrap; }
 .card h2 .opcoes-cv .opcao { margin-left: 0; }
 .matriz-cv td.cel { color: #000; }
+#dgKpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 720px) { #dgKpis { grid-template-columns: minmax(0, 1fr); } }
+.legenda-g .cor-neg { background: #E8710A; }
+.grafico svg.pareto { max-height: 360px; }
+.grafico .ref80t { font-size: 10px; fill: #64748b; font-weight: 600; text-anchor: end; }
+.grafico .ref80 { stroke: #8A94A6; stroke-dasharray: 5 4; stroke-width: 1; }
+.grafico .rot-h { font-size: 12px; text-anchor: end; fill: #000; }
+.grafico .val-h { font-size: 12px; fill: #000; text-anchor: start; }
+.grafico .x-rot { font-size: 11px; text-anchor: end; fill: #000; }
 .matriz-cv td.parcial { font-style: italic; }
 .matriz-cv td.tot { font-weight: 700; }
 .matriz-cv tbody tr[data-ref] { cursor: pointer; }

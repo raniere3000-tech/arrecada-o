@@ -367,9 +367,9 @@
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
-    $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || !!AREA_DA_ABA[E.aba];
+    $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && E.aba !== "localidade");   // o Diagnóstico usa os dias marcados
     ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
-      conversao: desenhaConversao, clientes: () => {}, localidade: () => {} })[E.aba]();
+      conversao: desenhaConversao, clientes: () => {}, localidade: desenhaLocalidade })[E.aba]();
   }
 
   // "1 a 12", "1, 5 e 10", "0 (fins de semana e feriados) e 1 a 3"
@@ -1196,6 +1196,148 @@
       ...cvCidLinhas.map((o) => [o.nome, o.contas, nCsv(o.faturado), p(o.m0), p(o.m1), p(o.m2), nCsv(o.recebido), p(o.conv), p(o.pagas), nCsv(o.sem)].join(";"))];
     baixa("﻿" + linhas.join("\r\n"), `Conversao_cidades_ref_${cvRefEscolhida}.csv`);
   });
+  // ----- Diagnóstico por localidade -----
+  let dgOrdem = ["dv", 1], dgLinhas = [], dgCab = null;
+  const NIVEIS_DG = { cidade: ["Cidade", (c) => c.cidade], grupo: ["Subcategoria", (c) => c.grupo], sup: ["Superintendência", (c) => nomeSup(c.sup)],
+    cidgrupo: ["Cidade × subcategoria", (c) => `${c.cidade} · ${c.grupo}`] };
+  function desenhaLocalidade() {
+    const d = E.res.dados, mi = idxMes(E.mes), mk = marcas(), sel = E.sel, nivel = $("dgNivel").value, [titulo, grupoDe] = NIVEIS_DG[nivel];
+    const baseSel = $("dgBase").value, metodo = $("dgMetodo").value;
+    const mesesBase = baseSel === "ant" ? [C.mesAnterior(E.mes)] : baseSel === "ano" ? [C.mesAnterior(E.mes, 12)] : [1, 2, 3].map((n) => C.mesAnterior(E.mes, n));
+    const comDados = mesesBase.filter((m) => idxMes(m) >= 0);
+    const rotBase = baseSel === "media3" ? "Média 3 meses" : C.rotuloMes(mesesBase[0]);
+    const linhas = C.comparaGrupos(d, mi, comDados.map(idxMes), mk, sel, grupoDe);
+    const total = C.comparaGrupos(d, mi, comDados.map(idxMes), mk, sel, () => "T")[0] || { atual: { valor: 0, contas: 0, clientes: 0 }, base: null };
+    // projeção: fração do mês até os dias marcados
+    const mm = C.mesesMesmosUteis(d, E.mes);
+    const frU = C.fracaoAteDias(d, mm.meses, mk, sel, grupoDe), frUT = C.fracaoAteDias(d, mm.meses, mk, sel, () => "T").get("T");
+    const pesos = curvaDoMes(E.mes, E.sup).pesos, frC = C.diasDaMascara(sel).reduce((a, k) => a + (pesos[k] || 0), 0);
+    const fracao = (rot) => (metodo === "curva" ? frC : frU.get(rot) || frUT);
+    const proj = (v, f) => (f > 0 ? v / f : null);
+    const projU = proj(total.atual.valor, frUT), projC = proj(total.atual.valor, frC), projT = metodo === "curva" ? projC : projU;
+    const orc = filtroParcial() ? null : orcadoMensal(E.mes, E.sup);
+    const N = ultimoDiaComDados(E.mes), cal = C.calendario(E.mes);
+    const fechado = (d.ultimoCredito[E.mes] || "") >= cal.dias[cal.dias.length - 1].data, mesInteiro = fechado ? C.totalDoMes(d, mi, mk, C.MASCARA_MES).valor : null;
+    const criterio = { iguais: `meses de ${E.mes.slice(0, 4)} com ${cal.uteis} dias úteis`, iguais12: `últimos 12 meses com ${cal.uteis} dias úteis (nenhum no ano)`,
+      ano: `meses anteriores de ${E.mes.slice(0, 4)} (nenhum com ${cal.uteis} dias úteis)`, ult12: "últimos 12 meses" }[mm.criterio];
+    $("dgNota").textContent = `${[nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ")} · ${C.rotuloMes(E.mes)}, dias úteis ${rotuloSel(sel)}`
+      + ` (crédito até ${dataBR(d.ultimoCredito[E.mes])}; dia útil ${N} de ${cal.uteis}) · comparação com ${baseSel === "media3" ? "a média de " + mesesBase.map(C.rotuloMes).join(", ") : rotBase}, nos mesmos dias.`;
+    $("dgAviso").innerHTML = comDados.length < mesesBase.length
+      ? `<p class="aviso-pdf">${esc(comDados.length ? `Sem dados de ${mesesBase.filter((m) => !comDados.includes(m)).map(C.rotuloMes).join(", ")} na pasta: a média usa só ${comDados.map(C.rotuloMes).join(", ")}.` : `Sem dados de ${mesesBase.map(C.rotuloMes).join(", ")} na pasta para comparar.`)}</p>` : "";
+    // faturado (Interior, referência = mês escolhido) por cidade / superintendência
+    const cz = E.res.cruzamento && E.res.cruzamento.fat.length ? E.res.cruzamento : null, filtroG = E.grupo ? grupoCruz(E.grupo) : "";
+    const fatRef = cz ? cz.fat.filter((f) => f.ref === E.mes) : [];
+    const comFat = fatRef.length && (nivel === "cidade" || nivel === "sup") && (!E.sup || E.sup === "INTERIOR");
+    const fatDe = new Map();
+    if (comFat) for (const f of fatRef) {
+      const c = cz.combos[f.c];
+      if ((E.cidade && c.cidade !== E.cidade) || (filtroG && c.grupo !== filtroG)) continue;
+      const k = nivel === "cidade" ? c.cidade : nomeSup(c.sup), o = fatDe.get(k) || { valor: 0, matriculas: 0 };
+      o.valor += f.valor; o.matriculas += f.matriculas; fatDe.set(k, o);
+    }
+    const comOrc = nivel === "sup" && !E.cidade && !E.grupo;
+    const supDe = new Map(d.combos.map((c) => [nomeSup(c.sup), c.sup]));
+    dgLinhas = linhas.map((l) => {
+      const a = l.atual, b = l.base, f = fracao(l.rot), pj = proj(a.valor, f), fat = fatDe.get(l.rot);
+      const o = comOrc ? orcadoMensal(E.mes, supDe.get(l.rot)).valor : null;
+      return { nome: l.rot, v: a.valor, b: b ? b.valor : null, dv: b ? a.valor - b.valor : null, dp: b && b.valor ? a.valor / b.valor - 1 : null,
+        cli: a.clientes, dcli: b && b.clientes ? a.clientes / b.clientes - 1 : null, contas: a.contas, ticket: a.contas ? a.valor / a.contas : null,
+        proj: pj, fr: f, orc: o, po: o && pj != null ? pj / o : null, fat: fat ? fat.valor : null, mat: fat ? fat.matriculas : null };
+    });
+    dgCab = [["nome", titulo], ["v", "Arrecadado (R$)"], ["b", `${rotBase} (R$)`], ["dv", "Variação (R$)"], ["dp", "Variação %"], ["cli", "Clientes"], ["dcli", "Var. clientes"],
+      ["contas", "Contas"], ["ticket", "Ticket (R$)"], ["proj", "Projeção do mês (R$)"],
+      ...(comOrc ? [["orc", "Orçado (R$)"], ["po", "Projeção ÷ orçado"]] : []), ...(comFat ? [["fat", `Faturado ${C.rotuloMes(E.mes)} (R$)`], ["mat", "Matrículas faturadas"]] : [])];
+    desenhaTabelaDg(total, projT, orc);
+    $("dgNotaTab").textContent = `Variação = arrecadado nos dias marcados − ${rotBase} nos mesmos dias. Projeção pelo método ${metodo === "curva" ? "da curva do orçado" : "dos meses com os mesmos dias úteis"}.`
+      + ((nivel === "cidade" || nivel === "sup") && !fatRef.length ? ` Faturamento da referência ${C.rotuloMes(E.mes)} não está na pasta.` : "");
+    // cards
+    const b = total.base, dv = b ? total.atual.valor - b.valor : null;
+    const pa = C.pareto(dgLinhas.map((x) => ({ rot: x.nome, v: x.dv == null ? 0 : -x.dv })));
+    const card = (t, v, sub) => `<div class="kpi"><span>${t}</span><b>${v}</b><small>${sub}</small></div>`;
+    const sinal = (x) => (x == null ? "—" : (x >= 0 ? "+" : "") + pct(x));
+    $("dgKpis").innerHTML = [
+      card("Arrecadado nos dias marcados", milhoes(total.atual.valor), b ? `${rotBase}: ${rs(b.valor)} · ${sinal(b.valor ? total.atual.valor / b.valor - 1 : null)}` : "sem período de comparação"),
+      card(`Projeção do mês — ${metodo === "curva" ? "curva do orçado" : "mesmos dias úteis"}`, projT == null ? "—" : milhoes(projT),
+        (metodo === "curva" ? `a curva prevê ${pct(frC)} do mês nos dias marcados` : `${frUT ? pct(frUT) : "—"} do mês costuma entrar até os dias marcados · ${criterio}: ${mm.meses.map(C.rotuloMes).join(", ") || "—"}`)
+        + (fechado ? ` · mês fechado: realizado no mês inteiro ${rs(mesInteiro)}` : "")),
+      card(`Pelo outro método — ${metodo === "curva" ? "mesmos dias úteis" : "curva do orçado"}`, (metodo === "curva" ? projU : projC) == null ? "—" : milhoes(metodo === "curva" ? projU : projC),
+        metodo === "curva" ? `${frUT ? pct(frUT) : "—"} do mês até os dias marcados (${mm.meses.map(C.rotuloMes).join(", ") || "—"})` : `a curva prevê ${pct(frC)} do mês nos dias marcados`),
+      card("Projeção ÷ orçado", orc && orc.valor != null && projT != null ? pct(projT / orc.valor) : "—",
+        orc ? (orc.valor != null ? `orçado ${rs(orc.valor)} · falta ${rs(Math.max(0, orc.valor - total.atual.valor))} para o orçado` : "sem orçado no mês para o orçado escolhido") : "o orçado é por superintendência (Cidade e Subcategoria = Todas)"),
+      card("Clientes pagantes", fmt(total.atual.clientes), b ? `${rotBase}: ${fmt(b.clientes)} · ${sinal(b.clientes ? total.atual.clientes / b.clientes - 1 : null)}` : "—"),
+      card("Localidades em queda", b ? `${fmt(pa.itens.length)} de ${fmt(dgLinhas.length)}` : "—",
+        b ? (pa.itens.length ? `quedas somam ${rs(pa.total)} · ${fmt(pa.n80)} explicam 80% · variação total ${rs(dv)}` : "nenhuma localidade em queda") : "—"),
+    ].join("");
+    // quedas, altas e Pareto
+    const cmp = dgLinhas.filter((x) => x.dv != null);
+    const quedas = cmp.filter((x) => x.dv < 0).sort((a, c) => a.dv - c.dv).slice(0, 10), altas = cmp.filter((x) => x.dv > 0).sort((a, c) => c.dv - a.dv).slice(0, 10);
+    $("dgNotaQ").textContent = `Até 10 localidades com a maior queda em R$ contra ${rotBase} (variação % ao lado).`;
+    $("dgNotaA").textContent = `Até 10 localidades com o maior aumento em R$ contra ${rotBase}.`;
+    $("dgQuedas").innerHTML = quedas.length ? svgBarrasH(quedas.map((x) => [x.nome, x.dv, x.dp]), "b-queda") : '<p class="nota">Nenhuma queda.</p>';
+    $("dgAltas").innerHTML = altas.length ? svgBarrasH(altas.map((x) => [x.nome, x.dv, x.dp]), "b-alta") : '<p class="nota">Nenhum aumento.</p>';
+    const top = pa.itens.slice(0, 20), resto = pa.itens.slice(20);
+    $("dgNotaP").textContent = pa.itens.length ? `${fmt(pa.n80)} de ${fmt(pa.itens.length)} localidades em queda somam 80% da queda total (${rs(pa.total)}).${resto.length ? ` As ${fmt(resto.length)} menores ficam em “demais”.` : ""}` : "";
+    const itensP = resto.length ? [...top, { rot: "demais", v: resto.reduce((a, x) => a + x.v, 0), acum: 1 }] : top;
+    $("dgPareto").innerHTML = itensP.length ? svgPareto(itensP) : '<p class="nota">Nenhuma localidade em queda no período.</p>';
+  }
+  function desenhaTabelaDg(total, projT, orc) {
+    const [col, dir] = dgOrdem.length && dgCab.some(([k]) => k === dgOrdem[0]) ? dgOrdem : ["dv", 1];
+    const L = [...dgLinhas].sort((a, b) => (col === "nome" ? a.nome.localeCompare(b.nome, "pt-BR") : ((a[col] ?? Infinity * dir) - (b[col] ?? Infinity * dir)) || 0) * dir);
+    const f = { nome: (x) => esc(x), dp: (x) => (x == null ? "" : pct(x)), dcli: (x) => (x == null ? "" : pct(x)), po: (x) => (x == null ? "" : pct(x)), ticket: (x) => (x == null ? "" : fmt(x, 2)) };
+    const cel = (k, v) => (v == null && k !== "nome" ? td("") : k === "nome" ? td(esc(v), "rot") : (k === "dv" || k === "dp" || k === "dcli") ? tdNum(v, f[k] || fmt) : td((f[k] || fmt)(v)));
+    const soma = (k) => (dgLinhas.some((x) => x[k] != null) ? dgLinhas.reduce((a, x) => a + (x[k] || 0), 0) : null);
+    const b = total.base, tot = { nome: "Total", v: total.atual.valor, b: b ? b.valor : null, dv: b ? total.atual.valor - b.valor : null, dp: b && b.valor ? total.atual.valor / b.valor - 1 : null,
+      cli: total.atual.clientes, dcli: b && b.clientes ? total.atual.clientes / b.clientes - 1 : null, contas: total.atual.contas, ticket: total.atual.contas ? total.atual.valor / total.atual.contas : null,
+      proj: projT, orc: soma("orc"), po: null, fat: soma("fat"), mat: soma("mat") };
+    if (tot.orc != null && projT != null) tot.po = projT / tot.orc;
+    $("dgTab").innerHTML = `<thead><tr>${dgCab.map(([k, t]) => `<th data-col="${k}" class="${k === col ? (dir > 0 ? "asc" : "desc") : ""}">${t}</th>`).join("")}</tr></thead><tbody>`
+      + L.map((o) => `<tr>${dgCab.map(([k]) => cel(k, o[k])).join("")}</tr>`).join("")
+      + `<tr class="total">${dgCab.map(([k]) => cel(k, tot[k])).join("")}</tr></tbody>`;
+  }
+  ["dgNivel", "dgBase", "dgMetodo"].forEach((id) => $(id).addEventListener("change", () => desenha()));
+  $("dgTab").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-col]");
+    if (!th) return;
+    dgOrdem = [th.dataset.col, th.dataset.col === dgOrdem[0] ? -dgOrdem[1] : th.dataset.col === "nome" ? 1 : th.dataset.col === "dv" || th.dataset.col === "dp" ? 1 : -1];
+    desenha();
+  });
+  $("dgCsv").addEventListener("click", () => {
+    const n = (v) => (v == null ? "" : (Math.round(v * 100) / 100).toFixed(2).replace(".", ","));
+    const pcts = new Set(["dp", "dcli", "po"]);
+    const linhas = [dgCab.map(([k, t]) => (pcts.has(k) ? t + " (%)" : t.replace(" (R$)", ""))).join(";"),
+      ...dgLinhas.map((o) => dgCab.map(([k]) => (k === "nome" ? o.nome : pcts.has(k) ? n(o[k] == null ? null : o[k] * 100) : n(o[k]))).join(";"))];
+    baixa("﻿" + linhas.join("\r\n"), `Diagnostico_${$("dgNivel").value}_${E.mes}.csv`);
+  });
+  // barras horizontais: itens [rótulo, valor, variação %]
+  function svgBarrasH(itens, cls) {
+    const larg = 640, h = 26, esq = 210, dirW = 130, alt = itens.length * h + 8, max = Math.max(1, ...itens.map(([, v]) => Math.abs(v)));
+    let svg = `<svg viewBox="0 0 ${larg} ${alt}" class="barras-h">`;
+    itens.forEach(([rot, v, p], i) => {
+      const y = i * h + 4, w = ((larg - esq - dirW) * Math.abs(v)) / max, nome = rot.length > 27 ? rot.slice(0, 26) + "…" : rot;
+      svg += `<g><title>${esc(rot)}: ${rs(v)}${p == null ? "" : " (" + pct(p) + ")"}</title><text class="rot-h" x="${esq - 6}" y="${y + 16}">${esc(nome)}</text>`
+        + `<rect class="${cls}" x="${esq}" y="${y + 3}" width="${Math.max(1, w)}" height="${h - 8}" rx="2"/>`
+        + `<text class="val-h" x="${esq + w + 6}" y="${y + 16}">${curto(v)}${p == null ? "" : " · " + pct(p)}</text></g>`;
+    });
+    return svg + "</svg>";
+  }
+  // Pareto: barras (queda) e linha do acumulado (0–100%), com a marca dos 80%
+  function svgPareto(itens) {
+    const larg = Math.max(720, itens.length * 56 + 80), alt = 330, topo = 26, base = 220, esq = 80, passo = (larg - esq) / itens.length, bw = Math.min(34, passo * 0.6);
+    const max = Math.max(1, ...itens.map((x) => x.v)), y = (v) => base - ((base - topo) * v) / max, ya = (a) => base - (base - topo) * a;
+    let svg = `<svg viewBox="0 0 ${larg} ${alt}" class="pareto"><line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`
+      + `<line x1="0" y1="${ya(0.8)}" x2="${larg}" y2="${ya(0.8)}" class="ref80"/><text class="ref80t" x="${larg - 4}" y="${ya(0.8) - 4}">80%</text>`;
+    const pts = [];
+    itens.forEach((x, i) => {
+      const cx = esq + passo * i + passo / 2, nome = x.rot.length > 22 ? x.rot.slice(0, 21) + "…" : x.rot;
+      svg += `<g><title>${esc(x.rot)}: queda de ${rs(x.v)} · acumulado ${pct(x.acum)}</title><rect class="b-queda" x="${cx - bw / 2}" y="${y(x.v)}" width="${bw}" height="${base - y(x.v)}" rx="2"/>`
+        + `<text class="r-ant" x="${cx}" y="${y(x.v) - 4}">${curto(x.v)}</text></g>`
+        + `<text class="x-rot" transform="translate(${cx},${base + 12}) rotate(-35)">${esc(nome)}</text>`;
+      pts.push(`${cx},${ya(x.acum)}`);
+    });
+    svg += `<polyline class="l-at" points="${pts.join(" ")}"/>`;
+    itens.forEach((x, i) => { const cx = esq + passo * i + passo / 2; svg += `<circle class="l-at" cx="${cx}" cy="${ya(x.acum)}" r="3.5"/>`; });
+    return svg + "</svg>";
+  }
   // gráficos simples (SVG): barras agrupadas e linhas; null = sem dado (não desenha)
   function svgBarras(cats, series, rotulo) {
     const larg = Math.max(720, cats.length * 80), alt = 260, base = 214, topo = 30;
