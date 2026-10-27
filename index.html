@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v27-20261027">
+<link rel="stylesheet" href="assets/painel.css?v=v28-20261027">
 </head>
 <body>
 
@@ -260,11 +260,13 @@
 
     <section class="painel-aba base" data-painel="base" hidden>
       <div class="card"><h2>Extrair base de arrecadação</h2>
-        <p class="nota">Gera um CSV com <b>todas as colunas</b> dos arquivos de arrecadação, só das matrículas informadas e dos meses marcados (mês da Data Crédito).
-          Os filtros do cabeçalho e os dias úteis não se aplicam aqui. O CSV abre no Excel.</p>
+        <p class="nota">Gera CSV com <b>todas as colunas</b> dos arquivos de arrecadação dos meses marcados (mês da Data Crédito): só das matrículas informadas
+          ou a <b>base completa</b>. Os filtros do cabeçalho e os dias úteis não se aplicam aqui. O CSV abre no Excel (até cerca de 1 milhão de linhas por arquivo).</p>
         <div class="base-grade">
           <div>
             <h3>1. Matrículas</h3>
+            <div class="base-modo"><label><input type="radio" name="baseModo" value="lista" checked> Só as matrículas abaixo</label>
+              <label><input type="radio" name="baseModo" value="todas"> Todas as matrículas (base completa)</label></div>
             <textarea id="baseLigs" rows="9" placeholder="Cole aqui as matrículas (uma por linha, ou separadas por espaço, vírgula ou ponto e vírgula). Pode colar direto de uma coluna do Excel."></textarea>
             <div class="base-acoes"><label class="btn sec">Carregar de arquivo (Excel, CSV ou TXT)<input type="file" id="baseArquivo" accept=".xlsx,.xls,.csv,.txt" hidden></label>
               <button type="button" class="btn sec" id="baseLimpaLigs">Limpar</button><span class="salvo" id="baseQtd">0 matrículas</span></div>
@@ -273,10 +275,18 @@
             <h3>2. Meses</h3>
             <div class="base-meses" id="baseMeses"></div>
             <div class="base-acoes"><button type="button" class="btn sec" id="baseTodos">Marcar todos</button><button type="button" class="btn sec" id="baseNenhum">Desmarcar</button></div>
+            <label class="base-opcao"><input type="checkbox" id="basePorMes"> Um arquivo por mês</label>
           </div>
         </div>
         <div class="base-acoes"><button type="button" class="btn" id="baseExtrair">3. Extrair base</button><span class="salvo" id="baseStatus"></span></div>
         <div id="baseResultado"></div>
+      </div>
+      <div class="card"><h2>Base de cobrança</h2>
+        <p class="nota">Matrículas que <b>pagaram</b> num mês e <b>não pagaram</b> em outro (até o último crédito da pasta), uma linha por matrícula, com nome, cidade,
+          subcategoria e o valor pago no primeiro mês. <b>Os filtros do cabeçalho valem aqui</b> (superintendência, cidade e subcategoria).</p>
+        <div class="base-acoes"><label class="opcao-base">Pagaram em <select id="cobA"></select></label><label class="opcao-base">e não pagaram em <select id="cobB"></select></label>
+          <button type="button" class="btn" id="cobGerar">Gerar base de cobrança</button><span class="salvo" id="cobStatus"></span></div>
+        <div id="cobResultado"></div>
       </div>
     </section>
 
@@ -418,6 +428,7 @@
             escolhido. Com o mês em andamento, mostra quem costuma ter pago até este ponto do mês e ainda não pagou. Valor esperado = média dos 3 meses.</li>
           <li><b>Voltaram a pagar</b>: pagaram nos dias marcados do mês escolhido e não tiveram nenhum pagamento nos 3 meses anteriores (mês inteiro).</li>
           <li>Valores de arrecadação aqui: Val. Autenticado, sem o desconto comercial. Os filtros do cabeçalho valem (faturamento: só Interior).</li>
+          <li><b>Base de cobrança</b> (aba Base): matrículas com algum pagamento no 1º mês escolhido e nenhum pagamento no 2º (até o último crédito da pasta), nos filtros do cabeçalho; valor = Val. Autenticado pago no 1º mês.</li>
           <li><b>Buscar matrícula</b>: arrecadação de cada mês (com o desconto à parte) e cada conta da fatura com o valor pago e o mês do pagamento.</li>
         </ul></div>
 
@@ -435,9 +446,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v27-20261027"></script>
-<script src="assets/calculos.js?v=v27-20261027"></script>
-<script>const VERSAO_SITE = "v27-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v27-20261027"></script>
+<script src="assets/regras.js?v=v28-20261027"></script>
+<script src="assets/calculos.js?v=v28-20261027"></script>
+<script>const VERSAO_SITE = "v28-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v28-20261027"></script>
 </body>
 </html>

@@ -291,6 +291,11 @@ table.ordenavel th.desc::after { content: " ▼"; font-size: 9px; }
 table.clicavel a.lig { color: var(--azul); font-weight: 600; text-decoration: none; }
 table.clicavel a.lig:hover { text-decoration: underline; }
 tr.alerta td { background: #FFF4E5; }
+.base-modo { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; font-size: 13px; }
+.base-opcao { display: inline-flex; gap: 6px; align-items: center; margin-top: 8px; font-size: 13px; }
+.opcao-base { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 600; color: var(--azul); }
+.opcao-base select { font: inherit; font-weight: 400; padding: 4px 6px; border: 1px solid var(--linha); border-radius: 6px; }
+textarea:disabled { opacity: .5; }
 .lista-rolavel { max-height: 520px; overflow: auto; }
 .lista-rolavel thead th { position: sticky; top: 0; z-index: 1; }
 @media (max-width: 720px) { #dgKpis { grid-template-columns: minmax(0, 1fr); } }

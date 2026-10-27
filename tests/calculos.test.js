@@ -423,3 +423,18 @@ test("clientes e oportunidades: deixaram de pagar, voltaram a pagar, faturado se
   assert.equal(h.semConta.length, 2);                                 // jul e ago: vencimentos sem conta na fatura
   assert.equal(C.historicoMatricula(d.analise, cz.base, 3).nome, "FULANO");
 });
+
+test("base de cobrança: pagaram num mês e não pagaram em outro", () => {
+  const a = new C.Agregador();
+  a.adiciona(linha(1, "01/06/2026", "100,00")); a.adiciona(linha(1, "02/06/2026", "20,00"));   // jun: 2 dias; não paga em out
+  a.adiciona(linha(2, "01/06/2026", "50,00")); a.adiciona(linha(2, "01/10/2026", "50,00"));    // pagou nos dois
+  a.adiciona(linha(3, "01/10/2026", "70,00"));                                                  // só out
+  a.adiciona({ ...linha(4, "01/06/2026", "90,00"), zona: "16-SAO GONCALO" });                   // Leste, só jun
+  const d = a.resultado(new Map()), jun = d.meses.indexOf("2026-06"), out = d.meses.indexOf("2026-10");
+  const r = C.pagaramNaoPagaram(d.analise, jun, out, C.marcaCombos(d, {}));
+  assert.deepEqual(r.map((x) => x.lig), [1, 4]);                                             // do maior valor para o menor
+  perto(r[0].valor, 120); assert.equal(r[0].dias, 2);
+  const interior = C.pagaramNaoPagaram(d.analise, jun, out, C.marcaCombos(d, { sup: "INTERIOR" }));
+  assert.deepEqual(interior.map((x) => x.lig), [1]);
+  assert.equal(C.pagaramNaoPagaram(d.analise, jun, -1, C.marcaCombos(d, {})).length, 3);       // mês B sem dados: todos de jun
+});

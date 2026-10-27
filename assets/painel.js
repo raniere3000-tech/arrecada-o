@@ -166,6 +166,7 @@
       else if (m.tipo === "analise") recebeAnalise(m);
       else if (m.tipo === "clientes") recebeClientes(m);
       else if (m.tipo === "matricula") recebeMatricula(m);
+      else if (m.tipo === "cobranca") recebeCobranca(m);
       else if (m.tipo === "extracao-progresso") { if (m.id === idBase) $("baseStatus").textContent = `${m.texto}… ${m.pct}%`; }
       else if (m.tipo === "extracao") recebeBase(m);
       else if (m.tipo === "erro") { fim(); setFonte("Erro na leitura: " + esc(m.mensagem)); console.error(m.detalhe); }
@@ -804,7 +805,19 @@
     if (!mesesBase || mesesBase.some((m) => !meses.includes(m))) mesesBase = [E.mes];
     $("baseMeses").innerHTML = meses.map((m) => `<label><input type="checkbox" value="${m}"${mesesBase.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("");
     atualizaQtdBase();
+    // base de cobrança: padrão = pagaram no mês anterior ao do cabeçalho e não pagaram nele
+    if (!meses.includes(cobA)) cobA = meses.includes(C.mesAnterior(E.mes)) ? C.mesAnterior(E.mes) : meses[meses.length - 1];
+    if (!meses.includes(cobB)) cobB = E.mes;
+    const opcoes = (sel) => meses.map((m) => `<option value="${m}"${m === sel ? " selected" : ""}>${C.rotuloMes(m)}</option>`).join("");
+    $("cobA").innerHTML = opcoes(cobA); $("cobB").innerHTML = opcoes(cobB);
   }
+  let cobA = "", cobB = "", idCob = 0;
+  const modoBase = () => document.querySelector('input[name="baseModo"]:checked').value;
+  document.querySelectorAll('input[name="baseModo"]').forEach((r) => r.addEventListener("change", () => {
+    const todas = modoBase() === "todas";
+    $("baseLigs").disabled = todas;
+    $("basePorMes").checked = todas;
+  }));
   $("baseMeses").addEventListener("change", () => { mesesBase = [...$("baseMeses").querySelectorAll("input:checked")].map((i) => i.value); });
   $("baseTodos").addEventListener("click", () => { mesesBase = [...E.res.dados.meses]; desenhaBase(); });
   $("baseNenhum").addEventListener("click", () => { mesesBase = []; desenhaBase(); });
@@ -834,14 +847,14 @@
     } catch (x) { toast("Não foi possível ler o arquivo de matrículas: " + esc(x.message || x), true); }
   });
   $("baseExtrair").addEventListener("click", () => {
-    const ligs = ligsDoTexto($("baseLigs").value);
-    if (!ligs.length) { toast("Informe as matrículas (cole a lista ou carregue um arquivo).", true); return; }
+    const todas = modoBase() === "todas", ligs = todas ? null : ligsDoTexto($("baseLigs").value);
+    if (!todas && !ligs.length) { toast("Informe as matrículas (cole a lista ou carregue um arquivo), ou escolha Todas as matrículas.", true); return; }
     if (!mesesBase || !mesesBase.length) { toast("Marque pelo menos um mês.", true); return; }
     if (!worker) return;
     $("baseExtrair").disabled = true;
     $("baseResultado").innerHTML = "";
     $("baseStatus").textContent = "Lendo os arquivos…";
-    worker.postMessage({ tipo: "extrair", id: ++idBase, ligs, meses: [...mesesBase].sort() });
+    worker.postMessage({ tipo: "extrair", id: ++idBase, ligs, meses: [...mesesBase].sort(), porMesArquivo: $("basePorMes").checked });
   });
   let ultimaBase = null;
   function recebeBase(m) {
@@ -849,26 +862,61 @@
     $("baseExtrair").disabled = false;
     if (m.erro) { $("baseStatus").textContent = "Erro: " + m.erro; return; }
     ultimaBase = m;
-    const meses = Object.keys(m.porMes).sort();
-    $("baseStatus").textContent = `${fmt(m.linhas)} linha${m.linhas === 1 ? "" : "s"} encontrada${m.linhas === 1 ? "" : "s"} em ${m.arquivos} arquivo(s).`;
+    const meses = Object.keys(m.porMes).sort(), nomeArq = (o) => `Base_arrecadacao${m.completa ? "_completa" : ""}_${o.mes || (meses.length ? meses[0] + (meses.length > 1 ? "_a_" + meses[meses.length - 1] : "") : "vazia")}.csv`;
+    const mb = (b) => (b.size < 1048576 ? Math.max(1, Math.round(b.size / 1024)) + " KB" : (b.size / 1048576).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " MB");
+    $("baseStatus").textContent = `${fmt(m.linhas)} linha${m.linhas === 1 ? "" : "s"} encontrada${m.linhas === 1 ? "" : "s"} em ${m.arquivos} arquivo(s) lido(s).`;
+    const grandes = m.saida.filter((o) => o.linhas > 1048000);
     $("baseResultado").innerHTML = `<table class="compacta base-tabela"><thead><tr><th>Mês</th><th>Linhas</th></tr></thead><tbody>`
       + meses.map((x) => `<tr>${td(C.rotuloMes(x), "rot")}${td(fmt(m.porMes[x]))}</tr>`).join("")
       + `<tr class="total">${td("Total", "rot")}${td(fmt(m.linhas))}</tr></tbody></table>`
-      + `<div class="base-acoes">${m.linhas ? '<button type="button" class="btn" id="baseBaixar">Baixar base (CSV)</button>' : ""}`
+      + `<div class="base-acoes">${m.saida.map((o, i) => `<button type="button" class="btn" data-base-arq="${i}">Baixar ${o.mes ? C.rotuloMes(o.mes) : "base"} (CSV, ${mb(o.blob)})</button>`).join("")}`
       + (m.naoEncontradas.length ? `<button type="button" class="btn sec" id="baseBaixarNao">Baixar matrículas sem pagamento (${fmt(m.naoEncontradas.length)})</button>` : "")
-      + `</div>` + (m.linhas > 1048000 ? '<p class="nota">Atenção: a base passa de 1 milhão de linhas, o limite de uma planilha do Excel.</p>' : "")
+      + `</div>` + (grandes.length ? `<p class="nota">Atenção: ${grandes.map((o) => o.mes ? C.rotuloMes(o.mes) : "a base").join(", ")} passa${grandes.length > 1 ? "m" : ""} de 1 milhão de linhas, o limite de uma planilha do Excel`
+        + `${$("basePorMes").checked ? "" : " (marque Um arquivo por mês para dividir)"}. Para cruzar meses, use a Base de cobrança abaixo.</p>` : "")
       + (m.naoEncontradas.length ? `<p class="nota">${fmt(m.naoEncontradas.length)} matrícula(s) da lista não têm pagamento nos meses marcados.</p>` : "");
-    const nome = `Base_arrecadacao_${meses.length ? meses[0] + (meses.length > 1 ? "_a_" + meses[meses.length - 1] : "") : "vazia"}.csv`;
-    if ($("baseBaixar")) $("baseBaixar").onclick = () => baixa(ultimaBase.csv, nome);
+    $("baseResultado").querySelectorAll("button[data-base-arq]").forEach((b) => { b.onclick = () => { const o = ultimaBase.saida[+b.dataset.baseArq]; baixa(o.blob, nomeArq(o)); }; });
     if ($("baseBaixarNao")) $("baseBaixarNao").onclick = () => baixa("\ufeffMatrícula\r\n" + ultimaBase.naoEncontradas.join("\r\n"), "Matriculas_sem_pagamento.csv");
-    if (m.linhas) baixa(m.csv, nome);
+    // baixa sozinho (um arquivo atrás do outro; o navegador pode pedir para permitir vários downloads)
+    m.saida.forEach((o, i) => setTimeout(() => baixa(o.blob, nomeArq(o)), i * 800));
+  }
+  // base de cobrança: pagaram no mês A e não pagaram no mês B (o worker cruza; os filtros do cabeçalho valem)
+  $("cobA").addEventListener("change", (e) => { cobA = e.target.value; });
+  $("cobB").addEventListener("change", (e) => { cobB = e.target.value; });
+  $("cobGerar").addEventListener("click", () => {
+    if (cobA === cobB) { toast("Escolha dois meses diferentes.", true); return; }
+    $("cobGerar").disabled = true;
+    $("cobStatus").textContent = "Cruzando os meses…";
+    $("cobResultado").innerHTML = "";
+    worker.postMessage({ tipo: "cobranca", id: ++idCob, miA: idxMes(cobA), miB: idxMes(cobB), marcas: marcas() });
+  });
+  function recebeCobranca(m) {
+    if (m.id !== idCob) return;
+    $("cobGerar").disabled = false;
+    if (m.erro) { $("cobStatus").textContent = "Erro: " + m.erro; return; }
+    const d = E.res.dados, l = m.lista, total = l.reduce((a, x) => a + x.valor, 0), A = C.rotuloMes(cobA), B = C.rotuloMes(cobB);
+    const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
+    const ultB = d.ultimoCredito[cobB];
+    $("cobStatus").textContent = `${fmt(l.length)} matrículas pagaram em ${A} e não pagaram em ${B}${ultB && cobB === d.meses[d.meses.length - 1] ? ` (até ${dataBR(ultB)})` : ""} · ${filtro} · ${rs(total)} pagos em ${A}.`;
+    const porCid = new Map();
+    for (const x of l) { const c = d.combos[x.c] || {}, o = porCid.get(c.cidade) || { n: 0, v: 0 }; o.n++; o.v += x.valor; porCid.set(c.cidade, o); }
+    const cids = [...porCid.entries()].sort((a, b) => b[1].v - a[1].v);
+    const n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ","), txt = (t) => String(t || "").replace(/;/g, ",");
+    const csv = "\ufeff" + [["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", `Valor pago em ${A}`, `Dias com pagamento em ${A}`].join(";"),
+      ...l.map((x) => { const c = d.combos[x.c] || {}; return [x.lig, txt(x.nome), nomeSup(c.sup), c.cidade, c.grupo, n(x.valor), x.dias].join(";"); })].join("\r\n");
+    const nome = `Base_cobranca_pagou_${cobA}_nao_pagou_${cobB}.csv`;
+    $("cobResultado").innerHTML = (cids.length ? `<table class="compacta base-tabela"><thead><tr><th>Cidade</th><th>Matrículas</th><th>Pago em ${A} (R$)</th></tr></thead><tbody>`
+      + cids.map(([c, o]) => `<tr>${td(esc(c || "—"), "rot")}${td(fmt(o.n))}${td(fmt(o.v))}</tr>`).join("")
+      + `<tr class="total">${td("Total", "rot")}${td(fmt(l.length))}${td(fmt(total))}</tr></tbody></table>` : "")
+      + `<div class="base-acoes">${l.length ? '<button type="button" class="btn" id="cobBaixar">Baixar base de cobrança (CSV)</button>' : ""}</div>`;
+    if ($("cobBaixar")) $("cobBaixar").onclick = () => baixa(csv, nome);
+    if (l.length) baixa(csv, nome);
   }
   function baixa(texto, nome) {
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([texto], { type: "text/csv;charset=utf-8" }));
+    a.href = URL.createObjectURL(texto instanceof Blob ? texto : new Blob([texto], { type: "text/csv;charset=utf-8" }));
     a.download = nome;
     a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);   // arquivos grandes: tempo para o download começar
   }
 
   // ===== Área Análises — Faturamento x Arrecadação (somente Interior: é onde há faturamento) =====

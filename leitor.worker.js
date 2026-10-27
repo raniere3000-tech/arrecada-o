@@ -15,6 +15,7 @@ self.onmessage = async (ev) => {
   if (ev.data.tipo === "analise") { respondeAnalise(ev.data); return; }
   if (ev.data.tipo === "clientes") { responde("clientes", ev.data.id, () => respondeClientes(ev.data)); return; }
   if (ev.data.tipo === "matricula") { responde("matricula", ev.data.id, () => respondeMatricula(ev.data)); return; }
+  if (ev.data.tipo === "cobranca") { responde("cobranca", ev.data.id, () => respondeCobranca(ev.data)); return; }
   if (ev.data.tipo === "extrair") { extraiBase(ev.data).catch((e) => avisa("extracao", { id: ev.data.id, erro: String((e && e.message) || e) })); return; }
   try {
     const r = await processa(ev.data.arquivos || []);
@@ -414,17 +415,26 @@ async function processa(itens) {
 // ---------- aba Base: linhas completas dos CSVs para uma lista de matrículas e meses ----------
 // Relê só os arquivos que têm os meses pedidos (as linhas inteiras não ficam guardadas). A saída tem as colunas do 1º
 // arquivo, na mesma ordem; arquivos com colunas em outra ordem são reorganizados pelo nome da coluna.
-async function extraiBase({ id, ligs, meses }) {
+// ligs = null: todas as matrículas (base completa). porMesArquivo: um CSV para cada mês. O CSV é montado em blocos (Blob)
+// de alguns MB, para um mês inteiro não virar um texto só na memória.
+async function extraiBase({ id, ligs, meses, porMesArquivo }) {
   if (!fontes) throw new Error("dados ainda não lidos");
-  const quer = new Set(ligs.map(C.ligacao)), mesesQ = new Set(meses);
+  const quer = ligs ? new Set(ligs.map(C.ligacao)) : null, mesesQ = new Set(meses);
   const usaDiaria = (m) => fontes.mesesDiaria.has(m);
   const arquivos = [
     ...fontes.diarias.filter((a) => a.meses.some((m) => mesesQ.has(m))).map((a) => ({ a, aceita: (m) => mesesQ.has(m) })),
     ...fontes.acumuladas.filter((a) => a.meses.some((m) => mesesQ.has(m) && !usaDiaria(m))).map((a) => ({ a, aceita: (m) => mesesQ.has(m) && !usaDiaria(m) })),
   ];
   const total = arquivos.reduce((t, x) => t + x.a.tamanho, 0) || 1;
-  let base = 0, cab = null, chavesCab = null;
-  const saida = [], porMes = {}, achadas = new Set();
+  let base = 0, cab = null, chavesCab = null, linhas = 0;
+  const saidas = new Map(), porMes = {}, achadas = new Set();
+  const fecha = (o) => { if (o.partes.length) { o.blobs.push(new Blob([o.partes.join("\r\n") + "\r\n"])); o.partes = []; o.tam = 0; } };
+  const escreve = (k, linha) => {
+    let o = saidas.get(k);
+    if (!o) { o = { partes: [], tam: 0, blobs: [], linhas: 0 }; saidas.set(k, o); }
+    o.partes.push(linha); o.tam += linha.length + 2; o.linhas++;
+    if (o.tam > 4e6) fecha(o);
+  };
   for (const { a, aceita } of arquivos) {
     let idx = null, ordem = null;
     await linhasDoArquivo(a.file, (linha) => {
@@ -439,16 +449,29 @@ async function extraiBase({ id, ligs, meses }) {
       const cred = p[idx.cred] || "";
       const mes = cred.length >= 10 ? cred.slice(6, 10) + "-" + cred.slice(3, 5) : "";
       if (!aceita(mes)) return;
-      const lig = C.ligacao(p[idx.lig]);
-      if (!quer.has(lig)) return;
-      achadas.add(lig);
+      if (quer) {
+        const lig = C.ligacao(p[idx.lig]);
+        if (!quer.has(lig)) return;
+        achadas.add(lig);
+      }
       porMes[mes] = (porMes[mes] || 0) + 1;
-      saida.push(ordem ? ordem.map((j) => (j >= 0 ? p[j] : "")).join(";") : linha);
+      linhas++;
+      escreve(porMesArquivo ? mes : "", ordem ? ordem.map((j) => (j >= 0 ? p[j] : "")).join(";") : linha);
     }, (lidos) => avisa("extracao-progresso", { id, pct: Math.round(((base + lidos) / total) * 100), texto: `Lendo ${a.rel}` }));
     base += a.tamanho;
   }
-  const naoEncontradas = [...quer].filter((l) => !achadas.has(l));
-  avisa("extracao", { id, csv: cab ? "\ufeff" + [cab, ...saida].join("\r\n") : "", linhas: saida.length, porMes, naoEncontradas, arquivos: arquivos.length });
+  const saida = [...saidas.entries()].sort(([x], [y]) => x.localeCompare(y)).map(([mes, o]) => {
+    fecha(o);
+    return { mes, linhas: o.linhas, blob: new Blob(["\ufeff" + cab + "\r\n", ...o.blobs], { type: "text/csv;charset=utf-8" }) };
+  });
+  const naoEncontradas = quer ? [...quer].filter((l) => !achadas.has(l)) : [];
+  avisa("extracao", { id, saida, linhas, porMes, naoEncontradas, arquivos: arquivos.length, completa: !quer });
+}
+// Base de cobrança: pagaram no mês A e não pagaram no mês B (nas combinações marcadas pelos filtros do cabeçalho)
+function respondeCobranca({ miA, miB, marcas }) {
+  const lista = C.pagaramNaoPagaram(analise, miA, miB, marcas);
+  for (const x of lista) { x.nome = nomeDe(x.lig); x.lig = ligTxt(x.lig); }
+  return { lista };
 }
 async function linhasDoArquivo(file, aoLinha, aoLer) {
   const leitor = file.stream().getReader();

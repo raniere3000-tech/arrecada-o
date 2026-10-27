@@ -829,6 +829,30 @@
       deixaram, voltaram,
     };
   }
+  // Base de cobrança: matrículas (nas combinações marcadas) com pagamento no mês miA e nenhum pagamento no mês miB.
+  // Devolve, por matrícula, o valor pago em miA (Val. Autenticado), em quantos dias e a combinação do maior pagamento.
+  function pagaramNaoPagaram(an, miA, miB, marcas) {
+    const pagouB = new Set(), porLig = new Map();
+    for (const { L, mapa } of an.entradas[miB] || []) for (let i = 0; i < L.k.length; i++) {
+      const cl = L.k[i] % COMBOS_ARQ;
+      if (!marcas || marcas[mapa[cl]]) pagouB.add((L.k[i] - cl) / COMBOS_ARQ);
+    }
+    for (const { L, mapa } of an.entradas[miA] || []) for (let i = 0; i < L.k.length; i++) {
+      const cl = L.k[i] % COMBOS_ARQ, c = mapa[cl], l = (L.k[i] - cl) / COMBOS_ARQ;
+      if ((marcas && !marcas[c]) || pagouB.has(l)) continue;
+      let x = porLig.get(l);
+      if (!x) { x = { lig: l, c, valor: 0, dias: 0, maior: -Infinity, mask: 0 }; porLig.set(l, x); }
+      x.valor += L.v[i]; x.mask |= 1 << L.d[i];
+      if (L.v[i] > x.maior) { x.maior = L.v[i]; x.c = c; }
+    }
+    const out = [];
+    for (const x of porLig.values()) {
+      let d = 0;
+      for (let k = 0; k <= MAX_DIA; k++) if (x.mask & (1 << k)) d++;
+      out.push({ lig: x.lig, c: x.c, valor: x.valor, dias: d });
+    }
+    return out.sort((a, b) => b.valor - a.valor);
+  }
   // Histórico de uma matrícula: arrecadação de cada mês (todas as combinações) e cada conta da fatura com os pagamentos dela
   function historicoMatricula(an, base, l) {
     const meses = an.entradas.map((partes, m) => {
@@ -918,7 +942,7 @@
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
-    clientesOportunidades, historicoMatricula, diasEntre,
+    clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram,
     MASCARA_MES, comparaGrupos, mesesMesmosUteis, fracaoAteDias, pareto,
   };
 });
