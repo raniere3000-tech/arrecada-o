@@ -18,7 +18,7 @@
   try { $("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) { /* sem versão */ }
 
   // ===== formatação =====
-  const fmt = (v, d = 0) => (isFinite(v) ? v : 0).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const fmt = (v, d = 0) => (isFinite(v) && Math.abs(v) >= 0.5 / 10 ** d ? v : 0).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });   // sem "-0"
   const rs = (v) => (v < 0 ? "-R$ " : "R$ ") + fmt(Math.abs(v));
   const pct = (v) => (isFinite(v) ? (v * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%" : "—");
   const milhoes = (v) => (isFinite(v) ? fmt(v / 1e6, 2) + " Mi" : "—");
@@ -369,7 +369,7 @@
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
     $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || !!AREA_DA_ABA[E.aba];
     ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
-      conversao: () => {}, clientes: () => {}, localidade: () => {} })[E.aba]();
+      conversao: desenhaConversao, clientes: () => {}, localidade: () => {} })[E.aba]();
   }
 
   // "1 a 12", "1, 5 e 10", "0 (fins de semana e feriados) e 1 a 3"
@@ -1062,6 +1062,140 @@
     const linhas = [cab.join(";"), ...(fxvLinhas[id] || []).map((o) => [o.ref ? C.rotuloMes(o.ref) : o.nome, o.contas, o.matriculas, n(o.faturado), n(o.pago), n(o.pago - o.faturado)].join(";"))];
     baixa("\ufeff" + linhas.join("\r\n"), `Mesmo_vencimento_${id.slice(3).toLowerCase()}_${fxvMesEscolhido}.csv`);
   }));
+  // ----- Conversão por referência (matriz por coorte) -----
+  let cvRefEscolhida = "", cvOrdem = ["faturado", -1], cvCidLinhas = [], cvMz = null;
+  const rotOff = (k, mz) => (k === 12 && mz.maxOff === 12 ? "M+12 em diante" : k ? `M+${k}` : "M");
+  function desenhaConversao() {
+    const cz = E.res.cruzamento && E.res.cruzamento.fat.length ? E.res.cruzamento : null;
+    $("cvCorpo").hidden = !cz;
+    if (!cz) {
+      $("cvNota").textContent = "";
+      $("cvAviso").innerHTML = '<p class="aviso-pdf">Sem faturamento aproveitado na pasta: veja a aba Faturamento x Arrecadação para o motivo.</p>';
+      return;
+    }
+    const filtroG = E.grupo ? grupoCruz(E.grupo) : "";
+    const ok = (c) => (!E.cidade || c.cidade === E.cidade) && (!filtroG || c.grupo === filtroG);
+    $("cvAviso").innerHTML = E.sup && E.sup !== "INTERIOR"
+      ? `<p class="aviso-pdf">${esc(`O faturamento é só do Interior: o filtro Superintendência = ${nomeSup(E.sup)} não se aplica aqui.`)}</p>` : "";
+    const meses = cz.concil.map((c) => c.mes), mz = C.matrizConversao(cz, ok, meses);
+    cvMz = mz;
+    $("cvCorpo").hidden = !mz.linhas.length;
+    if (!mz.linhas.length) { $("cvNota").textContent = ""; $("cvAviso").innerHTML += '<p class="aviso-pdf">Nenhuma conta faturada nos filtros escolhidos.</p>'; return; }
+    const porValor = $("cvMedida").value === "valor", acum = $("cvModo").value === "acum";
+    const base = (l) => (porValor ? l.faturado : l.contas), med = (c) => (porValor ? c.valor : c.contas);
+    $("cvNota").textContent = `${["Interior", E.cidade, filtroG].filter(Boolean).join(" · ")} · faturas ${C.rotuloMes(mz.linhas[0].ref)} a ${C.rotuloMes(mz.linhas[mz.linhas.length - 1].ref)}`
+      + ` · arrecadação ${C.rotuloMes(meses[0])} a ${C.rotuloMes(mz.ultimo)} (crédito até ${dataBR(E.res.dados.ultimoCredito[mz.ultimo])}).`;
+    $("cvLegenda").textContent = `${porValor ? "Valor recebido ÷ faturado da referência" : "Contas pagas pela 1ª vez ÷ contas faturadas"}, ${acum ? "acumulado até o mês" : "em cada mês"}. M = mês da referência.`;
+    // matriz
+    const ks = Array.from({ length: mz.maxOff + 1 }, (_, k) => k);
+    let maxMes = 0.0001;
+    if (!acum) for (const l of mz.linhas) for (const c of [l.antes, ...l.cel]) if (c && base(l) > 0) maxMes = Math.max(maxMes, med(c) / base(l));
+    const cor = (r) => `background:rgba(47,111,235,${(Math.max(0, Math.min(1, acum ? r : r / maxMes)) * 0.42).toFixed(3)})`;
+    if (!mz.linhas.some((l) => l.ref === cvRefEscolhida)) cvRefEscolhida = mz.linhas[mz.linhas.length - 1].ref;
+    const corpo = mz.linhas.map((l) => {
+      const b = base(l);
+      let soma = med(l.antes);
+      const celulas = ks.map((k) => {
+        const c = l.cel[k];
+        if (!c) return td("");
+        soma += med(c);
+        const r = b ? (acum ? soma : med(c)) / b : 0, parcial = C.mesAnterior(l.ref, -k) === mz.ultimo && !c.junta;
+        return `<td class="cel${parcial ? " parcial" : ""}" style="${cor(r)}" title="${C.rotuloMes(l.ref)} · ${rotOff(k, mz)}: ${porValor ? rs(c.valor) : fmt(c.contas) + " contas"} no mês">${pct(r)}</td>`;
+      });
+      const antes = med(l.antes), total = porValor ? l.recebido : l.contasPagas;
+      return `<tr data-ref="${l.ref}"${l.ref === cvRefEscolhida ? ' class="sel"' : ""}>${td(C.rotuloMes(l.ref) + (l.desdeInicio ? "" : " *"), "rot")}${td(fmt(l.contas))}${td(fmt(l.faturado))}`
+        + `${td(antes && b ? pct(antes / b) : "")}${celulas.join("")}${td(b ? pct(total / b) : "—", "tot")}`
+        + `${td(porValor ? fmt(l.semPagamento) : fmt(l.contas - l.contasPagas))}</tr>`;
+    });
+    tabela("cvMatriz", ["Referência", "Contas", "Faturado (R$)", "Antes de M", ...ks.map((k) => rotOff(k, mz)), "Total", porValor ? "Faturado sem pagamento (R$)" : "Contas sem pagamento"], corpo);
+    $("cvLegenda").textContent += mz.linhas.some((l) => !l.desdeInicio) ? ` * Referência anterior ao primeiro mês de arrecadação da pasta (${C.rotuloMes(meses[0])}): faltam os pagamentos dos meses anteriores.` : "";
+    desenhaDetalheCv(ok, meses);
+  }
+  function desenhaDetalheCv(ok, meses) {
+    const mz = cvMz, porValor = $("cvMedida").value === "valor";
+    $("cvRef").innerHTML = [...mz.linhas].reverse().map((l) => `<option value="${l.ref}"${l.ref === cvRefEscolhida ? " selected" : ""}>${C.rotuloMes(l.ref)}</option>`).join("");
+    const l = mz.linhas.find((x) => x.ref === cvRefEscolhida), R = cvRefEscolhida;
+    const base = (x) => (porValor ? x.faturado : x.contas), med = (c) => (porValor ? c.valor : c.contas);
+    // acumulado por k (antes de M entra no M); null onde o mês ainda não tem arrecadação
+    const curva = (x) => { let s = med(x.antes); return x.cel.map((c) => (c ? (s += med(c)) / (base(x) || 1) : null)); };
+    const parcialEm = (x, k) => C.mesAnterior(x.ref, -k) === mz.ultimo && !(x.cel[k] && x.cel[k].junta);
+    const ultK = l.cel.length - 1, cm = l.cel, mesM = cm[0] ? cm[0].valor : 0, mes1 = cm[1] ? cm[1].valor : 0;
+    const anteriores = mz.linhas.filter((x) => x.ref < R && x.desdeInicio);
+    const media = Array.from({ length: Math.max(ultK + 1, mz.maxOff + 1) }, (_, k) => {
+      const vs = anteriores.filter((x) => x.cel[k] && !parcialEm(x, k)).map((x) => curva(x)[k]);
+      return vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+    });
+    const minha = curva(l), kComp = ultK >= 0 && parcialEm(l, ultK) ? ultK - 1 : ultK;
+    const comp = kComp >= 0 && media[kComp] != null && minha[kComp] != null ? minha[kComp] - media[kComp] : null;
+    const card = (t, v, sub) => `<div class="kpi"><span>${t}</span><b>${v}</b><small>${sub}</small></div>`;
+    $("cvKpis").innerHTML = [
+      card(`Faturado da ref. ${C.rotuloMes(R)}`, milhoes(l.faturado), `${fmt(l.contas)} contas · ${fmt(l.matriculas)} matrículas`),
+      card("Recebido até agora", milhoes(l.recebido), `${pct(l.recebido / l.faturado)} do faturado${mz.ultimo ? ` · até ${C.rotuloMes(mz.ultimo)}` : ""}`),
+      card("Contas pagas", pct(l.contasPagas / l.contas), `${fmt(l.contasPagas)} de ${fmt(l.contas)} contas receberam pagamento`),
+      card("Recebido em M / M+1", `${pct(mesM / l.faturado)} / ${cm[1] ? pct(mes1 / l.faturado) : "—"}`, `${C.rotuloMes(R)} / ${C.rotuloMes(C.mesAnterior(R, -1))}${cm[1] ? "" : " (ainda sem arrecadação)"}`),
+      card("Faturado ainda sem pagamento", milhoes(l.semPagamento), `${fmt(l.contas - l.contasPagas)} contas · ${pct(l.semPagamento / l.faturado)} do faturado · a investigar`),
+      card(`Comparação em ${kComp >= 0 ? rotOff(kComp, mz) : "M"}`, comp == null ? "—" : `${comp >= 0 ? "+" : ""}${fmt(comp * 100, 2)} p.p.`,
+        comp == null ? "sem referências anteriores para comparar" : `${pct(minha[kComp])} × média de ${pct(media[kComp])} das referências anteriores (${porValor ? "valor" : "contas"}, acumulado)`),
+    ].join("");
+    const n = Math.max(ultK + 1, ...media.map((v, k) => (v != null ? k + 1 : 0)));
+    const cats = Array.from({ length: n }, (_, k) => rotOff(k, mz));
+    $("cvNotaG").textContent = `${porValor ? "Valor recebido ÷ faturado" : "Contas pagas ÷ contas faturadas"}, acumulado do mês da referência em diante. A média usa só referências anteriores com o mês completo.`;
+    $("cvG1").innerHTML = n ? svgLinhas(cats, [[minha.slice(0, n).concat(Array(Math.max(0, n - minha.length)).fill(null)), "l-at"], [media.slice(0, n), "l-fat", true]], (v) => fmt(v * 100, 1) + "%") : "";
+    // por cidade
+    const cidades = [...new Set(cz_combos().filter(ok).map((c) => c.cidade))];
+    cvCidLinhas = cidades.map((cid) => {
+      const m = C.matrizConversao(E.res.cruzamento, (c) => ok(c) && c.cidade === cid, meses).linhas.find((x) => x.ref === R);
+      if (!m) return null;
+      const ac = (k) => { let s = m.antes.valor; for (let i = 0; i <= k; i++) if (m.cel[i]) s += m.cel[i].valor; else return null; return m.faturado ? s / m.faturado : 0; };
+      return { nome: cid, contas: m.contas, faturado: m.faturado, m0: ac(0), m1: ac(1), m2: ac(2), recebido: m.recebido, conv: m.faturado ? m.recebido / m.faturado : 0,
+        pagas: m.contas ? m.contasPagas / m.contas : 0, sem: m.semPagamento };
+    }).filter(Boolean);
+    desenhaCidCv();
+  }
+  const cz_combos = () => E.res.cruzamento.combos;
+  const COLS_CV = [["nome", "Cidade"], ["contas", "Contas"], ["faturado", "Faturado (R$)"], ["m0", "Até M"], ["m1", "Até M+1"], ["m2", "Até M+2"],
+    ["recebido", "Recebido (R$)"], ["conv", "Conversão"], ["pagas", "Contas pagas"], ["sem", "Faturado sem pagamento (R$)"]];
+  function desenhaCidCv() {
+    const [col, dir] = cvOrdem, L = [...cvCidLinhas].sort((a, b) => (col === "nome" ? a.nome.localeCompare(b.nome, "pt-BR") : (a[col] ?? -1) - (b[col] ?? -1)) * dir);
+    const t = L.reduce((x, o) => ({ contas: x.contas + o.contas, faturado: x.faturado + o.faturado, recebido: x.recebido + o.recebido, sem: x.sem + o.sem }), { contas: 0, faturado: 0, recebido: 0, sem: 0 });
+    const l = cvMz.linhas.find((x) => x.ref === cvRefEscolhida), acT = (k) => { let s = l.antes.valor; for (let i = 0; i <= k; i++) if (l.cel[i]) s += l.cel[i].valor; else return null; return s / l.faturado; };
+    const p = (v) => (v == null ? "" : pct(v));
+    $("cvCid").innerHTML = `<thead><tr>${COLS_CV.map(([k, tt]) => `<th data-col="${k}" class="${k === col ? (dir > 0 ? "asc" : "desc") : ""}">${tt}</th>`).join("")}</tr></thead><tbody>`
+      + L.map((o) => `<tr>${td(esc(o.nome), "rot")}${td(fmt(o.contas))}${td(fmt(o.faturado))}${td(p(o.m0))}${td(p(o.m1))}${td(p(o.m2))}${td(fmt(o.recebido))}${td(pct(o.conv))}${td(pct(o.pagas))}${td(fmt(o.sem))}</tr>`).join("")
+      + `<tr class="total">${td("Total", "rot")}${td(fmt(t.contas))}${td(fmt(t.faturado))}${td(p(acT(0)))}${td(p(acT(1)))}${td(p(acT(2)))}${td(fmt(t.recebido))}`
+      + `${td(t.faturado ? pct(t.recebido / t.faturado) : "—")}${td(pct(l.contasPagas / l.contas))}${td(fmt(t.sem))}</tr></tbody>`;
+  }
+  ["cvMedida", "cvModo"].forEach((id) => $(id).addEventListener("change", () => desenha()));
+  $("cvRef").addEventListener("change", (e) => { cvRefEscolhida = e.target.value; desenha(); });
+  $("cvMatriz").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-ref]");
+    if (!tr) return;
+    cvRefEscolhida = tr.dataset.ref;
+    desenha();
+    $("cvRef").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  $("cvCid").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-col]");
+    if (!th) return;
+    cvOrdem = [th.dataset.col, th.dataset.col === cvOrdem[0] ? -cvOrdem[1] : th.dataset.col === "nome" ? 1 : -1];
+    desenhaCidCv();
+  });
+  const nCsv = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ",");
+  $("cvCsv").addEventListener("click", () => {
+    const mz = cvMz, ks = Array.from({ length: mz.maxOff + 1 }, (_, k) => k), porValor = $("cvMedida").value === "valor";
+    const med = (c) => (c ? (porValor ? nCsv(c.valor) : c.contas) : "");
+    const cab = ["Referência", "Contas faturadas", "Faturado", "Antes de M", ...ks.map((k) => rotOff(k, mz)), porValor ? "Recebido total" : "Contas pagas", porValor ? "Faturado sem pagamento" : "Contas sem pagamento"];
+    const linhas = [`${porValor ? "Valor recebido (R$)" : "Contas pagas pela 1ª vez"} em cada mês`, cab.join(";"),
+      ...mz.linhas.map((l) => [C.rotuloMes(l.ref), l.contas, nCsv(l.faturado), med(l.antes), ...ks.map((k) => med(l.cel[k])),
+        porValor ? nCsv(l.recebido) : l.contasPagas, porValor ? nCsv(l.semPagamento) : l.contas - l.contasPagas].join(";"))];
+    baixa("﻿" + linhas.join("\r\n"), `Conversao_por_referencia_${porValor ? "valor" : "contas"}.csv`);
+  });
+  $("cvCidCsv").addEventListener("click", () => {
+    const p = (v) => (v == null ? "" : nCsv(v * 100));
+    const linhas = [["Cidade", "Contas", "Faturado", "Até M (%)", "Até M+1 (%)", "Até M+2 (%)", "Recebido", "Conversão (%)", "Contas pagas (%)", "Faturado sem pagamento"].join(";"),
+      ...cvCidLinhas.map((o) => [o.nome, o.contas, nCsv(o.faturado), p(o.m0), p(o.m1), p(o.m2), nCsv(o.recebido), p(o.conv), p(o.pagas), nCsv(o.sem)].join(";"))];
+    baixa("﻿" + linhas.join("\r\n"), `Conversao_cidades_ref_${cvRefEscolhida}.csv`);
+  });
   // gráficos simples (SVG): barras agrupadas e linhas; null = sem dado (não desenha)
   function svgBarras(cats, series, rotulo) {
     const larg = Math.max(720, cats.length * 80), alt = 260, base = 214, topo = 30;
@@ -1086,10 +1220,10 @@
     const max = Math.max(0.01, ...vals), min = Math.min(-0.01, ...vals), y = (v) => topo + ((max - v) / (max - min)) * (baixo - topo);
     const passo = larg / Math.max(1, cats.length), x = (i) => passo * i + passo / 2;
     let svg = `<svg viewBox="0 0 ${larg} ${alt}"><line x1="0" y1="${y(0)}" x2="${larg}" y2="${y(0)}" class="eixo"/>`;
-    series.forEach(([v, cls]) => {
+    series.forEach(([v, cls, abaixo]) => {   // abaixo: rótulos sob os pontos (evita sobrepor a outra série)
       const pts = v.map((p, i) => (p == null ? null : `${x(i)},${y(p)}`)).filter(Boolean);
       if (pts.length > 1) svg += `<polyline class="${cls}" points="${pts.join(" ")}"/>`;
-      v.forEach((p, i) => { if (p != null) svg += `<g><title>${cats[i]}: ${rotulo(p)}</title><circle class="${cls}" cx="${x(i)}" cy="${y(p)}" r="4"/><text class="r-at" x="${x(i)}" y="${y(p) - 8}">${rotulo(p)}</text></g>`; });
+      v.forEach((p, i) => { if (p != null) svg += `<g><title>${cats[i]}: ${rotulo(p)}</title><circle class="${cls}" cx="${x(i)}" cy="${y(p)}" r="4"/><text class="r-at" x="${x(i)}" y="${abaixo ? y(p) + 20 : y(p) - 8}">${rotulo(p)}</text></g>`; });
     });
     cats.forEach((c, i) => { svg += `<text class="x" x="${x(i)}" y="${baixo + 26}">${c}</text>`; });
     return svg + "</svg>";

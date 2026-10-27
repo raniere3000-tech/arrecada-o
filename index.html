@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v21-20261027">
+<link rel="stylesheet" href="assets/painel.css?v=v22-20261027">
 </head>
 <body>
 
@@ -188,8 +188,28 @@
       </div>
     </section>
     <section class="painel-aba" data-painel="conversao" hidden>
-      <div class="card"><h2>Conversão por referência</h2><p>Próxima etapa. Vai mostrar, para cada mês de referência do faturamento, quanto foi recebido no próprio mês e nos meses seguintes
-        (matriz por coorte), ligando cada pagamento à sua conta pela matrícula + data de vencimento. A base desse cruzamento já é montada na leitura: veja a conciliação na aba Faturamento x Arrecadação.</p></div>
+      <div class="card"><h2>Conversão por referência
+          <span class="opcoes-cv">
+            <label class="opcao">Medida <select id="cvMedida"><option value="valor">Valor recebido</option><option value="contas">Contas pagas</option></select></label>
+            <label class="opcao">Exibição <select id="cvModo"><option value="acum">Acumulado</option><option value="mes">No mês</option></select></label>
+          </span></h2>
+        <p class="nota" id="cvNota"></p><div id="cvAviso"></div></div>
+      <div id="cvCorpo">
+        <div class="card"><h2>Matriz de conversão <button type="button" class="btn sec csv" id="cvCsv">Baixar CSV</button></h2>
+          <p class="nota" id="cvLegenda"></p>
+          <div class="wrap"><table id="cvMatriz" class="compacta matriz-cv"></table></div>
+          <p class="nota">Clique numa referência para ver o detalhe abaixo. Cada pagamento é ligado à sua conta pela matrícula + data de vencimento e conta no mês da Data Crédito.
+            Uma conta é “paga” no primeiro mês em que recebe qualquer pagamento. O valor recebido inclui juros e multas pagos junto, por isso pode passar de 100%.
+            <i>Itálico</i> = mês da arrecadação ainda em andamento; vazio = mês ainda sem arrecadação na pasta.</p></div>
+        <div class="card"><h2>Detalhe da referência <label class="opcao">Referência <select id="cvRef"></select></label></h2></div>
+        <div class="kpis" id="cvKpis"></div>
+        <div class="card"><h2>Curva de conversão acumulada</h2>
+          <p class="nota" id="cvNotaG"></p>
+          <div class="legenda-g"><span><i class="cor-at"></i>Referência escolhida</span><span><i class="cor-fat"></i>Média das referências anteriores</span></div>
+          <div class="grafico" id="cvG1"></div></div>
+        <div class="card"><h2>Por cidade <small>clique no título da coluna para ordenar</small><button type="button" class="btn sec csv" id="cvCidCsv">Baixar CSV</button></h2>
+          <div class="wrap"><table id="cvCid" class="compacta ordenavel"></table></div></div>
+      </div>
     </section>
     <section class="painel-aba" data-painel="clientes" hidden>
       <div class="card"><h2>Clientes e oportunidades</h2><p>Etapa seguinte: matrículas faturadas sem pagamento, queda recente de arrecadação, clientes que deixaram de pagar e busca do histórico de uma matrícula.
@@ -325,6 +345,17 @@
           <li>Matrículas e contas são distintas dentro de cada linha; uma conta paga em parcelas aparece em cada mês em que recebeu pagamento.</li>
         </ul></div>
 
+      <div class="card"><h2>Conversão por referência</h2>
+        <p>Para cada <b>referência</b> do faturamento (Interior), quanto das contas foi recebido no próprio mês da referência (<b>M</b>) e nos meses seguintes
+          (<b>M+1</b>, <b>M+2</b>, ...), pelo mês da Data Crédito. O pagamento é ligado à conta pela <b>matrícula + data de vencimento</b>.</p>
+        <ul>
+          <li><b>Valor recebido</b>: Val. Autenticado ligado às contas da referência ÷ faturado da referência (com créditos). Inclui juros e multas pagos junto, por isso pode passar de 100%.</li>
+          <li><b>Contas pagas</b>: contas que receberam o primeiro pagamento no mês ÷ contas faturadas. Uma conta conta uma só vez, no primeiro mês em que é paga, mesmo que o pagamento seja parcial.</li>
+          <li><b>Faturado ainda sem pagamento</b>: faturado das contas que não receberam nenhum pagamento com aquele vencimento nos meses da pasta. É situação a investigar, não dívida confirmada (pode ter sido paga por acordo, por exemplo).</li>
+          <li><b>Antes de M</b>: pagamentos creditados antes do mês da referência. A última coluna junta M+12 em diante. Mês vazio = ainda sem arrecadação na pasta; em itálico = mês em andamento.</li>
+          <li>Referência anterior ao primeiro mês de arrecadação da pasta: os pagamentos dos meses que faltam não aparecem (a linha é marcada).</li>
+        </ul></div>
+
       <div class="card"><h2>Diferenças em relação ao BI</h2>
         <ul>
           <li>Feriados: o painel considera São Jorge (23/04) e Consciência Negra (20/11) em todos os anos; o BI só os tinha em 2025.</li>
@@ -339,9 +370,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v21-20261027"></script>
-<script src="assets/calculos.js?v=v21-20261027"></script>
-<script>const VERSAO_SITE = "v21-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v21-20261027"></script>
+<script src="assets/regras.js?v=v22-20261027"></script>
+<script src="assets/calculos.js?v=v22-20261027"></script>
+<script>const VERSAO_SITE = "v22-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v22-20261027"></script>
 </body>
 </html>

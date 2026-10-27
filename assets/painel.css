@@ -275,3 +275,14 @@ table.ordenavel th.desc::after { content: " ▼"; font-size: 9px; }
 .lista-problemas { font-size: 12.5px; margin: 6px 0; padding-left: 18px; color: #000; }
 #fxvKpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 720px) { #fxvKpis { grid-template-columns: minmax(0, 1fr); } }
+#cvKpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 720px) { #cvKpis { grid-template-columns: minmax(0, 1fr); } }
+.card h2 .opcoes-cv { margin-left: auto; display: inline-flex; gap: 14px; flex-wrap: wrap; }
+.card h2 .opcoes-cv .opcao { margin-left: 0; }
+.matriz-cv td.cel { color: #000; }
+.matriz-cv td.parcial { font-style: italic; }
+.matriz-cv td.tot { font-weight: 700; }
+.matriz-cv tbody tr[data-ref] { cursor: pointer; }
+.matriz-cv tbody tr[data-ref]:hover td.rot { text-decoration: underline; }
+.matriz-cv tbody tr.sel td { box-shadow: inset 0 2px 0 #1A2740, inset 0 -2px 0 #1A2740; }
+.matriz-cv tbody tr.sel td.rot { font-weight: 700; }

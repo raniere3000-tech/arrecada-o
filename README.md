@@ -7,7 +7,8 @@ para a internet: tudo é processado no navegador.
 ## Navegação
 
 - **Executivo** (acompanhamento e resultado): Resumo, Subcategoria, Perfil de pagamento, Cidades, Escada, Análise, Base e Dados.
-- **Análises** (cruzamentos e oportunidades): Faturamento x Arrecadação; Conversão por referência, Clientes e oportunidades e
+- **Análises** (cruzamentos e oportunidades): Faturamento x Arrecadação; Fat. x Arrec. — mesmo vencimento; Conversão por
+  referência (matriz por coorte: quanto de cada referência foi recebido em M, M+1, ...); Clientes e oportunidades e
   Diagnóstico por localidade (próximas etapas). O PDF é só do Executivo.
 
 ## Como usar

@@ -296,6 +296,21 @@ test("cruzamento: pagamento acha a conta pela matrícula + vencimento; parcela e
   perto(co("2026-10").reduce((s, r) => s + r.valor, 0), 360);
   assert.equal(co("2026-10").reduce((s, r) => s + r.contas, 0), 2);
   assert.equal(co("2026-11").reduce((s, r) => s + r.contas, 0), 0);
+  perto(co("2026-10").reduce((s, r) => s + r.faturado, 0), 400);   // faturado das contas pagas pela 1ª vez no mês
+  // matriz de conversão: set/26 tem 450 faturados (3 contas; a de 50 não foi paga); out/26 = M+1 (360), nov/26 = M+2 (40)
+  const mz = C.matrizConversao(x, () => true, ["2026-09", "2026-10", "2026-11"]);
+  const s9 = mz.linhas.find((l) => l.ref === "2026-09");
+  perto(s9.faturado, 450);
+  assert.equal(s9.contas, 3);
+  perto(s9.cel[1].valor, 360);
+  perto(s9.cel[2].valor, 40);
+  assert.equal(s9.cel[0].valor, 0);
+  assert.equal(s9.cel[3], undefined);                 // dez/26 ainda não tem arrecadação
+  perto(s9.recebido, 400);
+  assert.equal(s9.contasPagas, 2);
+  perto(s9.semPagamento, 50);
+  assert.equal(mz.maxOff, 2);
+  assert.equal(C.matrizConversao(x, (c) => c.cidade === "NADA", ["2026-10"]).linhas.length, 0);
   assert.equal(x.combos.find((c) => c.cidade === "CORDEIRO").grupo, "PUBLICO");
   // mesmo vencimento: em out/26 foram pagos 360 de contas da ref. set/26 cujo faturado é 100 + 300 = 400; em nov/26, 40 da conta de 100
   const pg = (mes) => x.pagas.filter((r) => r.mes === mes);

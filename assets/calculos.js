@@ -561,7 +561,8 @@
   // Cruzamento faturamento × arrecadação (Interior). Junta as contas de todos os arquivos de fatura (conta repetida em dois
   // arquivos conta uma vez) e liga cada pagamento à conta de mesma matrícula + vencimento. Devolve só somas pequenas:
   //  fat:     por referência × cidade × categoria: valor faturado, créditos, contas, matrículas
-  //  coorte:  por referência da conta × mês de crédito × cidade × categoria: valor pago e contas pagas pela 1ª vez
+  //  coorte:  por referência da conta × mês de crédito × cidade × categoria: valor pago e contas pagas pela 1ª vez (com o
+  //           faturado delas)
   //  concil:  por mês de crédito × tipo de fatura: valor arrecadado que achou (ou não) a conta pelo vencimento
   function cruzaFaturamento(exportsFat, pagamentos, mesesArrec) {
     const combos = [], idxCombo = new Map(), comboDe = (ck) => {
@@ -606,9 +607,9 @@
         cc.achou[P.tipo[i]] += P.v[i]; cc.linhasAchou++;
         const k = ref[p] + "|" + mi + "|" + cmb[p];
         let o = coorte.get(k);
-        if (!o) { o = { ref: refTxt(ref[p]), mes: mesesArrec[mi], c: cmb[p], valor: 0, contas: 0 }; coorte.set(k, o); }
+        if (!o) { o = { ref: refTxt(ref[p]), mes: mesesArrec[mi], c: cmb[p], valor: 0, contas: 0, faturado: 0 }; coorte.set(k, o); }
         o.valor += P.v[i];
-        if (pagaEm[p] < 0) { pagaEm[p] = mi; o.contas++; }
+        if (pagaEm[p] < 0) { pagaEm[p] = mi; o.contas++; o.faturado += valor[p]; }
         const kp = mi + "|" + ref[p] + "|" + cmb[p];
         let q = pagas.get(kp);
         if (!q) { q = { mes: mesesArrec[mi], ref: refTxt(ref[p]), c: cmb[p], pago: 0, faturado: 0, contas: 0, matriculas: 0 }; pagas.set(kp, q); }
@@ -620,6 +621,41 @@
     });
     return { combos, fat: [...fat.values()], coorte: [...coorte.values()], concil, pagas: [...pagas.values()],
       diag: { contas: lig.length, duplicadas, linhas, semChave, fora } };
+  }
+
+  // Conversão por referência: para cada referência do faturamento (nos filtros de aceita(combo)), quanto foi recebido no
+  // mês da referência (M), nos meses seguintes (M+1, M+2, ...) e antes dela, ligando o pagamento à conta pelo vencimento.
+  // cel[k] fica undefined quando o mês M+k não tem arrecadação na pasta; a última coluna (maxCol) junta M+maxCol em diante.
+  const numMes = (m) => +m.slice(0, 4) * 12 + +m.slice(5, 7);
+  function matrizConversao(cz, aceita, mesesArrec, maxCol = 12) {
+    const tem = new Set(mesesArrec), ultimo = mesesArrec[mesesArrec.length - 1], primeiro = mesesArrec[0];
+    const L = new Map(), nova = () => ({ valor: 0, contas: 0, faturado: 0 });
+    for (const f of cz.fat) {
+      if (!aceita(cz.combos[f.c])) continue;
+      let l = L.get(f.ref);
+      if (!l) { l = { ref: f.ref, faturado: 0, contas: 0, matriculas: 0, cel: [], antes: nova(), recebido: 0, contasPagas: 0, fatPago: 0 }; L.set(f.ref, l); }
+      l.faturado += f.valor; l.contas += f.contas; l.matriculas += f.matriculas;
+    }
+    for (const l of L.values()) {
+      for (let k = 0; k <= maxCol; k++) if (tem.has(mesAnterior(l.ref, -k))) l.cel[k] = nova();
+      if (l.cel[maxCol] && numMes(ultimo) > numMes(mesAnterior(l.ref, -maxCol))) l.cel[maxCol].junta = true;
+      l.desdeInicio = !primeiro || numMes(primeiro) <= numMes(l.ref);   // a arrecadação da pasta começa até o mês M
+    }
+    for (const o of cz.coorte) {
+      const l = L.get(o.ref);
+      if (!l || !aceita(cz.combos[o.c])) continue;
+      const k = numMes(o.mes) - numMes(o.ref);
+      const c = k < 0 ? l.antes : (l.cel[Math.min(k, maxCol)] || (l.cel[Math.min(k, maxCol)] = nova()));
+      c.valor += o.valor; c.contas += o.contas; c.faturado += o.faturado;
+      l.recebido += o.valor; l.contasPagas += o.contas; l.fatPago += o.faturado;
+    }
+    let maxOff = 0;
+    const linhas = [...L.values()].sort((a, b) => a.ref.localeCompare(b.ref));
+    for (const l of linhas) {
+      l.semPagamento = l.faturado - l.fatPago;
+      l.cel.forEach((c, k) => { if (c && k > maxOff) maxOff = k; });
+    }
+    return { linhas, maxOff, ultimo };
   }
 
   // ---------- aba Análise: rankings por ligação ----------
@@ -713,7 +749,7 @@
   }
 
   return {
-    MAX_DIA, MESES_CURTOS, chave, separaCsv, refDeTexto, vencNum, consertaAcento, LeituraFaturamento, cruzaFaturamento, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
+    MAX_DIA, MESES_CURTOS, chave, separaCsv, refDeTexto, vencNum, consertaAcento, LeituraFaturamento, cruzaFaturamento, matrizConversao, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
