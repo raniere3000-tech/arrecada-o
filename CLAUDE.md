@@ -9,3 +9,5 @@
   `FERIADOS_EXTRAS` já entra na chave do cache. O faturamento tem cache próprio: mudou `LeituraFaturamento.exporta()`?
   Aumente `CACHE_FATURAMENTO` (a arrecadação não é relida).
 - Regras de negócio (cidades, subcategorias, feriados) ficam em `assets/regras.js`.
+- Gráficos: desenhe com `grafico(id, (largura) => svg…)` em `painel.js`, que usa a largura real do quadro e redesenha
+  quando ela muda (celular, janela, PDF). Não use `viewBox` fixo esticado: o texto ficaria gigante ou ilegível.

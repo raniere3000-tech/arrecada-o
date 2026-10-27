@@ -212,7 +212,8 @@ body.bi table.ranking td.rot { background: transparent !important; color: #000; 
 body.bi table.ranking td.du { background: var(--bi) !important; color: #fff; }
 
 /* Resumo: análise por dia útil (fora do PDF) */
-.grafico svg { width: 100%; height: auto; display: block; }
+.grafico { overflow-x: auto; max-width: 100%; }
+.grafico svg { display: block; max-width: none; }   /* desenhado na largura do quadro (painel.js: grafico) */
 .grafico .eixo { stroke: var(--linha); }
 .grafico .b-ant { fill: #A9B4CB; }
 .grafico .b-at { fill: #1A2740; }
@@ -294,7 +295,6 @@ tr.alerta td { background: #FFF4E5; }
 .lista-rolavel thead th { position: sticky; top: 0; z-index: 1; }
 @media (max-width: 720px) { #dgKpis { grid-template-columns: minmax(0, 1fr); } }
 .legenda-g .cor-neg { background: #E8710A; }
-.grafico svg.pareto { max-height: 360px; }
 .grafico .ref80t { font-size: 10px; fill: #64748b; font-weight: 600; text-anchor: end; }
 .grafico .ref80 { stroke: #8A94A6; stroke-dasharray: 5 4; stroke-width: 1; }
 .grafico .rot-h { font-size: 12px; text-anchor: end; fill: #000; }

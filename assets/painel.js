@@ -483,22 +483,7 @@
     $("gTitulo").textContent = `Arrecadação por dia útil — ${nAt} vs ${nAnt}`;
     $("gNota").textContent = "Barras do mês atual em laranja indicam queda acima de 40%; em azul médio, crescimento acima de 40%. Rótulos nas duas barras (mês anterior e atual); passe o mouse para ver o valor exato.";
     $("gLegenda").innerHTML = `<span><i class="cor-ant"></i>${nAnt}</span><span><i class="cor-at"></i>${nAt}</span><span><i class="cor-alerta"></i>Alerta (±40%)</span>`;
-    const larg = Math.max(720, dias.length * 92), alt = 270, base = 222, topo = 34, max = Math.max(1, ...at, ...an);
-    const passo = larg / Math.max(1, dias.length), bw = Math.min(36, passo * 0.32);
-    let svg = `<svg viewBox="0 0 ${larg} ${alt}" role="img" aria-label="Arrecadação por dia útil"><line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`;
-    dias.forEach((k, i) => {
-      const cx = passo * i + passo / 2, h1 = ((base - topo) * an[i]) / max, h2 = ((base - topo) * at[i]) / max;
-      const v = an[i] > 0 ? at[i] / an[i] - 1 : NaN;
-      const cls = v <= -ALERTA ? "b-queda" : v >= ALERTA ? "b-alta" : "b-at";
-      const data = k ? dataBR(cal.dataDoDia[k]).slice(0, 5) : "";
-      svg += `<g><title>${rot(k)}${data ? ` (${data})` : ""}\n${nAnt}: ${rs(an[i])}\n${nAt}: ${rs(at[i])}${isFinite(v) ? `\nΔ ${pct(v)}` : ""}</title>`
-        + `<rect class="b-ant" x="${cx - bw - 3}" y="${base - h1}" width="${bw}" height="${Math.max(0, h1)}" rx="2"/>`
-        + `<rect class="${cls}" x="${cx + 3}" y="${base - h2}" width="${bw}" height="${Math.max(0, h2)}" rx="2"/>`
-        + (an[i] ? `<text class="r-ant" x="${cx - bw / 2 - 3}" y="${base - h1 - 5}">${curto(an[i])}</text>` : "")
-        + (at[i] ? `<text class="r-at" x="${cx + bw / 2 + 3}" y="${base - h2 - 5}">${curto(at[i])}</text>` : "")
-        + `<text class="x" x="${cx}" y="${base + 18}">${rot(k)}</text><text class="x2" x="${cx}" y="${base + 32}">${data}</text></g>`;
-    });
-    $("grafico").innerHTML = dias.length ? svg + "</svg>" : '<p class="nota">Nenhum dia útil marcado.</p>';
+    grafico("grafico", dias.length && ((W) => svgDias(dias, at, an, cal, nAt, nAnt, W)), '<p class="nota">Nenhum dia útil marcado.</p>');
     // faixa: dias úteis dos dois meses
     $("faixaDias").innerHTML = `<b>Dias úteis no mês</b><span>${nAt}: <b>${cal.uteis} dias</b></span><span>${nAnt}: <b>${calAnt.uteis} dias</b></span>`
       + `<span><b>Δ ${cal.uteis - calAnt.uteis >= 0 ? "" : "−"}${Math.abs(cal.uteis - calAnt.uteis)} dia${Math.abs(cal.uteis - calAnt.uteis) === 1 ? "" : "s"}</b></span>`
@@ -534,6 +519,29 @@
     linhas.push(`<tr class="total">${td("Total", "du")}${td("")}${td(fmt(tA.valor, 2))}${td(tB ? fmt(tB.valor, 2) : "")}${isFinite(vT) ? tdNum(vT, pct) : td("")}`
       + `${td(fmt(tA.clientes))}${td(fmt(tA.contas))}${td(tA.contas ? fmt(tic(tA), 2) : "")}</tr>`);
     tabela("tConsolidado", ["Dia útil", "Data", `Arrecadação ${C.rotuloMes(E.mes)}`, `Arrecadação ${C.rotuloMes(ant)}`, "Δ (%)", "Clientes pagantes", "Contas pagas", "Ticket médio"], linhas);
+  }
+  // barras por dia útil: mês anterior × mês atual (rótulos dos dois se couberem; senão só o do mês atual)
+  function svgDias(dias, at, an, cal, nAt, nAnt, W) {
+    const rot = (k) => (k ? `Dia ${k}` : "Fins de semana"), n = Math.max(1, dias.length);
+    const base = 222, topo = 34, max = Math.max(1, ...at, ...an);
+    const { larg, passo, ex } = ajustaEixo(dias.map(rot), W, n * 52, base + 18), bw = Math.min(36, passo * 0.32);
+    const lv = Math.max(0, ...at.concat(an).filter((v) => v).map((v) => larguraTexto(curto(v), 10)));
+    const dois = passo >= 2 * lv + 10, umSo = !dois && passo >= lv + 6;
+    const alt = 270 + ex.extra;
+    let svg = abreSvg(larg, alt, ex.pad, ' role="img" aria-label="Arrecadação por dia útil"') + `<line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`;
+    dias.forEach((k, i) => {
+      const cx = passo * i + passo / 2, h1 = ((base - topo) * an[i]) / max, h2 = ((base - topo) * at[i]) / max;
+      const v = an[i] > 0 ? at[i] / an[i] - 1 : NaN;
+      const cls = v <= -ALERTA ? "b-queda" : v >= ALERTA ? "b-alta" : "b-at";
+      const data = k ? dataBR(cal.dataDoDia[k]).slice(0, 5) : "";
+      svg += `<g><title>${rot(k)}${data ? ` (${data})` : ""}\n${nAnt}: ${rs(an[i])}\n${nAt}: ${rs(at[i])}${isFinite(v) ? `\nΔ ${pct(v)}` : ""}</title>`
+        + `<rect class="b-ant" x="${cx - bw - 3}" y="${base - h1}" width="${bw}" height="${Math.max(0, h1)}" rx="2"/>`
+        + `<rect class="${cls}" x="${cx + 3}" y="${base - h2}" width="${bw}" height="${Math.max(0, h2)}" rx="2"/>`
+        + (dois && an[i] ? `<text class="r-ant" x="${cx - bw / 2 - 3}" y="${base - h1 - 5}">${curto(an[i])}</text>` : "")
+        + ((dois || umSo) && at[i] ? `<text class="r-at" x="${dois ? cx + bw / 2 + 3 : cx}" y="${base - h2 - 5}">${curto(at[i])}</text>` : "")
+        + (ex.extra ? "" : `<text class="x2" x="${cx}" y="${base + 32}">${data}</text>`) + "</g>";
+    });
+    return svg + ex.svg + "</g></svg>";
   }
   function destaquesClientes(m) {
     if (m.id !== idResumo || !$("destAumentos")) return;
@@ -925,11 +933,12 @@
     const janela = meses.filter((m) => m <= M).slice(-14);
     const serieF = janela.map((m) => { const f = fatMes(m); return f.tem ? f.valor : null; });
     const serieA = janela.map((m) => { const a = arrMes(m); return a ? a.valor : null; });
-    $("fxaG1").innerHTML = svgBarras(janela.map(C.rotuloMes), [[serieF, "b-fat"], [serieA, "b-at"]], curto);
+    grafico("fxaG1", (W) => svgBarras(janela.map(C.rotuloMes), [[serieF, "b-fat"], [serieA, "b-at"]], curto, W));
     const varS = (s) => s.map((v, i) => (i && v != null && s[i - 1] ? v / s[i - 1] - 1 : null));
-    $("fxaG2").innerHTML = svgLinhas(janela.map(C.rotuloMes), [[varS(serieF), "l-fat"], [varS(serieA), "l-at"]], (v) => pct(v));
-    $("fxaG3").innerHTML = svgBarras(janela.map(C.rotuloMes), [[janela.map((m) => { const f = fatMes(m); return f.tem ? f.matriculas : null; }), "b-fat"],
-      [janela.map((m) => { const a = arrMes(m); return a ? a.clientes : null; }), "b-at"]], (v) => fmt(v / 1000, 1) + " mil");
+    grafico("fxaG2", (W) => svgLinhas(janela.map(C.rotuloMes), [[varS(serieF), "l-fat"], [varS(serieA), "l-at"]], (v) => pct(v), W));
+    const serieMat = [[janela.map((m) => { const f = fatMes(m); return f.tem ? f.matriculas : null; }), "b-fat"],
+      [janela.map((m) => { const a = arrMes(m); return a ? a.clientes : null; }), "b-at"]];
+    grafico("fxaG3", (W) => svgBarras(janela.map(C.rotuloMes), serieMat, (v) => fmt(v / 1000, 1) + " mil", W));
     // tabelas por cidade e por subcategoria (mês escolhido)
     const porLinha = (rotFat, rotArr) => {
       const L = new Map(), cel = (k) => { let o = L.get(k); if (!o) { o = { nome: k, fat: 0, arr: 0, mf: 0, mp: 0 }; L.set(k, o); } return o; };
@@ -1019,7 +1028,7 @@
     ].join("");
     // gráfico por referência de origem (da mais antiga para a mais nova; até 14 referências)
     const g = [...refsOrdem].reverse().slice(-14);
-    $("fxvG1").innerHTML = g.length ? svgBarras(g.map((o) => C.rotuloMes(o.ref)), [[g.map((o) => o.faturado), "b-fat"], [g.map((o) => o.pago), "b-at"]], curto) : '<p class="nota">Nenhum pagamento ligado a conta neste mês.</p>';
+    grafico("fxvG1", g.length && ((W) => svgBarras(g.map((o) => C.rotuloMes(o.ref)), [[g.map((o) => o.faturado), "b-fat"], [g.map((o) => o.pago), "b-at"]], curto, W)), '<p class="nota">Nenhum pagamento ligado a conta neste mês.</p>');
     // tabela por referência
     fxvLinhas.fxvRef = refsOrdem;
     const linRef = refsOrdem.map((o) => `<tr>${td(C.rotuloMes(o.ref), "rot")}${td(fmt(o.contas))}${td(fmt(o.matriculas))}${td(fmt(o.faturado))}${td(fmt(o.pago))}${tdNum(o.pago - o.faturado, fmt)}${td(pago ? pct(o.pago / pago) : "")}</tr>`);
@@ -1142,7 +1151,8 @@
     const n = Math.max(ultK + 1, ...media.map((v, k) => (v != null ? k + 1 : 0)));
     const cats = Array.from({ length: n }, (_, k) => rotOff(k, mz));
     $("cvNotaG").textContent = `${porValor ? "Valor recebido ÷ faturado" : "Contas pagas ÷ contas faturadas"}, acumulado do mês da referência em diante. A média usa só referências anteriores com o mês completo.`;
-    $("cvG1").innerHTML = n ? svgLinhas(cats, [[minha.slice(0, n).concat(Array(Math.max(0, n - minha.length)).fill(null)), "l-at"], [media.slice(0, n), "l-fat", true]], (v) => fmt(v * 100, 1) + "%") : "";
+    const serieCv = [[minha.slice(0, n).concat(Array(Math.max(0, n - minha.length)).fill(null)), "l-at"], [media.slice(0, n), "l-fat", true]];
+    grafico("cvG1", n && ((W) => svgLinhas(cats, serieCv, (v) => fmt(v * 100, 1) + "%", W)));
     // por cidade
     const cidades = [...new Set(cz_combos().filter(ok).map((c) => c.cidade))];
     cvCidLinhas = cidades.map((cid) => {
@@ -1430,12 +1440,12 @@
     const quedas = cmp.filter((x) => x.dv < 0).sort((a, c) => a.dv - c.dv).slice(0, 10), altas = cmp.filter((x) => x.dv > 0).sort((a, c) => c.dv - a.dv).slice(0, 10);
     $("dgNotaQ").textContent = `Até 10 localidades com a maior queda em R$ contra ${rotBase} (variação % ao lado).`;
     $("dgNotaA").textContent = `Até 10 localidades com o maior aumento em R$ contra ${rotBase}.`;
-    $("dgQuedas").innerHTML = quedas.length ? svgBarrasH(quedas.map((x) => [x.nome, x.dv, x.dp]), "b-queda") : '<p class="nota">Nenhuma queda.</p>';
-    $("dgAltas").innerHTML = altas.length ? svgBarrasH(altas.map((x) => [x.nome, x.dv, x.dp]), "b-alta") : '<p class="nota">Nenhum aumento.</p>';
+    grafico("dgQuedas", quedas.length && ((W) => svgBarrasH(quedas.map((x) => [x.nome, x.dv, x.dp]), "b-queda", W)), '<p class="nota">Nenhuma queda.</p>');
+    grafico("dgAltas", altas.length && ((W) => svgBarrasH(altas.map((x) => [x.nome, x.dv, x.dp]), "b-alta", W)), '<p class="nota">Nenhum aumento.</p>');
     const top = pa.itens.slice(0, 20), resto = pa.itens.slice(20);
     $("dgNotaP").textContent = pa.itens.length ? `${fmt(pa.n80)} de ${fmt(pa.itens.length)} localidades em queda somam 80% da queda total (${rs(pa.total)}).${resto.length ? ` As ${fmt(resto.length)} menores ficam em “demais”.` : ""}` : "";
     const itensP = resto.length ? [...top, { rot: "demais", v: resto.reduce((a, x) => a + x.v, 0), acum: 1 }] : top;
-    $("dgPareto").innerHTML = itensP.length ? svgPareto(itensP) : '<p class="nota">Nenhuma localidade em queda no período.</p>';
+    grafico("dgPareto", itensP.length && ((W) => svgPareto(itensP, W)), '<p class="nota">Nenhuma localidade em queda no período.</p>');
   }
   function desenhaTabelaDg(total, projT, orc) {
     const [col, dir] = dgOrdem.length && dgCab.some(([k]) => k === dgOrdem[0]) ? dgOrdem : ["dv", 1];
@@ -1465,29 +1475,30 @@
       ...dgLinhas.map((o) => dgCab.map(([k]) => (k === "nome" ? o.nome : pcts.has(k) ? n(o[k] == null ? null : o[k] * 100) : n(o[k]))).join(";"))];
     baixa("﻿" + linhas.join("\r\n"), `Diagnostico_${$("dgNivel").value}_${E.mes}.csv`);
   });
-  // barras horizontais: itens [rótulo, valor, variação %]
-  function svgBarrasH(itens, cls) {
-    const larg = 640, h = 26, esq = 210, dirW = 130, alt = itens.length * h + 8, max = Math.max(1, ...itens.map(([, v]) => Math.abs(v)));
-    let svg = `<svg viewBox="0 0 ${larg} ${alt}" class="barras-h">`;
+  // barras horizontais: itens [rótulo, valor, variação %]; a coluna dos nomes acompanha a largura do quadro
+  function svgBarrasH(itens, cls, W) {
+    const larg = Math.max(300, W), h = 26, esq = Math.round(Math.min(220, Math.max(110, larg * 0.36))), dirW = larg < 480 ? 92 : 128;
+    const alt = itens.length * h + 8, max = Math.max(1, ...itens.map(([, v]) => Math.abs(v))), cabe = Math.max(8, Math.floor((esq - 10) / 6.6));
+    let svg = `<svg width="${larg}" height="${alt}" viewBox="0 0 ${larg} ${alt}" class="barras-h">`;
     itens.forEach(([rot, v, p], i) => {
-      const y = i * h + 4, w = ((larg - esq - dirW) * Math.abs(v)) / max, nome = rot.length > 27 ? rot.slice(0, 26) + "…" : rot;
+      const y = i * h + 4, w = ((larg - esq - dirW) * Math.abs(v)) / max, nome = rot.length > cabe ? rot.slice(0, cabe - 1) + "…" : rot;
       svg += `<g><title>${esc(rot)}: ${rs(v)}${p == null ? "" : " (" + pct(p) + ")"}</title><text class="rot-h" x="${esq - 6}" y="${y + 16}">${esc(nome)}</text>`
         + `<rect class="${cls}" x="${esq}" y="${y + 3}" width="${Math.max(1, w)}" height="${h - 8}" rx="2"/>`
-        + `<text class="val-h" x="${esq + w + 6}" y="${y + 16}">${curto(v)}${p == null ? "" : " · " + pct(p)}</text></g>`;
+        + `<text class="val-h" x="${esq + w + 6}" y="${y + 16}">${curto(v)}${p == null || larg < 480 ? "" : " · " + pct(p)}</text></g>`;
     });
     return svg + "</svg>";
   }
   // Pareto: barras (queda) e linha do acumulado (0–100%), com a marca dos 80%
-  function svgPareto(itens) {
-    const larg = Math.max(720, itens.length * 56 + 80), alt = 330, topo = 26, base = 220, esq = 80, passo = (larg - esq) / itens.length, bw = Math.min(34, passo * 0.6);
+  function svgPareto(itens, W) {
+    const esq = 70, larg = Math.max(W, esq + itens.length * 40), alt = 330, topo = 26, base = 220, passo = (larg - esq) / itens.length, bw = Math.min(34, passo * 0.6);
     const max = Math.max(1, ...itens.map((x) => x.v)), y = (v) => base - ((base - topo) * v) / max, ya = (a) => base - (base - topo) * a;
-    let svg = `<svg viewBox="0 0 ${larg} ${alt}" class="pareto"><line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`
+    let svg = `<svg width="${larg}" height="${alt}" viewBox="0 0 ${larg} ${alt}" class="pareto"><line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`
       + `<line x1="0" y1="${ya(0.8)}" x2="${larg}" y2="${ya(0.8)}" class="ref80"/><text class="ref80t" x="${larg - 4}" y="${ya(0.8) - 4}">80%</text>`;
     const pts = [];
     itens.forEach((x, i) => {
       const cx = esq + passo * i + passo / 2, nome = x.rot.length > 22 ? x.rot.slice(0, 21) + "…" : x.rot;
       svg += `<g><title>${esc(x.rot)}: queda de ${rs(x.v)} · acumulado ${pct(x.acum)}</title><rect class="b-queda" x="${cx - bw / 2}" y="${y(x.v)}" width="${bw}" height="${base - y(x.v)}" rx="2"/>`
-        + `<text class="r-ant" x="${cx}" y="${y(x.v) - 4}">${curto(x.v)}</text></g>`
+        + (passo >= 44 ? `<text class="r-ant" x="${cx}" y="${y(x.v) - 4}">${curto(x.v)}</text>` : "") + "</g>"
         + `<text class="x-rot" transform="translate(${cx},${base + 12}) rotate(-35)">${esc(nome)}</text>`;
       pts.push(`${cx},${ya(x.acum)}`);
     });
@@ -1495,39 +1506,87 @@
     itens.forEach((x, i) => { const cx = esq + passo * i + passo / 2; svg += `<circle class="l-at" cx="${cx}" cy="${ya(x.acum)}" r="3.5"/>`; });
     return svg + "</svg>";
   }
-  // gráficos simples (SVG): barras agrupadas e linhas; null = sem dado (não desenha)
-  function svgBarras(cats, series, rotulo) {
-    const larg = Math.max(720, cats.length * 80), alt = 260, base = 214, topo = 30;
+  // ----- gráficos responsivos -----
+  // Cada gráfico é desenhado na largura real do quadro (1 unidade do SVG = 1 px, o texto não encolhe nem cresce) e
+  // redesenhado quando o quadro muda de largura (janela, celular, PDF). Abaixo da largura mínima por categoria, o quadro
+  // rola para o lado; rótulos de valor que não cabem saem (o valor fica no passar do mouse) e os do eixo inclinam.
+  const graficos = new Map();                          // id do quadro → { fn(largura) → svg, larg }
+  const obsGraficos = typeof ResizeObserver !== "undefined" ? new ResizeObserver((ents) => ents.forEach((e) => redesenhaGrafico(e.target.id))) : null;
+  const larguraDe = (el) => Math.max(260, Math.floor(el.clientWidth || (el.parentElement && el.parentElement.clientWidth) || 900));
+  function grafico(id, fn, vazio = "") {
+    const el = $(id);
+    if (!fn) { graficos.delete(id); el.innerHTML = vazio; return; }
+    const larg = larguraDe(el);
+    graficos.set(id, { fn, larg });
+    el.innerHTML = fn(larg);
+    if (obsGraficos && !el.dataset.observado) { obsGraficos.observe(el); el.dataset.observado = "1"; }
+  }
+  function redesenhaGrafico(id) {
+    const g = graficos.get(id), el = $(id);
+    if (!g || !el || !el.offsetParent) return;         // escondido: redesenha quando a aba for desenhada de novo
+    const larg = larguraDe(el);
+    if (Math.abs(larg - g.larg) < 6) return;
+    g.larg = larg;
+    el.innerHTML = g.fn(larg);
+  }
+  const larguraTexto = (t, px = 11.5) => String(t).length * px * 0.56;   // estimativa (fonte do painel)
+  // eixo das categorias: na horizontal se couber; senão, inclinado (devolve o espaço extra que precisa embaixo)
+  function eixoX(cats, x, passo, y) {
+    const maior = Math.max(0, ...cats.map((c) => larguraTexto(c)));
+    if (maior + 8 <= passo) return { svg: cats.map((c, i) => `<text class="x" x="${x(i)}" y="${y}">${c}</text>`).join(""), extra: 0, pad: 0 };
+    return { svg: cats.map((c, i) => `<text class="x-rot" transform="translate(${x(i) + 4},${y - 8}) rotate(-35)">${c}</text>`).join(""),
+      extra: Math.ceil(maior * 0.6), pad: Math.max(0, Math.ceil(maior * 0.82 - x(0))) };   // pad: o 1º rótulo inclinado não sai pela esquerda
+  }
+  // largura útil e eixo: a margem dos rótulos inclinados entra na largura do quadro (só passa dela se faltar espaço)
+  function ajustaEixo(cats, W, minL, y) {
+    const n = Math.max(1, cats.length), calc = (larg) => ({ larg, passo: larg / n, ex: eixoX(cats, (i) => (larg / n) * i + larg / n / 2, larg / n, y) });
+    let r = calc(Math.max(W, minL));
+    if (r.ex.pad && r.larg > minL) r = calc(Math.max(minL, r.larg - r.ex.pad - 2));
+    return r;
+  }
+  // abre o SVG com a margem esquerda do eixo (o conteúdo é deslocado e o SVG fica mais largo)
+  const abreSvg = (larg, alt, pad, extra = "") => `<svg width="${larg + pad}" height="${alt}" viewBox="0 0 ${larg + pad} ${alt}"${extra}><g transform="translate(${pad},0)">`;
+  // barras agrupadas; null = sem dado (não desenha)
+  function svgBarras(cats, series, rotulo, W) {
+    const n = Math.max(1, cats.length), minL = n * (12 * series.length + 20), base = 214, topo = 30;
     const max = Math.max(1, ...series.flatMap(([v]) => v.filter((x) => x != null)));
-    const passo = larg / Math.max(1, cats.length), bw = Math.min(30, (passo * 0.7) / series.length);
-    let svg = `<svg viewBox="0 0 ${larg} ${alt}"><line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`;
+    const { larg, passo, ex } = ajustaEixo(cats, W, minL, base + 18), bw = Math.min(30, (passo * 0.7) / series.length), cx = (i) => passo * i + passo / 2;
+    // rótulos de valor: todos se couberem lado a lado; só o da última série se couber um; senão nenhum
+    const lv = Math.max(0, ...series.flatMap(([v]) => v.filter((x) => x != null).map((x) => larguraTexto(rotulo(x), 10))));
+    const quais = passo >= series.length * (lv + 4) ? "todos" : passo >= lv + 2 ? "ultimo" : "nenhum";
+    const alt = 260 + ex.extra;
+    let svg = abreSvg(larg, alt, ex.pad) + `<line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`;
     cats.forEach((cat, i) => {
-      const cx = passo * i + passo / 2;
       series.forEach(([v, cls], j) => {
         if (v[i] == null) return;
-        const h = ((base - topo) * Math.max(0, v[i])) / max, x = cx + (j - series.length / 2) * (bw + 4) + 2;
+        const h = ((base - topo) * Math.max(0, v[i])) / max, x = cx(i) + (j - series.length / 2) * (bw + 4) + 2;
+        const mostra = quais === "todos" || (quais === "ultimo" && j === series.length - 1);
         svg += `<g><title>${cat}: ${rotulo(v[i])}</title><rect class="${cls}" x="${x}" y="${base - h}" width="${bw}" height="${h}" rx="2"/>`
-          + `<text class="r-${j ? "at" : "ant"}" x="${x + bw / 2}" y="${base - h - 4}">${rotulo(v[i])}</text></g>`;
+          + (mostra ? `<text class="r-${j ? "at" : "ant"}" x="${quais === "ultimo" ? cx(i) : x + bw / 2}" y="${base - h - 4}">${rotulo(v[i])}</text>` : "") + "</g>";
       });
-      svg += `<text class="x" x="${cx}" y="${base + 18}">${cat}</text>`;
     });
-    return svg + "</svg>";
+    return svg + ex.svg + "</g></svg>";
   }
-  function svgLinhas(cats, series, rotulo) {
-    const larg = Math.max(720, cats.length * 80), alt = 240, topo = 24, baixo = 200;
+  // linhas; abaixo (3º item da série): rótulos sob os pontos, para não sobrepor a outra série
+  function svgLinhas(cats, series, rotulo, W) {
+    const n = Math.max(1, cats.length), topo = 24, baixo = 200, { larg, passo, ex } = ajustaEixo(cats, W, n * 34, baixo + 26);
     const vals = series.flatMap(([v]) => v.filter((x) => x != null));
     const max = Math.max(0.01, ...vals), min = Math.min(-0.01, ...vals), y = (v) => topo + ((max - v) / (max - min)) * (baixo - topo);
-    const passo = larg / Math.max(1, cats.length), x = (i) => passo * i + passo / 2;
-    let svg = `<svg viewBox="0 0 ${larg} ${alt}"><line x1="0" y1="${y(0)}" x2="${larg}" y2="${y(0)}" class="eixo"/>`;
-    series.forEach(([v, cls, abaixo]) => {   // abaixo: rótulos sob os pontos (evita sobrepor a outra série)
+    const x = (i) => passo * i + passo / 2;
+    const lv = Math.max(0, ...vals.map((v) => larguraTexto(rotulo(v), 10))), comRotulo = passo >= lv + 6;
+    const alt = 240 + ex.extra;
+    let svg = abreSvg(larg, alt, ex.pad) + `<line x1="0" y1="${y(0)}" x2="${larg}" y2="${y(0)}" class="eixo"/>`;
+    series.forEach(([v, cls, abaixo]) => {
       const pts = v.map((p, i) => (p == null ? null : `${x(i)},${y(p)}`)).filter(Boolean);
       if (pts.length > 1) svg += `<polyline class="${cls}" points="${pts.join(" ")}"/>`;
-      v.forEach((p, i) => { if (p != null) svg += `<g><title>${cats[i]}: ${rotulo(p)}</title><circle class="${cls}" cx="${x(i)}" cy="${y(p)}" r="4"/><text class="r-at" x="${x(i)}" y="${abaixo ? y(p) + 20 : y(p) - 8}">${rotulo(p)}</text></g>`; });
+      v.forEach((p, i) => {
+        if (p == null) return;
+        svg += `<g><title>${cats[i]}: ${rotulo(p)}</title><circle class="${cls}" cx="${x(i)}" cy="${y(p)}" r="4"/>`
+          + (comRotulo ? `<text class="r-at" x="${x(i)}" y="${abaixo ? y(p) + 20 : y(p) - 8}">${rotulo(p)}</text>` : "") + "</g>";
+      });
     });
-    cats.forEach((c, i) => { svg += `<text class="x" x="${x(i)}" y="${baixo + 26}">${c}</text>`; });
-    return svg + "</svg>";
+    return svg + ex.svg + "</g></svg>";
   }
-
   // ----- Dados: os números por trás do que está na tela -----
   function desenhaDados() {
     const d = E.res.dados, mi = idxMes(E.mes), cal = C.calendario(E.mes), mk = marcas();
