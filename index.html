@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v31-20261027">
+<link rel="stylesheet" href="assets/painel.css?v=v32-20261027">
 </head>
 <body>
 
@@ -296,22 +296,22 @@
         <div class="base-acoes"><button type="button" class="btn" id="baseExtrair">3. Extrair base</button><span class="salvo" id="baseStatus"></span></div>
         <div id="baseResultado"></div>
       </div>
-      <div class="card"><h2>Base de cobrança</h2>
+      <div class="card"><h2>Base de oportunidades</h2>
         <p class="nota">Matrículas que <b>pagaram</b> num mês e <b>não pagaram</b> em outro (até o último crédito da pasta), uma linha por matrícula, com nome, cidade,
           subcategoria e o valor pago no primeiro mês. <b>Os filtros do cabeçalho valem aqui</b> (superintendência, cidade e subcategoria).</p>
-        <div class="base-acoes"><label class="opcao-base">Pagaram em <select id="cobA"></select></label><label class="opcao-base">e não pagaram em <select id="cobB"></select></label>
-          <button type="button" class="btn" id="cobGerar">Gerar base de cobrança</button><span class="salvo" id="cobStatus"></span></div>
-        <label class="base-opcao"><input type="checkbox" id="cobFat" class="opcao-fat" checked> <span class="rot-fat">Incluir dados do faturamento</span></label>
-        <label class="base-opcao"><input type="checkbox" id="cobRec" class="opcao-rec" checked> <span class="rot-rec">Incluir saldo das contas a receber</span></label>
-        <div id="cobResultado"></div>
+        <div class="base-acoes"><label class="opcao-base">Pagaram em <select id="opA"></select></label><label class="opcao-base">e não pagaram em <select id="opB"></select></label>
+          <button type="button" class="btn" id="opGerar">Gerar base de oportunidades</button><span class="salvo" id="opStatus"></span></div>
+        <label class="base-opcao"><input type="checkbox" id="opFat" class="opcao-fat" checked> <span class="rot-fat">Incluir dados do faturamento</span></label>
+        <label class="base-opcao"><input type="checkbox" id="opRec" class="opcao-rec" checked> <span class="rot-rec">Incluir dados das contas a receber</span></label>
+        <div id="opResultado"></div>
       </div>
       <div class="card"><h2>Comparativo por mês</h2>
-        <p class="nota">Uma linha por matrícula com as mesmas colunas da base de cobrança e <b>uma coluna de valor arrecadado para cada mês marcado</b>
+        <p class="nota">Uma linha por matrícula com as mesmas colunas da base de oportunidades e <b>uma coluna de valor arrecadado para cada mês marcado</b>
           (Val. Autenticado; em branco = sem pagamento no mês). Entram todas as matrículas com pagamento em pelo menos um dos meses.
           <b>Os filtros do cabeçalho valem aqui.</b></p>
         <div class="base-meses" id="cmpMeses"></div>
         <label class="base-opcao"><input type="checkbox" id="cmpFat" class="opcao-fat" checked> <span class="rot-fat">Incluir dados do faturamento</span></label>
-        <label class="base-opcao"><input type="checkbox" id="cmpRec" class="opcao-rec" checked> <span class="rot-rec">Incluir saldo das contas a receber</span></label>
+        <label class="base-opcao"><input type="checkbox" id="cmpRec" class="opcao-rec" checked> <span class="rot-rec">Incluir dados das contas a receber</span></label>
         <div class="base-acoes"><button type="button" class="btn sec" id="cmpNenhum">Desmarcar</button>
           <button type="button" class="btn" id="cmpGerar">Gerar comparativo</button><span class="salvo" id="cmpStatus"></span></div>
         <div id="cmpResultado"></div>
@@ -459,13 +459,17 @@
             escolhido. Com o mês em andamento, mostra quem costuma ter pago até este ponto do mês e ainda não pagou. Valor esperado = média dos 3 meses.</li>
           <li><b>Voltaram a pagar</b>: pagaram nos dias marcados do mês escolhido e não tiveram nenhum pagamento nos 3 meses anteriores (mês inteiro).</li>
           <li>Valores de arrecadação aqui: Val. Autenticado, sem o desconto comercial. Os filtros do cabeçalho valem (faturamento: só Interior).</li>
-          <li><b>Base de cobrança</b> (aba Base): matrículas com algum pagamento no 1º mês escolhido e nenhum pagamento no 2º (até o último crédito da pasta), nos filtros do cabeçalho; valor = Val. Autenticado pago no 1º mês.</li>
+          <li><b>Base de oportunidades</b> (aba Base): matrículas com algum pagamento no 1º mês escolhido e nenhum pagamento no 2º (até o último crédito da pasta), nos filtros do cabeçalho; valor = Val. Autenticado pago no 1º mês.</li>
           <li><b>Contas a receber</b>: a base informada (vencidas e a vencer, por matrícula e faixa de atraso) é a posição do dia em que foi extraída. Saldo vencido =
             todas as faixas menos “00 - A Vencer”. Ela confirma o faturado sem pagamento por matrícula (a base não traz o vencimento de cada conta).
             “Pagaram no mês” = devedoras com algum pagamento no mês escolhido; “sem pagamento há 3 meses” = nenhum pagamento no mês e nos 2 anteriores.
             Os filtros de superintendência e cidade usam a cidade da base; o de subcategoria, a da conta mais recente da fatura.</li>
-          <li><b>Dados do faturamento nas bases de cobrança e comparativo</b> (aba Base): Endereço da ligação, Grupo, Rota e Situação da ligação, do(s) arquivo(s) de
+          <li><b>Dados do faturamento nas bases de oportunidades e comparativo</b> (aba Base): Endereço da ligação, Grupo, Rota e Situação da ligação, do(s) arquivo(s) de
             faturamento da referência mais recente da pasta (1ª linha da matrícula no arquivo). Em branco = matrícula sem conta nessa referência (ex.: Leste).</li>
+          <li><b>Dados das contas a receber nas bases de oportunidades e comparativo</b> (no fim do arquivo): <b>Saldo total vencido</b> = soma das faixas vencidas da matrícula
+            (sem “00 - A Vencer”; 0,00 se ela só tiver saldo a vencer; em branco se não estiver na base); <b>SIT_LIG</b> = uma coluna só, no padrão
+            da base de contas a receber: a situação da base quando a matrícula está nela (igual ou diferente da do faturamento); fora dela, a do faturamento escrita no mesmo
+            padrão (ex.: “A-Ativa” → “Ativa”). Com essa opção marcada, a coluna Situação da ligação do faturamento sai, para não duplicar.</li>
           <li><b>Comparativo por mês</b> (aba Base): uma linha por matrícula com pagamento em algum dos meses marcados e uma coluna com o Val. Autenticado de cada mês (em branco = não pagou), nos filtros do cabeçalho.</li>
           <li><b>Buscar matrícula</b>: arrecadação de cada mês (com o desconto à parte) e cada conta da fatura com o valor pago e o mês do pagamento.</li>
         </ul></div>
@@ -484,9 +488,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v31-20261027"></script>
-<script src="assets/calculos.js?v=v31-20261027"></script>
-<script>const VERSAO_SITE = "v31-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v31-20261027"></script>
+<script src="assets/regras.js?v=v32-20261027"></script>
+<script src="assets/calculos.js?v=v32-20261027"></script>
+<script>const VERSAO_SITE = "v32-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v32-20261027"></script>
 </body>
 </html>

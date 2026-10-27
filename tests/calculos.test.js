@@ -481,3 +481,17 @@ test("contas a receber: saldo por matrícula e faixa, cruzado com a arrecadaçã
   assert.equal(r.lista[1].ultimo, d.meses.indexOf("2026-06"));
   assert.equal(C.analisaReceber(rec, d.analise, mi, (x) => x.cidade === "CORDEIRO", d.meses).tot.matriculas, 1);
 });
+
+test("base de oportunidades: colunas da base de contas a receber e situação da ligação num padrão só", () => {
+  assert.equal(C.situacaoPadrao("A-Ativa"), "Ativa");
+  assert.equal(C.situacaoPadrao("CP-CORTE PEDIDO"), "Corte Pedido");
+  assert.equal(C.situacaoPadrao("Cortada"), "Cortada");
+  const reg = (lig, faixa, contas, saldo, sitLig = "Cortada") => ({ lig, contas, saldo, faixa, sitLig, cidade: "RIO BONITO" });
+  const rec = C.montaReceber([reg(1, "00 - A Vencer", 1, 50), reg(1, "31 - 60 Dias", 2, 200), reg(1, "366 Dias >>", 3, 300), reg(2, "00 - A Vencer", 1, 80, "Ativa")]);
+  // na base: só o saldo vencido (sem o a vencer); a situação dela vale mesmo diferente da do faturamento
+  assert.deepEqual(C.colunasReceber(rec.get(1), "A-Ativa"), { saldo: 500, sit: "Cortada" });
+  assert.deepEqual(C.colunasReceber(rec.get(2), "A-Ativa"), { saldo: 0, sit: "Ativa" });            // só a vencer: vencido 0
+  // fora da base: a do faturamento, no padrão da base
+  assert.deepEqual(C.colunasReceber(undefined, "A-Ativa"), { saldo: null, sit: "Ativa" });
+  assert.deepEqual(C.colunasReceber(undefined, ""), { saldo: null, sit: "" });
+});

@@ -829,7 +829,7 @@
       deixaram, voltaram,
     };
   }
-  // Base de cobrança: matrículas (nas combinações marcadas) com pagamento no mês miA e nenhum pagamento no mês miB.
+  // Base de oportunidades: matrículas (nas combinações marcadas) com pagamento no mês miA e nenhum pagamento no mês miB.
   // Devolve, por matrícula, o valor pago em miA (Val. Autenticado), em quantos dias e a combinação do maior pagamento.
   function pagaramNaoPagaram(an, miA, miB, marcas) {
     const pagouB = new Set(), porLig = new Map();
@@ -893,6 +893,15 @@
       x.faixas.push({ txt: String(r.faixa || "").trim(), num: n, contas, saldo });
     }
     return mapa;
+  }
+  // Situação da ligação no padrão da base de contas a receber ("Ativa", "Cortada", "Corte Pedido"): tira o código do
+  // faturamento ("A-Ativa" → "Ativa", "CP-CORTE PEDIDO" → "Corte Pedido")
+  const situacaoPadrao = (t) => String(t || "").trim().replace(/^[A-Z0-9]{1,3}\s*-\s*/i, "").toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+  // Colunas da base de contas a receber nas bases da aba Base (uma linha por matrícula): saldo vencido (todas as faixas
+  // menos "00 - A Vencer") e SIT_LIG (da base; sem a matrícula nela, a do faturamento no mesmo padrão)
+  function colunasReceber(x, sitFaturamento) {
+    if (!x) return { saldo: null, sit: sitFaturamento ? situacaoPadrao(sitFaturamento) : "" };
+    return { saldo: x.vencido, sit: x.sitLig || situacaoPadrao(sitFaturamento) };
   }
   // Análise da base nos filtros (aceita(resumo) → bool), com a arrecadação: pagou no mês mi? último mês com pagamento?
   // meses: os meses da arrecadação (índice = mi); sem3 = devedoras sem pagamento no mês e nos 2 meses de calendário anteriores
@@ -1019,7 +1028,7 @@
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
-    clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes, faixaNum, montaReceber, analisaReceber,
+    clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes, faixaNum, montaReceber, analisaReceber, situacaoPadrao, colunasReceber,
     MASCARA_MES, comparaGrupos, mesesMesmosUteis, fracaoAteDias, pareto,
   };
 });

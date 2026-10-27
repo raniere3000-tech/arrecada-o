@@ -166,7 +166,7 @@
       else if (m.tipo === "analise") recebeAnalise(m);
       else if (m.tipo === "clientes") recebeClientes(m);
       else if (m.tipo === "matricula") recebeMatricula(m);
-      else if (m.tipo === "cobranca") recebeCobranca(m);
+      else if (m.tipo === "oportunidades") recebeOportunidades(m);
       else if (m.tipo === "comparativo") recebeComparativo(m);
       else if (m.tipo === "extracao-progresso") { if (m.id === idBase) $("baseStatus").textContent = `${m.texto}… ${m.pct}%`; }
       else if (m.tipo === "extracao") recebeBase(m);
@@ -807,13 +807,13 @@
     if (!mesesBase || mesesBase.some((m) => !meses.includes(m))) mesesBase = [E.mes];
     $("baseMeses").innerHTML = meses.map((m) => `<label><input type="checkbox" value="${m}"${mesesBase.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("");
     atualizaQtdBase();
-    // base de cobrança: padrão = pagaram no mês anterior ao do cabeçalho e não pagaram nele
-    if (!meses.includes(cobA)) cobA = meses.includes(C.mesAnterior(E.mes)) ? C.mesAnterior(E.mes) : meses[meses.length - 1];
-    if (!meses.includes(cobB)) cobB = E.mes;
+    // base de oportunidades: padrão = pagaram no mês anterior ao do cabeçalho e não pagaram nele
+    if (!meses.includes(opA)) opA = meses.includes(C.mesAnterior(E.mes)) ? C.mesAnterior(E.mes) : meses[meses.length - 1];
+    if (!meses.includes(opB)) opB = E.mes;
     const opcoes = (sel) => meses.map((m) => `<option value="${m}"${m === sel ? " selected" : ""}>${C.rotuloMes(m)}</option>`).join("");
-    $("cobA").innerHTML = opcoes(cobA); $("cobB").innerHTML = opcoes(cobB);
-    // comparativo por mês: padrão = os meses da base de cobrança
-    if (!mesesCmp || mesesCmp.some((m) => !meses.includes(m))) mesesCmp = [...new Set([cobA, cobB])];
+    $("opA").innerHTML = opcoes(opA); $("opB").innerHTML = opcoes(opB);
+    // comparativo por mês: padrão = os meses da base de oportunidades
+    if (!mesesCmp || mesesCmp.some((m) => !meses.includes(m))) mesesCmp = [...new Set([opA, opB])];
     const refs = E.res.cruzamento ? [...new Set(E.res.cruzamento.fat.map((f) => f.ref))].sort() : [];
     document.querySelectorAll(".opcao-fat").forEach((cx) => {
       cx.disabled = !refs.length;
@@ -827,8 +827,8 @@
       cx.disabled = !ri;
       if (!ri) cx.checked = false;
       cx.parentElement.querySelector(".rot-rec").textContent = ri
-        ? `Incluir saldo das contas a receber (saldo vencido, contas, a vencer, faixa mais antiga, situação e contato), base de ${dataBR(ri.data)}`
-        : "Incluir saldo das contas a receber: nenhuma base de contas a receber na pasta";
+        ? `Incluir dados das contas a receber (Saldo total vencido e SIT_LIG, no fim do arquivo), base de ${dataBR(ri.data)}`
+        : "Incluir dados das contas a receber: nenhuma base de contas a receber na pasta";
     });
     $("cmpMeses").innerHTML = meses.map((m) => `<label><input type="checkbox" value="${m}"${mesesCmp.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("");
   }
@@ -861,7 +861,7 @@
     $("cmpBaixar").onclick = () => baixa(m.blob, nome);
     if (m.linhas) baixa(m.blob, nome);
   }
-  let cobA = "", cobB = "", idCob = 0;
+  let opA = "", opB = "", idOp = 0;
   const modoBase = () => document.querySelector('input[name="baseModo"]:checked').value;
   document.querySelectorAll('input[name="baseModo"]').forEach((r) => r.addEventListener("change", () => {
     const todas = modoBase() === "todas";
@@ -922,50 +922,49 @@
       + `<div class="base-acoes">${m.saida.map((o, i) => `<button type="button" class="btn" data-base-arq="${i}">Baixar ${o.mes ? C.rotuloMes(o.mes) : "base"} (CSV, ${mb(o.blob)})</button>`).join("")}`
       + (m.naoEncontradas.length ? `<button type="button" class="btn sec" id="baseBaixarNao">Baixar matrículas sem pagamento (${fmt(m.naoEncontradas.length)})</button>` : "")
       + `</div>` + (grandes.length ? `<p class="nota">Atenção: ${grandes.map((o) => o.mes ? C.rotuloMes(o.mes) : "a base").join(", ")} passa${grandes.length > 1 ? "m" : ""} de 1 milhão de linhas, o limite de uma planilha do Excel`
-        + `${$("basePorMes").checked ? "" : " (marque Um arquivo por mês para dividir)"}. Para cruzar meses, use a Base de cobrança abaixo.</p>` : "")
+        + `${$("basePorMes").checked ? "" : " (marque Um arquivo por mês para dividir)"}. Para cruzar meses, use a Base de oportunidades abaixo.</p>` : "")
       + (m.naoEncontradas.length ? `<p class="nota">${fmt(m.naoEncontradas.length)} matrícula(s) da lista não têm pagamento nos meses marcados.</p>` : "");
     $("baseResultado").querySelectorAll("button[data-base-arq]").forEach((b) => { b.onclick = () => { const o = ultimaBase.saida[+b.dataset.baseArq]; baixa(o.blob, nomeArq(o)); }; });
     if ($("baseBaixarNao")) $("baseBaixarNao").onclick = () => baixa("\ufeffMatrícula\r\n" + ultimaBase.naoEncontradas.join("\r\n"), "Matriculas_sem_pagamento.csv");
     // baixa sozinho (um arquivo atrás do outro; o navegador pode pedir para permitir vários downloads)
     m.saida.forEach((o, i) => setTimeout(() => baixa(o.blob, nomeArq(o)), i * 800));
   }
-  // base de cobrança: pagaram no mês A e não pagaram no mês B (o worker cruza; os filtros do cabeçalho valem)
-  $("cobA").addEventListener("change", (e) => { cobA = e.target.value; });
-  $("cobB").addEventListener("change", (e) => { cobB = e.target.value; });
-  $("cobGerar").addEventListener("click", () => {
-    if (cobA === cobB) { toast("Escolha dois meses diferentes.", true); return; }
-    $("cobGerar").disabled = true;
-    $("cobStatus").textContent = "Cruzando os meses…";
-    $("cobResultado").innerHTML = "";
-    worker.postMessage({ tipo: "cobranca", id: ++idCob, miA: idxMes(cobA), miB: idxMes(cobB), marcas: marcas(), comFat: $("cobFat").checked, comRec: $("cobRec").checked });
+  // base de oportunidades: pagaram no mês A e não pagaram no mês B (o worker cruza; os filtros do cabeçalho valem)
+  $("opA").addEventListener("change", (e) => { opA = e.target.value; });
+  $("opB").addEventListener("change", (e) => { opB = e.target.value; });
+  $("opGerar").addEventListener("click", () => {
+    if (opA === opB) { toast("Escolha dois meses diferentes.", true); return; }
+    $("opGerar").disabled = true;
+    $("opStatus").textContent = "Cruzando os meses…";
+    $("opResultado").innerHTML = "";
+    worker.postMessage({ tipo: "oportunidades", id: ++idOp, miA: idxMes(opA), miB: idxMes(opB), marcas: marcas(), comFat: $("opFat").checked, comRec: $("opRec").checked });
   });
   const textoReceber = (n) => (n != null ? ` Contas a receber (base de ${dataBR(E.res.receberInfo.data)}): ${fmt(n)} matrículas com saldo na base.` : "");
   const textoCadastro = (c) => (c ? ` Dados do faturamento da referência ${C.rotuloMes(c.ref)} (${c.arquivos.join(", ")}): ${fmt(c.comCadastro)} matrículas encontradas.` : "");
-  function recebeCobranca(m) {
-    if (m.id !== idCob) return;
-    $("cobGerar").disabled = false;
-    if (m.erro) { $("cobStatus").textContent = "Erro: " + m.erro; return; }
-    const d = E.res.dados, l = m.lista, total = l.reduce((a, x) => a + x.valor, 0), A = C.rotuloMes(cobA), B = C.rotuloMes(cobB);
+  function recebeOportunidades(m) {
+    if (m.id !== idOp) return;
+    $("opGerar").disabled = false;
+    if (m.erro) { $("opStatus").textContent = "Erro: " + m.erro; return; }
+    const d = E.res.dados, l = m.lista, total = l.reduce((a, x) => a + x.valor, 0), A = C.rotuloMes(opA), B = C.rotuloMes(opB);
     const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
-    const ultB = d.ultimoCredito[cobB];
-    $("cobStatus").textContent = `${fmt(l.length)} matrículas pagaram em ${A} e não pagaram em ${B}${ultB && cobB === d.meses[d.meses.length - 1] ? ` (até ${dataBR(ultB)})` : ""} · ${filtro} · ${rs(total)} pagos em ${A}.${textoCadastro(m.cadastro)}${textoReceber(m.comReceber)}`;
+    const ultB = d.ultimoCredito[opB];
+    $("opStatus").textContent = `${fmt(l.length)} matrículas pagaram em ${A} e não pagaram em ${B}${ultB && opB === d.meses[d.meses.length - 1] ? ` (até ${dataBR(ultB)})` : ""} · ${filtro} · ${rs(total)} pagos em ${A}.${textoCadastro(m.cadastro)}${textoReceber(m.comReceber)}`;
     const porCid = new Map();
     for (const x of l) { const c = d.combos[x.c] || {}, o = porCid.get(c.cidade) || { n: 0, v: 0 }; o.n++; o.v += x.valor; porCid.set(c.cidade, o); }
     const cids = [...porCid.entries()].sort((a, b) => b[1].v - a[1].v);
     const n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ","), txt = (t) => (t == null ? "" : String(t)).replace(/;/g, ",");
-    const cad = !!m.cadastro, rec = m.comReceber != null, CAB_CAD = ["Endereço da ligação", "Grupo", "Rota", "Situação da ligação"];
-    const CAB_REC = ["Saldo vencido", "Contas vencidas", "A vencer", "Faixa mais antiga", "Situação (contas a receber)", "Contato"];
-    const csv = "\ufeff" + [["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...(cad ? CAB_CAD : []), ...(rec ? CAB_REC : []), `Valor pago em ${A}`, `Dias com pagamento em ${A}`].join(";"),
+    // colunas extras (o worker monta): faturamento depois da Subcategoria; contas a receber no fim
+    const csv = "\ufeff" + [["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...m.cabFat, `Valor pago em ${A}`, `Dias com pagamento em ${A}`, ...m.cabRec].join(";"),
       ...l.map((x) => {
         const c = d.combos[x.c] || {};
-        return [x.lig, txt(x.nome), nomeSup(c.sup), c.cidade, c.grupo, ...(cad ? (x.fat || ["", "", "", ""]).map(txt) : []), ...(rec ? x.rec.map(txt) : []), n(x.valor), x.dias].join(";");
+        return [x.lig, txt(x.nome), nomeSup(c.sup), c.cidade, c.grupo, ...x.fat.map(txt), n(x.valor), x.dias, ...x.rec.map(txt)].join(";");
       })].join("\r\n");
-    const nome = `Base_cobranca_pagou_${cobA}_nao_pagou_${cobB}.csv`;
-    $("cobResultado").innerHTML = (cids.length ? `<table class="compacta base-tabela"><thead><tr><th>Cidade</th><th>Matrículas</th><th>Pago em ${A} (R$)</th></tr></thead><tbody>`
+    const nome = `Base_oportunidades_pagou_${opA}_nao_pagou_${opB}.csv`;
+    $("opResultado").innerHTML = (cids.length ? `<table class="compacta base-tabela"><thead><tr><th>Cidade</th><th>Matrículas</th><th>Pago em ${A} (R$)</th></tr></thead><tbody>`
       + cids.map(([c, o]) => `<tr>${td(esc(c || "—"), "rot")}${td(fmt(o.n))}${td(fmt(o.v))}</tr>`).join("")
       + `<tr class="total">${td("Total", "rot")}${td(fmt(l.length))}${td(fmt(total))}</tr></tbody></table>` : "")
-      + `<div class="base-acoes">${l.length ? '<button type="button" class="btn" id="cobBaixar">Baixar base de cobrança (CSV)</button>' : ""}</div>`;
-    if ($("cobBaixar")) $("cobBaixar").onclick = () => baixa(csv, nome);
+      + `<div class="base-acoes">${l.length ? '<button type="button" class="btn" id="opBaixar">Baixar base de oportunidades (CSV)</button>' : ""}</div>`;
+    if ($("opBaixar")) $("opBaixar").onclick = () => baixa(csv, nome);
     if (l.length) baixa(csv, nome);
   }
   function baixa(texto, nome) {
