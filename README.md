@@ -6,11 +6,13 @@ para a internet: tudo é processado no navegador.
 
 ## Navegação
 
-- **Executivo** (acompanhamento e resultado): Resumo, Subcategoria, Perfil de pagamento, Cidades, Escada, Análise, Base e Dados.
+- **Executivo** (acompanhamento e resultado): Resumo, Subcategoria, Perfil de pagamento, Cidades, Escada e Base.
 - **Análises** (cruzamentos e oportunidades): Faturamento x Arrecadação; Fat. x Arrec. — mesmo vencimento; Conversão por
-  referência (matriz por coorte: quanto de cada referência foi recebido em M, M+1, ...); Diagnóstico por localidade
-  (comparação por cidade/subcategoria/superintendência nos mesmos dias úteis, quedas, altas, Pareto e projeção de fechamento pelos
-  meses com os mesmos dias úteis ou pela curva do orçado) e Clientes e oportunidades (próxima etapa, à espera da base de contas a receber). O PDF é só do Executivo.
+  referência (matriz por coorte: quanto de cada referência foi recebido em M, M+1, ...); Diagnóstico por localidade (comparação
+  por cidade/subcategoria/superintendência nos mesmos dias úteis, quedas, altas, Pareto e projeção de fechamento pelos meses com
+  os mesmos dias úteis ou pela curva do orçado); Ranking de clientes (top 100 maiores, aumentos e quedas por cliente) e Clientes
+  e oportunidades (próxima etapa, à espera da base de contas a receber). O PDF é só do Executivo.
+- **Dados**: área à parte com as regras e a conferência dos números.
 
 ## Como usar
 

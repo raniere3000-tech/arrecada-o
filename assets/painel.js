@@ -4,11 +4,11 @@
   const C = window.CALC, R = window.REGRAS;
   const $ = (id) => document.getElementById(id);
   const ARQ_AJUSTES = "ajustes_arrecadacao.json";
-  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", analise: "Análise", base: "Base", dados: "Dados",
+  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", analise: "Ranking de clientes", base: "Base", dados: "Dados",
     fxa: "Faturamento x Arrecadação", fxv: "Fat. x Arrec. — mesmo vencimento", conversao: "Conversão por referência", localidade: "Diagnóstico por localidade", clientes: "Clientes e oportunidades" };
-  const AREA_DA_ABA = { fxa: "analises", fxv: "analises", conversao: "analises", clientes: "analises", localidade: "analises" };   // as outras: Executivo
-  const ultimaDaArea = { executivo: "resumo", analises: "fxa" };
-  const ABAS_PDF = ["resumo", "subcategoria", "perfil", "cidades", "escada"];     // Análise e Dados não entram no PDF
+  const AREA_DA_ABA = { fxa: "analises", fxv: "analises", conversao: "analises", localidade: "analises", analise: "analises", clientes: "analises", dados: "dados" };   // as outras: Executivo
+  const ultimaDaArea = { executivo: "resumo", analises: "fxa", dados: "dados" };
+  const ABAS_PDF = ["resumo", "subcategoria", "perfil", "cidades", "escada"];     // Ranking de clientes e Dados não entram no PDF
   const NOME_SUP = { INTERIOR: "Interior", LESTE: "Leste", [R.SEM_SUP]: "Sem SUP" };
   const DIGITADO = "__digitado";                      // opção do seletor de orçado: o valor digitado no painel
   const E = {
@@ -367,7 +367,7 @@
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
-    $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && E.aba !== "localidade");   // o Diagnóstico usa os dias marcados
+    $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && E.aba !== "localidade" && E.aba !== "analise");   // Diagnóstico e Ranking usam os dias marcados
     ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
       conversao: desenhaConversao, clientes: () => {}, localidade: desenhaLocalidade })[E.aba]();
   }

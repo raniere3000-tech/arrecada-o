@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v24-20261027">
+<link rel="stylesheet" href="assets/painel.css?v=v25-20261027">
 </head>
 <body>
 
@@ -49,6 +49,7 @@
   <div class="areas" role="tablist" aria-label="Áreas do painel">
     <button type="button" class="active" data-area="executivo">Executivo <small>acompanhamento e resultado</small></button>
     <button type="button" data-area="analises">Análises <small>cruzamentos e oportunidades</small></button>
+    <button type="button" data-area="dados">Dados <small>regras e conferência dos números</small></button>
   </div>
   <div class="toggle" role="tablist" data-grupo="executivo">
     <button type="button" class="active" data-aba="resumo">Resumo</button>
@@ -56,15 +57,14 @@
     <button type="button" data-aba="perfil">Perfil de pagamento</button>
     <button type="button" data-aba="cidades">Cidades</button>
     <button type="button" data-aba="escada">Escada</button>
-    <button type="button" data-aba="analise">Análise</button>
     <button type="button" data-aba="base">Base</button>
-    <button type="button" data-aba="dados">Dados</button>
   </div>
   <div class="toggle" role="tablist" data-grupo="analises" hidden>
     <button type="button" data-aba="fxa">Faturamento x Arrecadação</button>
     <button type="button" data-aba="fxv">Fat. x Arrec. — mesmo vencimento</button>
     <button type="button" data-aba="conversao">Conversão por referência</button>
     <button type="button" data-aba="localidade">Diagnóstico por localidade</button>
+    <button type="button" data-aba="analise">Ranking de clientes</button>
     <button type="button" data-aba="clientes">Clientes e oportunidades</button>
   </div>
 </nav>
@@ -295,7 +295,7 @@
           <tr><td>Orçado dia</td><td>Orçado mensal × peso do dia útil na curva do mês (abaixo). Orçado nos dias = soma dos dias marcados.</td></tr>
           <tr><td>Dif e Δ (%)</td><td>Dif = arrecadação − orçado; Δ = arrecadação ÷ orçado − 1.</td></tr>
           <tr><td>Arrecadação por dia útil (gráfico)</td><td>Valor de cada dia útil marcado no mês e no mês anterior (mesma posição de dia útil), sem desconto. A barra do mês fica laranja quando cai mais de 40% e azul médio quando sobe mais de 40%.</td></tr>
-          <tr><td>Destaques do mês</td><td>Clientes, contas e ticket do mês contra o anterior (com desconto); os 3 dias úteis de maior crescimento e de maior queda da arrecadação e do ticket médio; e os 2 clientes de maior aumento e de maior queda (aba Análise), com o total de clientes que subiram ou caíram.</td></tr>
+          <tr><td>Destaques do mês</td><td>Clientes, contas e ticket do mês contra o anterior (com desconto); os 3 dias úteis de maior crescimento e de maior queda da arrecadação e do ticket médio; e os 2 clientes de maior aumento e de maior queda (aba Ranking de clientes, em Análises), com o total de clientes que subiram ou caíram.</td></tr>
           <tr><td>Resumo consolidado por dia útil</td><td>Por dia útil marcado: arrecadação do mês e do anterior, Δ (%), clientes pagantes, contas pagas e ticket médio. O total tem o desconto comercial.</td></tr>
         </tbody></table>
         <p class="nota">O gráfico, os destaques e o consolidado ficam no fim do Resumo e não entram no PDF.</p></div>
@@ -401,9 +401,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v24-20261027"></script>
-<script src="assets/calculos.js?v=v24-20261027"></script>
-<script>const VERSAO_SITE = "v24-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v24-20261027"></script>
+<script src="assets/regras.js?v=v25-20261027"></script>
+<script src="assets/calculos.js?v=v25-20261027"></script>
+<script>const VERSAO_SITE = "v25-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v25-20261027"></script>
 </body>
 </html>
