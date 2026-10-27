@@ -280,7 +280,18 @@ table.ordenavel th.desc::after { content: " ▼"; font-size: 9px; }
 .card h2 .opcoes-cv { margin-left: auto; display: inline-flex; gap: 14px; flex-wrap: wrap; }
 .card h2 .opcoes-cv .opcao { margin-left: 0; }
 .matriz-cv td.cel { color: #000; }
-#dgKpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#dgKpis, #clKpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 720px) { #clKpis { grid-template-columns: minmax(0, 1fr); } }
+.busca-mat { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.busca-mat input { font: inherit; padding: 7px 10px; border: 1px solid var(--linha); border-radius: 8px; min-width: 240px; }
+.hist-tit { margin: 6px 0 10px; }
+#clHist h3 { font-size: 13px; margin: 8px 0 6px; }
+#clHist .grade-2 { align-items: start; }
+table.clicavel a.lig { color: var(--azul); font-weight: 600; text-decoration: none; }
+table.clicavel a.lig:hover { text-decoration: underline; }
+tr.alerta td { background: #FFF4E5; }
+.lista-rolavel { max-height: 520px; overflow: auto; }
+.lista-rolavel thead th { position: sticky; top: 0; z-index: 1; }
 @media (max-width: 720px) { #dgKpis { grid-template-columns: minmax(0, 1fr); } }
 .legenda-g .cor-neg { background: #E8710A; }
 .grafico svg.pareto { max-height: 360px; }

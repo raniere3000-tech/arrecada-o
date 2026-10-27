@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v25-20261027">
+<link rel="stylesheet" href="assets/painel.css?v=v26-20261027">
 </head>
 <body>
 
@@ -212,8 +212,29 @@
       </div>
     </section>
     <section class="painel-aba" data-painel="clientes" hidden>
-      <div class="card"><h2>Clientes e oportunidades</h2><p>Etapa seguinte: matrículas faturadas sem pagamento, queda recente de arrecadação, clientes que deixaram de pagar e busca do histórico de uma matrícula.
-        Sem uma base de contas em aberto, “faturado sem pagamento” será mostrado como situação a investigar, não como dívida confirmada.</p></div>
+      <div class="card"><h2>Clientes e oportunidades
+          <span class="opcoes-cv"><label class="opcao">Contas vencidas há mais de <select id="clCorte"><option value="10">10 dias</option><option value="30" selected>30 dias</option>
+            <option value="60">60 dias</option><option value="90">90 dias</option><option value="180">180 dias</option></select></label></span></h2>
+        <p class="nota" id="clNota"></p><div id="clAviso"></div>
+        <p class="nota">Sem uma base de contas a receber, <b>faturado sem pagamento</b> é situação <b>a investigar</b>, não dívida confirmada: a conta pode ter sido
+          paga por acordo (parcela), com outro vencimento, ou antes do primeiro mês de arrecadação da pasta.</p></div>
+      <div class="card"><h2>Buscar matrícula</h2>
+        <div class="busca-mat"><input type="text" id="clBusca" placeholder="Nº da ligação (matrícula)" inputmode="numeric"><button type="button" class="btn" id="clBuscar">Buscar</button>
+          <span class="nota" id="clBuscaStatus"></span></div>
+        <div id="clHist"></div></div>
+      <div class="kpis" id="clKpis"></div>
+      <div class="grade-2">
+        <div class="card"><h2>Faturado sem pagamento por tempo de vencido</h2><div class="wrap"><table id="clFaixas" class="compacta"></table></div></div>
+        <div class="card"><h2>Faturado sem pagamento por referência</h2><div class="wrap"><table id="clRefs" class="compacta"></table></div></div>
+      </div>
+      <div class="card"><h2>Faturado sem pagamento por cidade <small>clique no título da coluna para ordenar</small></h2><div class="wrap"><table id="clCid" class="compacta ordenavel"></table></div></div>
+      <div class="card"><h2>Matrículas com faturado sem pagamento <small>as 100 de maior valor · clique na matrícula para ver o histórico</small>
+          <button type="button" class="btn sec csv" data-cl-csv="sem">Baixar CSV (todas)</button></h2>
+        <div class="wrap lista-rolavel"><table id="clSem" class="compacta clicavel"></table></div></div>
+      <div class="card"><h2>Deixaram de pagar <small>as 100 de maior valor</small><button type="button" class="btn sec csv" data-cl-csv="deixaram">Baixar CSV (todas)</button></h2>
+        <p class="nota" id="clNotaD"></p><div class="wrap lista-rolavel"><table id="clDeixaram" class="compacta clicavel"></table></div></div>
+      <div class="card"><h2>Voltaram a pagar <small>as 100 de maior valor</small><button type="button" class="btn sec csv" data-cl-csv="voltaram">Baixar CSV (todas)</button></h2>
+        <p class="nota" id="clNotaV"></p><div class="wrap lista-rolavel"><table id="clVoltaram" class="compacta clicavel"></table></div></div>
     </section>
     <section class="painel-aba" data-painel="localidade" hidden>
       <div class="card"><h2>Diagnóstico por localidade
@@ -387,6 +408,19 @@
           <li><b>Pareto</b>: localidades com queda, da maior para a menor, e quantas somam 80% da queda total.</li>
         </ul></div>
 
+      <div class="card"><h2>Clientes e oportunidades</h2>
+        <ul>
+          <li><b>Faturado sem pagamento (a investigar)</b>: contas da fatura (Interior) com valor positivo, vencidas há mais do prazo escolhido em relação ao último
+            crédito da pasta, sem nenhum pagamento com a mesma matrícula + vencimento em qualquer mês. Só contas com vencimento a partir do 1º mês de arrecadação da pasta
+            (antes disso o pagamento não aparece). Não é dívida confirmada: falta a base de contas a receber.</li>
+          <li><b>Sem nenhum pagamento na pasta</b>: matrículas da lista acima que não têm nenhum pagamento em nenhum mês da arrecadação lida.</li>
+          <li><b>Deixaram de pagar</b>: matrículas que pagaram nos dias úteis marcados de cada um dos 3 meses anteriores e não pagaram nos dias marcados do mês
+            escolhido. Com o mês em andamento, mostra quem costuma ter pago até este ponto do mês e ainda não pagou. Valor esperado = média dos 3 meses.</li>
+          <li><b>Voltaram a pagar</b>: pagaram nos dias marcados do mês escolhido e não tiveram nenhum pagamento nos 3 meses anteriores (mês inteiro).</li>
+          <li>Valores de arrecadação aqui: Val. Autenticado, sem o desconto comercial. Os filtros do cabeçalho valem (faturamento: só Interior).</li>
+          <li><b>Buscar matrícula</b>: arrecadação de cada mês (com o desconto à parte) e cada conta da fatura com o valor pago e o mês do pagamento.</li>
+        </ul></div>
+
       <div class="card"><h2>Diferenças em relação ao BI</h2>
         <ul>
           <li>Feriados: o painel considera São Jorge (23/04) e Consciência Negra (20/11) em todos os anos; o BI só os tinha em 2025.</li>
@@ -401,9 +435,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v25-20261027"></script>
-<script src="assets/calculos.js?v=v25-20261027"></script>
-<script>const VERSAO_SITE = "v25-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v25-20261027"></script>
+<script src="assets/regras.js?v=v26-20261027"></script>
+<script src="assets/calculos.js?v=v26-20261027"></script>
+<script>const VERSAO_SITE = "v26-20261027"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v26-20261027"></script>
 </body>
 </html>

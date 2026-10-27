@@ -9,14 +9,19 @@ const avisa = (tipo, dados, transferir = []) => self.postMessage({ tipo, ...dado
 // Base dos rankings por ligação (aba Análise): fica aqui no worker; a página pede só as listas prontas
 let analise = null;
 let fontes = null;                                     // arquivos CSV lidos (com os meses de cada um), para a aba Base
+let contasFat = null;                                  // contas da fatura com o total pago (aba Clientes e oportunidades)
 
 self.onmessage = async (ev) => {
   if (ev.data.tipo === "analise") { respondeAnalise(ev.data); return; }
+  if (ev.data.tipo === "clientes") { responde("clientes", ev.data.id, () => respondeClientes(ev.data)); return; }
+  if (ev.data.tipo === "matricula") { responde("matricula", ev.data.id, () => respondeMatricula(ev.data)); return; }
   if (ev.data.tipo === "extrair") { extraiBase(ev.data).catch((e) => avisa("extracao", { id: ev.data.id, erro: String((e && e.message) || e) })); return; }
   try {
     const r = await processa(ev.data.arquivos || []);
     analise = r.dados.analise;
     delete r.dados.analise;
+    contasFat = r.cruzamento ? r.cruzamento.base : null;
+    if (r.cruzamento) delete r.cruzamento.base;
     avisa("pronto", r, C.buffers(r.dados));          // as tabelas vão para a página sem cópia
   } catch (e) {
     avisa("erro", { mensagem: String((e && e.message) || e), detalhe: String((e && e.stack) || "") });
@@ -32,6 +37,23 @@ function respondeAnalise({ id, para, mi, miAnt, marcas, sel, n }) {
     x.lig = x.lig < 1e10 ? String(x.lig) : "(não numérica)";
   }
   avisa("analise", { id, para, ...r });
+}
+
+function responde(tipo, id, f) {
+  if (!analise) { avisa(tipo, { id, erro: "dados ainda não lidos" }); return; }
+  try { avisa(tipo, { id, ...f() }); } catch (e) { avisa(tipo, { id, erro: String((e && e.message) || e) }); }
+}
+const nomeDe = (l) => analise.nomes.get(l) || (contasFat && contasFat.nomes.get(l)) || "";
+const ligTxt = (l) => (l < 1e10 ? String(l) : "(não numérica)");
+// aba Clientes e oportunidades: listas completas (a página mostra as primeiras e baixa o resto em CSV)
+function respondeClientes(o) {
+  const r = C.clientesOportunidades(analise, contasFat, o);
+  for (const lista of [r.deixaram, r.voltaram, r.semPagamento.lista]) for (const x of lista) { x.nome = nomeDe(x.lig); x.lig = ligTxt(x.lig); }
+  return { ...r, temFatura: !!contasFat };
+}
+function respondeMatricula({ lig }) {
+  const l = C.chaveLig(lig);
+  return { lig: l < 1e10 ? String(l) : String(lig).trim(), ...C.historicoMatricula(analise, contasFat, l) };
 }
 
 const ext = (nome) => (nome.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();

@@ -164,6 +164,8 @@
       if (m.tipo === "progresso") progresso(m.pct, m.texto);
       else if (m.tipo === "pronto") { fim(); carrega(m, nomePasta); }
       else if (m.tipo === "analise") recebeAnalise(m);
+      else if (m.tipo === "clientes") recebeClientes(m);
+      else if (m.tipo === "matricula") recebeMatricula(m);
       else if (m.tipo === "extracao-progresso") { if (m.id === idBase) $("baseStatus").textContent = `${m.texto}… ${m.pct}%`; }
       else if (m.tipo === "extracao") recebeBase(m);
       else if (m.tipo === "erro") { fim(); setFonte("Erro na leitura: " + esc(m.mensagem)); console.error(m.detalhe); }
@@ -367,9 +369,9 @@
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
-    $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && E.aba !== "localidade" && E.aba !== "analise");   // Diagnóstico e Ranking usam os dias marcados
+    $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && !["localidade", "analise", "clientes"].includes(E.aba));   // Diagnóstico, Ranking e Clientes usam os dias marcados
     ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
-      conversao: desenhaConversao, clientes: () => {}, localidade: desenhaLocalidade })[E.aba]();
+      conversao: desenhaConversao, clientes: desenhaClientes, localidade: desenhaLocalidade })[E.aba]();
   }
 
   // "1 a 12", "1, 5 e 10", "0 (fins de semana e feriados) e 1 a 3"
@@ -1196,6 +1198,161 @@
       ...cvCidLinhas.map((o) => [o.nome, o.contas, nCsv(o.faturado), p(o.m0), p(o.m1), p(o.m2), nCsv(o.recebido), p(o.conv), p(o.pagas), nCsv(o.sem)].join(";"))];
     baixa("﻿" + linhas.join("\r\n"), `Conversao_cidades_ref_${cvRefEscolhida}.csv`);
   });
+  // ----- Clientes e oportunidades (as listas são montadas no worker) -----
+  let idCl = 0, chaveCl = "", clRes = null, idMat = 0, clOrdem = ["valor", -1];
+  const numData = (n) => `${String(n % 100).padStart(2, "0")}/${String(Math.floor(n / 100) % 100).padStart(2, "0")}/${Math.floor(n / 10000)}`;
+  const refRot = (n) => C.rotuloMes(`${Math.floor(n / 100)}-${String(n % 100).padStart(2, "0")}`);
+  const isoNum = (iso) => +iso.replace(/-/g, "");
+  function desenhaClientes() {
+    const d = E.res.dados, cz = E.res.cruzamento && E.res.cruzamento.fat.length ? E.res.cruzamento : null, mi = idxMes(E.mes);
+    const ultimoMes = d.meses[d.meses.length - 1], hojeIso = d.ultimoCredito[ultimoMes], dias = +$("clCorte").value;
+    const corteD = new Date(hojeIso + "T12:00:00Z");
+    corteD.setUTCDate(corteD.getUTCDate() - dias);
+    const corteIso = corteD.toISOString().slice(0, 10), filtroG = E.grupo ? grupoCruz(E.grupo) : "";
+    const okFat = (c) => (!E.sup || E.sup === "INTERIOR") && (!E.cidade || c.cidade === E.cidade) && (!filtroG || c.grupo === filtroG);
+    $("clNota").textContent = `${[nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ")} · faturado sem pagamento: contas vencidas até ${dataBR(corteIso)}`
+      + ` (último crédito da pasta: ${dataBR(hojeIso)}) · deixaram/voltaram: ${C.rotuloMes(E.mes)}, dias úteis ${rotuloSel(E.sel)}, contra os 3 meses anteriores.`;
+    const avisos = [];
+    if (!cz) avisos.push("Sem faturamento aproveitado na pasta: só as listas de deixaram e voltaram a pagar e a arrecadação da matrícula.");
+    else if (E.sup && E.sup !== "INTERIOR") avisos.push(`O faturamento é só do Interior: com Superintendência = ${nomeSup(E.sup)}, o faturado sem pagamento fica vazio.`);
+    $("clAviso").innerHTML = avisos.map((a) => `<p class="aviso-pdf">${esc(a)}</p>`).join("");
+    const chave = [E.mes, E.sel, E.sup, E.cidade, E.grupo, dias].join("|");
+    if (chave === chaveCl && clRes) { desenhaListasCl(); return; }
+    chaveCl = chave; clRes = null;
+    $("clKpis").innerHTML = '<p class="nota">Calculando…</p>';
+    ["clFaixas", "clRefs", "clCid", "clSem", "clDeixaram", "clVoltaram"].forEach((id) => { $(id).innerHTML = ""; });
+    worker.postMessage({ tipo: "clientes", id: ++idCl, mi, marcas: marcas(), sel: E.sel, aceitaFat: cz ? cz.combos.map((c) => (okFat(c) ? 1 : 0)) : [],
+      hoje: isoNum(hojeIso), corte: isoNum(corteIso), inicio: isoNum(d.meses[0] + "-01") });
+  }
+  function recebeClientes(m) {
+    if (m.id !== idCl) return;
+    if (m.erro) { $("clKpis").innerHTML = `<p class="nota">Não foi possível montar as listas: ${esc(m.erro)}</p>`; return; }
+    clRes = m;
+    if (E.aba === "clientes") desenhaListasCl();
+  }
+  const comboArr = (c) => E.res.dados.combos[c] || { cidade: "", grupo: "" };
+  const comboFat = (c) => (E.res.cruzamento && E.res.cruzamento.combos[c]) || { cidade: "", grupo: "" };
+  const tdLig = (l) => `<td class="rot"><a href="#" class="lig" data-lig="${esc(l)}">${esc(l)}</a></td>`;
+  function desenhaListasCl() {
+    const r = clRes, sp = r.semPagamento, d = E.res.dados;
+    const somaD = r.deixaram.reduce((a, x) => a + x.media, 0), somaV = r.voltaram.reduce((a, x) => a + x.valor, 0);
+    const porCid = new Map();
+    for (const pc of sp.porCombo) {
+      const c = comboFat(pc.c).cidade, o = porCid.get(c) || { nome: c, matriculas: 0, contas: 0, valor: 0 };
+      o.matriculas += pc.matriculas; o.contas += pc.contas; o.valor += pc.valor; porCid.set(c, o);
+    }
+    const cids = [...porCid.values()].sort((a, b) => b.valor - a.valor);
+    const card = (t, v, sub) => `<div class="kpi"><span>${t}</span><b>${v}</b><small>${sub}</small></div>`;
+    $("clKpis").innerHTML = [
+      card("Faturado sem pagamento (a investigar)", r.temFatura ? milhoes(sp.valor) : "—", r.temFatura ? `${fmt(sp.contas)} contas · ${fmt(sp.matriculas)} matrículas` : "sem faturamento na pasta"),
+      card("Sem nenhum pagamento na pasta", r.temFatura ? fmt(sp.semNenhum) : "—", r.temFatura ? `matrículas · ${rs(sp.valorSemNenhum)} faturados sem pagamento` : "—"),
+      card("Pagam, mas têm conta sem pagamento", r.temFatura ? fmt(sp.matriculas - sp.semNenhum) : "—", r.temFatura ? `matrículas · ${rs(sp.valor - sp.valorSemNenhum)} · verificar vencimento ou acordo` : "—"),
+      card("Deixaram de pagar", r.temHist ? fmt(r.deixaram.length) : "—", r.temHist ? `matrículas · ${rs(somaD)} por mês, em média, nos dias marcados` : "faltam os 3 meses anteriores na pasta"),
+      card("Voltaram a pagar", r.temHist ? fmt(r.voltaram.length) : "—", r.temHist ? `matrículas · ${rs(somaV)} no mês` : "faltam os 3 meses anteriores na pasta"),
+      card("Maior faturado sem pagamento", cids.length ? esc(cids[0].nome) : "—", cids.length ? `${rs(cids[0].valor)} · ${pct(cids[0].valor / sp.valor)} do total` : "—"),
+    ].join("");
+    // faixas, referências e cidades
+    const linTotal = `<tr class="total">${td("Total", "rot")}${td(fmt(sp.contas))}${td(fmt(sp.valor))}${td(sp.valor ? "100,00%" : "")}</tr>`;
+    tabela("clFaixas", ["Vencida há", "Contas", "Valor (R$)", "% do valor"],
+      sp.faixas.map((f) => `<tr>${td(f.rot, "rot")}${td(fmt(f.contas))}${td(fmt(f.valor))}${td(sp.valor ? pct(f.valor / sp.valor) : "")}</tr>`).concat(linTotal));
+    tabela("clRefs", ["Referência", "Contas", "Valor (R$)", "% do valor"],
+      sp.porRef.map((f) => `<tr>${td(refRot(f.ref), "rot")}${td(fmt(f.contas))}${td(fmt(f.valor))}${td(sp.valor ? pct(f.valor / sp.valor) : "")}</tr>`).concat(linTotal));
+    const [col, dir] = clOrdem, L = [...cids].sort((a, b) => (col === "nome" ? a.nome.localeCompare(b.nome, "pt-BR") : a[col] - b[col]) * dir);
+    const cab = [["nome", "Cidade"], ["matriculas", "Matrículas"], ["contas", "Contas"], ["valor", "Valor (R$)"]];
+    $("clCid").innerHTML = `<thead><tr>${cab.map(([k, t]) => `<th data-col="${k}" class="${k === col ? (dir > 0 ? "asc" : "desc") : ""}">${t}</th>`).join("")}<th>% do valor</th></tr></thead><tbody>`
+      + L.map((o) => `<tr>${td(esc(o.nome), "rot")}${td(fmt(o.matriculas))}${td(fmt(o.contas))}${td(fmt(o.valor))}${td(sp.valor ? pct(o.valor / sp.valor) : "")}</tr>`).join("")
+      + `<tr class="total">${td("Total", "rot")}${td(fmt(sp.matriculas))}${td(fmt(sp.contas))}${td(fmt(sp.valor))}${td(sp.valor ? "100,00%" : "")}</tr></tbody>`;
+    // listas
+    const ult = (x) => (x.ultimo >= 0 ? C.rotuloMes(d.meses[x.ultimo]) : "nenhum na pasta");
+    tabela("clSem", ["Matrícula", "Nome", "Cidade", "Subcategoria", "Contas", "Valor (R$)", "Ref. mais antiga", "Venc. mais antigo", "Último pagamento"],
+      sp.lista.slice(0, 100).map((x) => {
+        const c = comboFat(x.c);
+        return `<tr>${tdLig(x.lig)}${td(esc(x.nome), "rot")}${td(esc(c.cidade), "rot")}${td(esc(c.grupo), "rot")}${td(fmt(x.contas))}${td(fmt(x.valor, 2))}${td(refRot(x.refMin))}${td(numData(x.vencMin))}${td(ult(x))}</tr>`;
+      }));
+    const m3 = [3, 2, 1].map((n) => C.rotuloMes(C.mesAnterior(E.mes, n)));
+    $("clNotaD").textContent = r.temHist
+      ? `${fmt(r.deixaram.length)} matrículas pagaram nos dias úteis ${rotuloSel(E.sel)} de ${m3.join(", ")} e ainda não pagaram nesses dias em ${C.rotuloMes(E.mes)}.`
+      : "Faltam na pasta os 3 meses anteriores ao mês escolhido.";
+    tabela("clDeixaram", ["Matrícula", "Nome", "Cidade", "Subcategoria", ...m3.map((m) => m + " (R$)"), "Média (R$)"],
+      r.deixaram.slice(0, 100).map((x) => {
+        const c = comboArr(x.c);
+        return `<tr>${tdLig(x.lig)}${td(esc(x.nome), "rot")}${td(esc(c.cidade), "rot")}${td(esc(c.grupo), "rot")}${td(fmt(x.m3, 2))}${td(fmt(x.m2, 2))}${td(fmt(x.m1, 2))}${td(fmt(x.media, 2))}</tr>`;
+      }));
+    $("clNotaV").textContent = r.temHist
+      ? `${fmt(r.voltaram.length)} matrículas pagaram nos dias úteis ${rotuloSel(E.sel)} de ${C.rotuloMes(E.mes)} sem nenhum pagamento em ${m3.join(", ")}.`
+      : "Faltam na pasta os 3 meses anteriores ao mês escolhido.";
+    tabela("clVoltaram", ["Matrícula", "Nome", "Cidade", "Subcategoria", `${C.rotuloMes(E.mes)} (R$)`],
+      r.voltaram.slice(0, 100).map((x) => {
+        const c = comboArr(x.c);
+        return `<tr>${tdLig(x.lig)}${td(esc(x.nome), "rot")}${td(esc(c.cidade), "rot")}${td(esc(c.grupo), "rot")}${td(fmt(x.valor, 2))}</tr>`;
+      }));
+  }
+  $("clCorte").addEventListener("change", () => desenha());
+  $("clCid").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-col]");
+    if (!th) return;
+    clOrdem = [th.dataset.col, th.dataset.col === clOrdem[0] ? -clOrdem[1] : th.dataset.col === "nome" ? 1 : -1];
+    desenhaListasCl();
+  });
+  ["clSem", "clDeixaram", "clVoltaram"].forEach((id) => $(id).addEventListener("click", (e) => {
+    const a = e.target.closest("a.lig");
+    if (!a) return;
+    e.preventDefault();
+    $("clBusca").value = a.dataset.lig;
+    buscaMatricula();
+    $("clBusca").scrollIntoView({ behavior: "smooth", block: "center" });
+  }));
+  document.querySelectorAll("button[data-cl-csv]").forEach((b) => b.addEventListener("click", () => {
+    if (!clRes) return;
+    const tipo = b.dataset.clCsv, n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ","), d = E.res.dados;
+    const m3 = [3, 2, 1].map((k) => C.rotuloMes(C.mesAnterior(E.mes, k)));
+    const txt = (t) => String(t).replace(/;/g, ",");
+    let linhas;
+    if (tipo === "sem") linhas = [["Matrícula", "Nome", "Cidade", "Subcategoria", "Contas", "Valor", "Ref. mais antiga", "Venc. mais antigo", "Último pagamento"].join(";"),
+      ...clRes.semPagamento.lista.map((x) => {
+        const c = comboFat(x.c);
+        return [x.lig, txt(x.nome), c.cidade, c.grupo, x.contas, n(x.valor), refRot(x.refMin), numData(x.vencMin), x.ultimo >= 0 ? C.rotuloMes(d.meses[x.ultimo]) : "nenhum na pasta"].join(";");
+      })];
+    else if (tipo === "deixaram") linhas = [["Matrícula", "Nome", "Cidade", "Subcategoria", ...m3, "Média"].join(";"),
+      ...clRes.deixaram.map((x) => { const c = comboArr(x.c); return [x.lig, txt(x.nome), c.cidade, c.grupo, n(x.m3), n(x.m2), n(x.m1), n(x.media)].join(";"); })];
+    else linhas = [["Matrícula", "Nome", "Cidade", "Subcategoria", C.rotuloMes(E.mes)].join(";"),
+      ...clRes.voltaram.map((x) => { const c = comboArr(x.c); return [x.lig, txt(x.nome), c.cidade, c.grupo, n(x.valor)].join(";"); })];
+    baixa("﻿" + linhas.join("\r\n"), `Clientes_${tipo}_${E.mes}.csv`);
+  }));
+  // histórico de uma matrícula
+  function buscaMatricula() {
+    const l = $("clBusca").value.trim();
+    if (!l) return;
+    $("clBuscaStatus").textContent = "Buscando…";
+    worker.postMessage({ tipo: "matricula", id: ++idMat, lig: l });
+  }
+  $("clBuscar").addEventListener("click", buscaMatricula);
+  $("clBusca").addEventListener("keydown", (e) => { if (e.key === "Enter") buscaMatricula(); });
+  const TIPO_PAG = { 1: "nota fiscal", 2: "fatura avulsa", 3: "parcela", 0: "outro" };
+  function recebeMatricula(m) {
+    if (m.id !== idMat) return;
+    if (m.erro) { $("clBuscaStatus").textContent = "Erro: " + m.erro; return; }
+    const d = E.res.dados, nada = !m.meses.length && !m.faturas.length && !m.semConta.length;
+    $("clBuscaStatus").textContent = nada ? `Matrícula ${m.lig} não encontrada na arrecadação nem no faturamento da pasta.` : "";
+    if (nada) { $("clHist").innerHTML = ""; return; }
+    const loc = m.meses.length ? comboArr(m.meses[m.meses.length - 1].c) : comboFat(m.faturas[m.faturas.length - 1].c);
+    const totArr = m.meses.reduce((a, x) => a + x.valor, 0), totDesc = m.meses.reduce((a, x) => a + x.desconto, 0);
+    const linMes = m.meses.map((x) => `<tr>${td(C.rotuloMes(d.meses[x.mi]), "rot")}${td(fmt(x.valor, 2))}${td(x.desconto ? fmt(-x.desconto, 2) : "")}${td(fmt(x.valor - x.desconto, 2))}${td(fmt(x.dias))}</tr>`)
+      .concat(`<tr class="total">${td("Total", "rot")}${td(fmt(totArr, 2))}${td(totDesc ? fmt(-totDesc, 2) : "")}${td(fmt(totArr - totDesc, 2))}${td("")}</tr>`);
+    const sit = (f) => (f.valor <= 0 ? "crédito" : !f.pagamentos.length ? "sem pagamento" : f.pago < f.valor - 0.5 ? "paga em parte" : f.pago > f.valor + 0.5 ? "paga acima (juros/multa?)" : "paga");
+    const linFat = m.faturas.map((f) => `<tr class="${f.valor > 0 && !f.pagamentos.length ? "alerta" : ""}">${td(refRot(f.ref), "rot")}${td(numData(f.venc))}${td(fmt(f.valor, 2))}`
+      + `${td(f.pagamentos.length ? fmt(f.pago, 2) : "")}${td([...new Set(f.pagamentos.map((p) => C.rotuloMes(d.meses[p.mi])))].join(", "), "rot")}${td(sit(f), "rot")}</tr>`);
+    const linSem = m.semConta.map((p) => `<tr>${td(C.rotuloMes(d.meses[p.mi]), "rot")}${td(numData(p.venc))}${td(TIPO_PAG[p.tipo] || "outro", "rot")}${td(fmt(p.v, 2))}</tr>`);
+    const tab = (cab, linhas) => `<div class="wrap"><table class="compacta"><thead><tr>${cab.map((c) => `<th>${c}</th>`).join("")}</tr></thead><tbody>${linhas.join("")}</tbody></table></div>`;
+    $("clHist").innerHTML = `<p class="hist-tit"><b>${esc(m.lig)}</b>${m.nome ? " — " + esc(m.nome) : ""} · ${esc(loc.cidade)} · ${esc(loc.grupo)}</p><div class="grade-2">`
+      + `<div><h3>Arrecadação por mês (crédito)</h3>${m.meses.length ? tab(["Mês", "Val. Autenticado (R$)", "Desconto (R$)", "Arrecadação (R$)", "Dias com pagamento"], linMes)
+        : '<p class="nota">Nenhum pagamento na arrecadação da pasta.</p>'}</div>`
+      + `<div><h3>Contas da fatura (Interior)</h3>${m.faturas.length ? tab(["Referência", "Vencimento", "Faturado (R$)", "Pago (R$)", "Pago em", "Situação"], linFat)
+        : '<p class="nota">Nenhuma conta nos arquivos de faturamento da pasta.</p>'}`
+      + (linSem.length ? `<h3>Pagamentos sem conta na fatura da pasta</h3>${tab(["Mês do crédito", "Vencimento", "Tipo", "Valor (R$)"], linSem)}` : "")
+      + "</div></div>";
+  }
+
   // ----- Diagnóstico por localidade -----
   let dgOrdem = ["dv", 1], dgLinhas = [], dgCab = null;
   const NIVEIS_DG = { cidade: ["Cidade", (c) => c.cidade], grupo: ["Subcategoria", (c) => c.grupo], sup: ["Superintendência", (c) => nomeSup(c.sup)],

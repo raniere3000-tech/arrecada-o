@@ -378,3 +378,48 @@ test("diagnóstico: comparação nos mesmos dias, fração do mês pelos meses c
   perto(p.total, 100);
   assert.equal(C.pareto([]).n80, 0);
 });
+
+test("clientes e oportunidades: deixaram de pagar, voltaram a pagar, faturado sem pagamento e histórico", () => {
+  const a = new C.Agregador();
+  // matrícula 1: paga no dia útil 1 de jul, ago e set e não paga em out; 2: só paga em out; 4: paga todo mês
+  for (const d of ["01/07/2026", "03/08/2026", "01/09/2026"]) { a.adiciona(linha(1, d, "100,00")); a.adiciona(linha(4, d, "30,00")); }
+  a.adiciona(linha(4, "01/10/2026", "30,00"));
+  a.adiciona(linha(2, "01/10/2026", "70,00"));
+  const f = new C.LeituraFaturamento();
+  f.adiciona(fat(1, "10/09/2026", "100,00"));                       // paga em set (vencimento 10/09)
+  f.adiciona(fat(3, "05/08/2026", "50,00", { ref: "ago/26" }));      // nunca paga, sem pagamento nenhum na pasta
+  f.adiciona(fat(3, "05/09/2026", "60,00"));                         // idem
+  f.adiciona(fat(4, "20/09/2026", "-5,00"));                         // crédito: não entra
+  const d = a.resultado(new Map());
+  const cz = C.cruzaFaturamento([f.exporta()], d.analise.pagamentos, d.meses);
+  assert.equal(cz.base.lig.length, 4);
+  assert.equal(cz.base.nomes.get(3), "FULANO");
+  const mi = d.meses.indexOf("2026-10"), tudo = C.marcaCombos(d, {}), aceita = cz.combos.map(() => 1);
+  const o = { mi, marcas: tudo, sel: 1 << 1, aceitaFat: aceita, hoje: 20261020, corte: 20260920, inicio: 20260701 };
+  const r = C.clientesOportunidades(d.analise, cz.base, o);
+  assert.equal(r.temHist, true);
+  assert.deepEqual(r.deixaram.map((x) => x.lig), [1]);
+  perto(r.deixaram[0].media, 100);
+  assert.deepEqual(r.voltaram.map((x) => x.lig), [2]);
+  perto(r.voltaram[0].valor, 70);
+  const sp = r.semPagamento;
+  assert.equal(sp.matriculas, 1); assert.equal(sp.contas, 2); perto(sp.valor, 110);
+  assert.equal(sp.semNenhum, 1);
+  assert.equal(sp.lista[0].refMin, 202608); assert.equal(sp.lista[0].vencMin, 20260805);
+  assert.deepEqual(sp.faixas.map((x) => x.contas), [0, 2, 0, 0]);   // 45 e 76 dias de vencido em 20/10
+  assert.deepEqual(sp.porRef.map((x) => x.ref), [202608, 202609]);
+  // corte mais cedo: a conta de 05/09 ainda não entra
+  assert.equal(C.clientesOportunidades(d.analise, cz.base, { ...o, corte: 20260901 }).semPagamento.contas, 1);
+  // sem os 3 meses anteriores na pasta: não calcula deixaram/voltaram
+  assert.equal(C.clientesOportunidades(d.analise, cz.base, { ...o, mi: d.meses.indexOf("2026-09") }).temHist, false);
+  assert.equal(C.diasEntre(20260805, 20261020), 76);
+  // histórico da matrícula 1: 3 meses de pagamento e a conta de set paga em set
+  const h = C.historicoMatricula(d.analise, cz.base, 1);
+  assert.equal(h.meses.length, 3);
+  perto(h.meses[0].valor, 100); assert.equal(h.meses[0].dias, 1);
+  assert.equal(h.faturas.length, 1);
+  perto(h.faturas[0].pago, 100);
+  assert.deepEqual(h.faturas[0].pagamentos.map((x) => d.meses[x.mi]), ["2026-09"]);
+  assert.equal(h.semConta.length, 2);                                 // jul e ago: vencimentos sem conta na fatura
+  assert.equal(C.historicoMatricula(d.analise, cz.base, 3).nome, "FULANO");
+});

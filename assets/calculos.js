@@ -599,12 +599,13 @@
     // "mesmo vencimento": por mês de crédito × referência de origem da conta × cidade/categoria — o que foi pago no mês
     // e o faturado dessas contas (cada conta conta uma vez por mês em que recebe pagamento)
     const pagas = new Map(), contaNoMes = new Int32Array(lig.length).fill(-1), ligNoGrupo = new Map();
+    const pagoConta = new Float64Array(lig.length);   // total pago em cada conta (aba Clientes e oportunidades)
     (pagamentos || []).forEach((partes, mi) => {
       const cc = { mes: mesesArrec[mi], achou: [0, 0, 0, 0], semConta: [0, 0, 0, 0], linhasAchou: 0, linhasSem: 0 };
       for (const P of partes || []) for (let i = 0; i < P.lig.length; i++) {
         const p = conta.get(P.lig[i] + "|" + P.venc[i]);
         if (p === undefined) { cc.semConta[P.tipo[i]] += P.v[i]; cc.linhasSem++; continue; }
-        cc.achou[P.tipo[i]] += P.v[i]; cc.linhasAchou++;
+        cc.achou[P.tipo[i]] += P.v[i]; cc.linhasAchou++; pagoConta[p] += P.v[i];
         const k = ref[p] + "|" + mi + "|" + cmb[p];
         let o = coorte.get(k);
         if (!o) { o = { ref: refTxt(ref[p]), mes: mesesArrec[mi], c: cmb[p], valor: 0, contas: 0, faturado: 0 }; coorte.set(k, o); }
@@ -619,8 +620,16 @@
       }
       concil.push(cc);
     });
+    // base por conta, que fica no worker (não vai para a página): aba Clientes e oportunidades
+    const nomes = new Map();
+    for (const e of exportsFat) if (e.nomes) {
+      const txt = e.nomes.txt ? e.nomes.txt.split(SEP) : [];
+      e.nomes.lig.forEach((l, i) => { if (!nomes.has(l)) nomes.set(l, txt[i]); });
+    }
+    const base = { lig: Float64Array.from(lig), venc: Int32Array.from(venc), ref: Int32Array.from(ref), cmb: Uint16Array.from(cmb),
+      valor: Float64Array.from(valor), pago: pagoConta, nomes };
     return { combos, fat: [...fat.values()], coorte: [...coorte.values()], concil, pagas: [...pagas.values()],
-      diag: { contas: lig.length, duplicadas, linhas, semChave, fora } };
+      diag: { contas: lig.length, duplicadas, linhas, semChave, fora }, base };
   }
 
   // Conversão por referência: para cada referência do faturamento (nos filtros de aceita(combo)), quanto foi recebido no
@@ -748,6 +757,110 @@
     return t > 0 ? w.map((v) => v / t) : w;
   }
 
+  // ---------- Clientes e oportunidades (roda no worker, com a base de análise e as contas da fatura) ----------
+  const dataNum = (n) => Date.UTC(Math.floor(n / 10000), Math.floor(n / 100) % 100 - 1, n % 100);
+  const diasEntre = (a, b) => Math.round((dataNum(b) - dataNum(a)) / 864e5);   // datas AAAAMMDD
+  const FAIXAS_VENCIDO = [[30, "até 30 dias"], [90, "31 a 90 dias"], [180, "91 a 180 dias"], [Infinity, "mais de 180 dias"]];
+  // o = { mi, marcas (combinações da arrecadação), sel, aceitaFat (por combinação da fatura), hoje e corte (AAAAMMDD), inicio (AAAAMMDD) }
+  //  semPagamento: contas da fatura com valor > 0, vencimento entre inicio e corte e nenhum pagamento ligado (matrícula + vencimento)
+  //  deixaram: pagaram nos dias marcados dos 3 meses anteriores e não pagaram nos dias marcados do mês mi
+  //  voltaram: pagaram nos dias marcados do mês mi e nada nos 3 meses anteriores (mês inteiro)
+  function clientesOportunidades(an, base, o) {
+    const { mi, marcas, sel } = o, pos = new Map(), ligs = [], v = [[], [], [], []], pagSel = [[], [], [], []], algum = [[], [], [], []], comb = [], maior = [];
+    const temHist = [1, 2, 3].every((t) => mi - t >= 0 && an.entradas[mi - t]);
+    for (let t = 0; t < 4; t++) {
+      const partes = mi - t >= 0 ? an.entradas[mi - t] : null;
+      if (!partes) continue;
+      for (const { L, mapa } of partes) for (let i = 0; i < L.k.length; i++) {
+        const cl = L.k[i] % COMBOS_ARQ, c = mapa[cl];
+        if (!marcas[c]) continue;
+        const l = (L.k[i] - cl) / COMBOS_ARQ;
+        let p = pos.get(l);
+        if (p === undefined) {
+          p = ligs.length; pos.set(l, p); ligs.push(l); comb.push(c); maior.push(-Infinity);
+          for (let u = 0; u < 4; u++) { v[u].push(0); pagSel[u].push(0); algum[u].push(0); }
+        }
+        algum[t][p] = 1;
+        if (sel & (1 << L.d[i])) { v[t][p] += L.v[i]; pagSel[t][p] = 1; }
+        if (L.v[i] > maior[p]) { maior[p] = L.v[i]; comb[p] = c; }
+      }
+    }
+    const deixaram = [], voltaram = [];
+    if (temHist) for (let p = 0; p < ligs.length; p++) {
+      if (!pagSel[0][p] && v[1][p] > 0 && v[2][p] > 0 && v[3][p] > 0)
+        deixaram.push({ lig: ligs[p], c: comb[p], m1: v[1][p], m2: v[2][p], m3: v[3][p], media: (v[1][p] + v[2][p] + v[3][p]) / 3 });
+      else if (pagSel[0][p] && v[0][p] > 0 && !algum[1][p] && !algum[2][p] && !algum[3][p]) voltaram.push({ lig: ligs[p], c: comb[p], valor: v[0][p] });
+    }
+    deixaram.sort((a, b) => b.media - a.media);
+    voltaram.sort((a, b) => b.valor - a.valor);
+    // faturado sem pagamento
+    const porLig = new Map(), faixas = FAIXAS_VENCIDO.map(([, rot]) => ({ rot, contas: 0, valor: 0 })), porCombo = new Map(), porRef = new Map();
+    let contas = 0, valorT = 0;
+    if (base) for (let p = 0; p < base.lig.length; p++) {
+      if (!o.aceitaFat[base.cmb[p]] || base.valor[p] <= 0.005 || base.pago[p] > 0 || base.venc[p] > o.corte || base.venc[p] < o.inicio) continue;
+      const val = base.valor[p], dias = diasEntre(base.venc[p], o.hoje);
+      contas++; valorT += val;
+      const f = faixas[FAIXAS_VENCIDO.findIndex(([lim]) => dias <= lim)]; f.contas++; f.valor += val;
+      const rf = porRef.get(base.ref[p]) || { ref: base.ref[p], contas: 0, valor: 0 }; rf.contas++; rf.valor += val; porRef.set(base.ref[p], rf);
+      let x = porLig.get(base.lig[p]);
+      if (!x) { x = { lig: base.lig[p], c: base.cmb[p], contas: 0, valor: 0, maior: 0, refMin: base.ref[p], vencMin: base.venc[p], ultimo: -1 }; porLig.set(base.lig[p], x); }
+      x.contas++; x.valor += val;
+      if (val > x.maior) { x.maior = val; x.c = base.cmb[p]; }
+      if (base.ref[p] < x.refMin) x.refMin = base.ref[p];
+      if (base.venc[p] < x.vencMin) x.vencMin = base.venc[p];
+    }
+    // último mês com algum pagamento (qualquer conta) de cada matrícula da lista
+    if (porLig.size) an.entradas.forEach((partes, m) => {
+      for (const { L } of partes || []) for (let i = 0; i < L.k.length; i++) {
+        const x = porLig.get(Math.floor(L.k[i] / COMBOS_ARQ));
+        if (x && m > x.ultimo) x.ultimo = m;
+      }
+    });
+    let semNenhum = 0, valorSemNenhum = 0;
+    for (const x of porLig.values()) {
+      const pc = porCombo.get(x.c) || { c: x.c, matriculas: 0, contas: 0, valor: 0 };
+      pc.matriculas++; pc.contas += x.contas; pc.valor += x.valor; porCombo.set(x.c, pc);
+      if (x.ultimo < 0) { semNenhum++; valorSemNenhum += x.valor; }
+    }
+    return {
+      temHist,
+      semPagamento: { matriculas: porLig.size, contas, valor: valorT, semNenhum, valorSemNenhum, faixas, porCombo: [...porCombo.values()],
+        porRef: [...porRef.values()].sort((a, b) => a.ref - b.ref), lista: [...porLig.values()].sort((a, b) => b.valor - a.valor) },
+      deixaram, voltaram,
+    };
+  }
+  // Histórico de uma matrícula: arrecadação de cada mês (todas as combinações) e cada conta da fatura com os pagamentos dela
+  function historicoMatricula(an, base, l) {
+    const meses = an.entradas.map((partes, m) => {
+      const r = { mi: m, valor: 0, dias: 0, desconto: (an.descontos[m] && an.descontos[m].get(l)) || 0, c: -1 };
+      let mask = 0, maior = -Infinity;
+      for (const { L, mapa } of partes || []) for (let i = 0; i < L.k.length; i++) {
+        const cl = L.k[i] % COMBOS_ARQ;
+        if ((L.k[i] - cl) / COMBOS_ARQ !== l) continue;
+        r.valor += L.v[i]; mask |= 1 << L.d[i];
+        if (L.v[i] > maior) { maior = L.v[i]; r.c = mapa[cl]; }
+      }
+      for (let d = 0; d <= MAX_DIA; d++) if (mask & (1 << d)) r.dias++;
+      return r;
+    });
+    const faturas = [], porVenc = new Map(), semConta = [];
+    if (base) for (let p = 0; p < base.lig.length; p++) if (base.lig[p] === l) {
+      const f = { ref: base.ref[p], venc: base.venc[p], valor: base.valor[p], pago: base.pago[p], c: base.cmb[p], pagamentos: [] };
+      faturas.push(f); porVenc.set(f.venc, f);
+    }
+    (an.pagamentos || []).forEach((partes, m) => {
+      for (const P of partes || []) for (let i = 0; i < P.lig.length; i++) {
+        if (P.lig[i] !== l) continue;
+        const f = porVenc.get(P.venc[i]);
+        if (f) f.pagamentos.push({ mi: m, v: P.v[i] });
+        else semConta.push({ mi: m, venc: P.venc[i], tipo: P.tipo[i], v: P.v[i] });
+      }
+    });
+    faturas.sort((a, b) => a.venc - b.venc);
+    return { meses: meses.filter((r) => r.valor || r.desconto), faturas, semConta,
+      nome: an.nomes.get(l) || (base && base.nomes.get(l)) || "" };
+  }
+
   // ---------- Diagnóstico por localidade ----------
   const MASCARA_MES = mascaraAte(MAX_DIA, true);       // todos os dias do mês (úteis e fins de semana/feriados)
   // Por localidade (grupoDe): o mês mi e a média dos meses de comparação, nos mesmos dias marcados (desconto incluído)
@@ -805,6 +918,7 @@
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
+    clientesOportunidades, historicoMatricula, diasEntre,
     MASCARA_MES, comparaGrupos, mesesMesmosUteis, fracaoAteDias, pareto,
   };
 });

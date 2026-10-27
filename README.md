@@ -11,7 +11,8 @@ para a internet: tudo é processado no navegador.
   referência (matriz por coorte: quanto de cada referência foi recebido em M, M+1, ...); Diagnóstico por localidade (comparação
   por cidade/subcategoria/superintendência nos mesmos dias úteis, quedas, altas, Pareto e projeção de fechamento pelos meses com
   os mesmos dias úteis ou pela curva do orçado); Ranking de clientes (top 100 maiores, aumentos e quedas por cliente) e Clientes
-  e oportunidades (próxima etapa, à espera da base de contas a receber). O PDF é só do Executivo.
+  e oportunidades (faturado sem pagamento a investigar, deixaram e voltaram a pagar, histórico de uma matrícula; a base de
+  contas a receber, quando existir, vai transformar o “a investigar” em dívida confirmada). O PDF é só do Executivo.
 - **Dados**: área à parte com as regras e a conferência dos números.
 
 ## Como usar
