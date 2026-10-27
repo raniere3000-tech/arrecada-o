@@ -8,7 +8,8 @@ para a internet: tudo é processado no navegador.
 
 - **Executivo** (acompanhamento e resultado): Resumo, Subcategoria, Perfil de pagamento, Cidades, Escada e Base (extração das linhas
   completas por matrículas ou a base completa dos meses marcados, a base de cobrança: pagaram num mês e não pagaram em outro;
-  e o comparativo por mês: uma linha por matrícula e uma coluna de valor por mês).
+  e o comparativo por mês: uma linha por matrícula e uma coluna de valor por mês; as duas podem trazer endereço,
+  grupo, rota e situação da ligação do faturamento mais recente da pasta).
 - **Análises** (cruzamentos e oportunidades): Faturamento x Arrecadação; Fat. x Arrec. — mesmo vencimento; Conversão por
   referência (matriz por coorte: quanto de cada referência foi recebido em M, M+1, ...); Diagnóstico por localidade (comparação
   por cidade/subcategoria/superintendência nos mesmos dias úteis, quedas, altas, Pareto e projeção de fechamento pelos meses com

@@ -10,7 +10,9 @@ const avisa = (tipo, dados, transferir = []) => self.postMessage({ tipo, ...dado
 let analise = null;
 let fontes = null;                                     // arquivos CSV lidos (com os meses de cada um), para a aba Base
 let contasFat = null;
-let combosArr = null;                                  // cidade/subcategoria/SUP de cada combinação da arrecadação                                  // contas da fatura com o total pago (aba Clientes e oportunidades)
+let combosArr = null;
+let fontesFat = null;                                  // arquivos de faturamento lidos (com as referências de cada um)
+let cadastroFat = null;                                // endereço, grupo, rota e situação da ligação da referência mais recente                                  // cidade/subcategoria/SUP de cada combinação da arrecadação                                  // contas da fatura com o total pago (aba Clientes e oportunidades)
 
 self.onmessage = async (ev) => {
   if (ev.data.tipo === "analise") { respondeAnalise(ev.data); return; }
@@ -43,9 +45,36 @@ function respondeAnalise({ id, para, mi, miAnt, marcas, sel, n }) {
   avisa("analise", { id, para, ...r });
 }
 
-function responde(tipo, id, f) {
+function responde(tipo, id, f) {                       // f pode devolver uma promessa (quando precisa ler um arquivo)
   if (!analise) { avisa(tipo, { id, erro: "dados ainda não lidos" }); return; }
-  try { avisa(tipo, { id, ...f() }); } catch (e) { avisa(tipo, { id, erro: String((e && e.message) || e) }); }
+  Promise.resolve().then(f).then((r) => avisa(tipo, { id, ...r }), (e) => avisa(tipo, { id, erro: String((e && e.message) || e) }));
+}
+// Dados de cadastro do faturamento (aba Base): lidos só quando pedidos, do(s) arquivo(s) da referência mais recente da
+// pasta, e guardados aqui. Matrícula → [endereço, grupo, rota, situação da ligação] (1ª linha da matrícula no arquivo).
+const COLS_CADASTRO = ["ENDERECOLIGACAO", "GRUPO", "ROTA", "SITUACAOLIGACAO"];
+async function leCadastroFat() {
+  if (cadastroFat) return cadastroFat;
+  const refs = (fontesFat || []).flatMap((a) => a.meses);
+  if (!refs.length) return null;
+  const ref = refs.sort()[refs.length - 1], arqs = fontesFat.filter((a) => a.meses.includes(ref)), mapa = new Map();
+  for (const a of arqs) {
+    let idx = null;
+    await linhasDoArquivo(a.file, (linha) => {
+      const p = C.separaCsv(linha);
+      if (!idx) {
+        if (!ehFaturamento(linha)) return;
+        const ch = p.map(C.chave);
+        idx = { lig: ch.indexOf(colunasFaturamento(linha).lig), ref: ch.indexOf("REFERENCIADELEITURA"), cols: COLS_CADASTRO.map((c) => ch.indexOf(c)) };
+        return;
+      }
+      if (idx.ref >= 0) { const r = C.refDeTexto(p[idx.ref]); if (r && r !== ref) return; }
+      const l = C.chaveLig(p[idx.lig]);
+      if (!p[idx.lig] || mapa.has(l)) return;
+      mapa.set(l, idx.cols.map((j) => (j >= 0 ? C.consertaAcento(String(p[j] || "").trim()) : "")));
+    }, () => {});
+  }
+  cadastroFat = { ref, arquivos: arqs.map((a) => a.rel), mapa };
+  return cadastroFat;
 }
 const nomeDe = (l) => analise.nomes.get(l) || (contasFat && contasFat.nomes.get(l)) || "";
 const ligTxt = (l) => (l < 1e10 ? String(l) : "(não numérica)");
@@ -360,6 +389,7 @@ async function processa(itens) {
   }
   // faturamento: cada arquivo lido uma vez e guardado (chave própria, "fat|…")
   const exportsFat = [];
+  cadastroFat = null;
   for (const a of faturas) {
     const id = `fat|v${CACHE_FATURAMENTO}|${a.rel}|${a.tamanho}|${a.file.lastModified}`;
     usados.add(id);
@@ -382,6 +412,7 @@ async function processa(itens) {
     }
     base += a.tamanho;
   }
+  fontesFat = faturas.filter((a) => a.tipo === "faturamento" && a.meses && a.meses.length);
   if (db) await cacheLimpa(db, usados);
   // O arquivo diário é o mais novo: os meses que ele traz não são lidos dos arquivos acumulados
   const mesesDiaria = new Set();
@@ -472,14 +503,16 @@ async function extraiBase({ id, ligs, meses, porMesArquivo }) {
 }
 // Comparativo por mês: uma linha por matrícula e uma coluna de valor por mês (em branco = sem pagamento no mês).
 // O CSV é montado aqui, em blocos, porque pode ter centenas de milhares de linhas.
-function respondeComparativo({ mis, rotulos, marcas, nomesSup }) {
-  const r = C.valoresPorMes(analise, mis, marcas), k = r.k;
+async function respondeComparativo({ mis, rotulos, marcas, nomesSup, comFat }) {
+  const r = C.valoresPorMes(analise, mis, marcas), k = r.k, cad = comFat ? await leCadastroFat() : null;
+  let comCadastro = 0;
   const n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ","), txt = (t) => String(t || "").replace(/[;\r\n]/g, " ");
   const ordem = r.ligs.map((_, p) => p).sort((a, b) => r.ligs[a] - r.ligs[b]);
   const blobs = [], partes = [], porMes = rotulos.map(() => ({ matriculas: 0, valor: 0 }));
   let tam = 0;
   for (const p of ordem) {
     const c = combosArr[r.comb[p]] || {}, cols = [ligTxt(r.ligs[p]), txt(nomeDe(r.ligs[p])), nomesSup[c.sup] || c.sup || "", c.cidade || "", c.grupo || ""];
+    if (cad) { const f = cad.mapa.get(r.ligs[p]); if (f) comCadastro++; cols.push(...(f || ["", "", "", ""]).map(txt)); }
     for (let j = 0; j < k; j++) {
       if (r.pagou[p * k + j]) { cols.push(n(r.vals[p * k + j])); porMes[j].matriculas++; porMes[j].valor += r.vals[p * k + j]; } else cols.push("");
     }
@@ -488,15 +521,20 @@ function respondeComparativo({ mis, rotulos, marcas, nomesSup }) {
     if (tam > 4e6) { blobs.push(new Blob([partes.join("\r\n") + "\r\n"])); partes.length = 0; tam = 0; }
   }
   if (partes.length) blobs.push(new Blob([partes.join("\r\n") + "\r\n"]));
-  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...rotulos.map((m) => `Arrecadado ${m}`)].join(";");
-  return { linhas: ordem.length, porMes, blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
+  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...(cad ? CAB_CADASTRO : []), ...rotulos.map((m) => `Arrecadado ${m}`)].join(";");
+  return { linhas: ordem.length, porMes, cadastro: cad && { ref: cad.ref, arquivos: cad.arquivos, comCadastro }, blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
 }
 // Base de cobrança: pagaram no mês A e não pagaram no mês B (nas combinações marcadas pelos filtros do cabeçalho)
-function respondeCobranca({ miA, miB, marcas }) {
-  const lista = C.pagaramNaoPagaram(analise, miA, miB, marcas);
-  for (const x of lista) { x.nome = nomeDe(x.lig); x.lig = ligTxt(x.lig); }
-  return { lista };
+async function respondeCobranca({ miA, miB, marcas, comFat }) {
+  const lista = C.pagaramNaoPagaram(analise, miA, miB, marcas), cad = comFat ? await leCadastroFat() : null;
+  let comCadastro = 0;
+  for (const x of lista) {
+    if (cad) { x.fat = cad.mapa.get(x.lig) || null; if (x.fat) comCadastro++; }
+    x.nome = nomeDe(x.lig); x.lig = ligTxt(x.lig);
+  }
+  return { lista, cadastro: cad && { ref: cad.ref, arquivos: cad.arquivos, comCadastro } };
 }
+const CAB_CADASTRO = ["Endereço da ligação", "Grupo", "Rota", "Situação da ligação"];
 async function linhasDoArquivo(file, aoLinha, aoLer) {
   const leitor = file.stream().getReader();
   let resto = "", dec = null, lidos = 0, ultimo = 0;

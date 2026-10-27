@@ -813,6 +813,14 @@
     $("cobA").innerHTML = opcoes(cobA); $("cobB").innerHTML = opcoes(cobB);
     // comparativo por mês: padrão = os meses da base de cobrança
     if (!mesesCmp || mesesCmp.some((m) => !meses.includes(m))) mesesCmp = [...new Set([cobA, cobB])];
+    const refs = E.res.cruzamento ? [...new Set(E.res.cruzamento.fat.map((f) => f.ref))].sort() : [];
+    document.querySelectorAll(".opcao-fat").forEach((cx) => {
+      cx.disabled = !refs.length;
+      if (!refs.length) cx.checked = false;
+      cx.parentElement.querySelector(".rot-fat").textContent = refs.length
+        ? `Incluir dados do faturamento (endereço da ligação, grupo, rota e situação da ligação), da referência ${C.rotuloMes(refs[refs.length - 1])}`
+        : "Incluir dados do faturamento: sem faturamento aproveitado na pasta";
+    });
     $("cmpMeses").innerHTML = meses.map((m) => `<label><input type="checkbox" value="${m}"${mesesCmp.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("");
   }
   let mesesCmp = null, idCmp = 0;
@@ -824,7 +832,7 @@
     $("cmpGerar").disabled = true;
     $("cmpStatus").textContent = "Montando o comparativo…";
     $("cmpResultado").innerHTML = "";
-    worker.postMessage({ tipo: "comparativo", id: ++idCmp, mis: meses.map(idxMes), rotulos: meses.map(C.rotuloMes), marcas: marcas(), nomesSup: NOME_SUP, meses });
+    worker.postMessage({ tipo: "comparativo", id: ++idCmp, mis: meses.map(idxMes), rotulos: meses.map(C.rotuloMes), marcas: marcas(), nomesSup: NOME_SUP, meses, comFat: $("cmpFat").checked });
     cmpPedido = meses;
   });
   let cmpPedido = [];
@@ -833,7 +841,7 @@
     $("cmpGerar").disabled = false;
     if (m.erro) { $("cmpStatus").textContent = "Erro: " + m.erro; return; }
     const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
-    $("cmpStatus").textContent = `${fmt(m.linhas)} matrículas com pagamento em pelo menos um dos meses · ${filtro}.`;
+    $("cmpStatus").textContent = `${fmt(m.linhas)} matrículas com pagamento em pelo menos um dos meses · ${filtro}.${textoCadastro(m.cadastro)}`;
     const nome = `Comparativo_por_mes_${cmpPedido[0]}${cmpPedido.length > 1 ? "_a_" + cmpPedido[cmpPedido.length - 1] : ""}.csv`;
     $("cmpResultado").innerHTML = `<table class="compacta base-tabela"><thead><tr><th>Mês</th><th>Matrículas com pagamento</th><th>Arrecadado (R$)</th></tr></thead><tbody>`
       + cmpPedido.map((mes, j) => `<tr>${td(C.rotuloMes(mes), "rot")}${td(fmt(m.porMes[j].matriculas))}${td(fmt(m.porMes[j].valor))}</tr>`).join("")
@@ -919,8 +927,9 @@
     $("cobGerar").disabled = true;
     $("cobStatus").textContent = "Cruzando os meses…";
     $("cobResultado").innerHTML = "";
-    worker.postMessage({ tipo: "cobranca", id: ++idCob, miA: idxMes(cobA), miB: idxMes(cobB), marcas: marcas() });
+    worker.postMessage({ tipo: "cobranca", id: ++idCob, miA: idxMes(cobA), miB: idxMes(cobB), marcas: marcas(), comFat: $("cobFat").checked });
   });
+  const textoCadastro = (c) => (c ? ` Dados do faturamento da referência ${C.rotuloMes(c.ref)} (${c.arquivos.join(", ")}): ${fmt(c.comCadastro)} matrículas encontradas.` : "");
   function recebeCobranca(m) {
     if (m.id !== idCob) return;
     $("cobGerar").disabled = false;
@@ -928,13 +937,14 @@
     const d = E.res.dados, l = m.lista, total = l.reduce((a, x) => a + x.valor, 0), A = C.rotuloMes(cobA), B = C.rotuloMes(cobB);
     const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
     const ultB = d.ultimoCredito[cobB];
-    $("cobStatus").textContent = `${fmt(l.length)} matrículas pagaram em ${A} e não pagaram em ${B}${ultB && cobB === d.meses[d.meses.length - 1] ? ` (até ${dataBR(ultB)})` : ""} · ${filtro} · ${rs(total)} pagos em ${A}.`;
+    $("cobStatus").textContent = `${fmt(l.length)} matrículas pagaram em ${A} e não pagaram em ${B}${ultB && cobB === d.meses[d.meses.length - 1] ? ` (até ${dataBR(ultB)})` : ""} · ${filtro} · ${rs(total)} pagos em ${A}.${textoCadastro(m.cadastro)}`;
     const porCid = new Map();
     for (const x of l) { const c = d.combos[x.c] || {}, o = porCid.get(c.cidade) || { n: 0, v: 0 }; o.n++; o.v += x.valor; porCid.set(c.cidade, o); }
     const cids = [...porCid.entries()].sort((a, b) => b[1].v - a[1].v);
     const n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ","), txt = (t) => String(t || "").replace(/;/g, ",");
-    const csv = "\ufeff" + [["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", `Valor pago em ${A}`, `Dias com pagamento em ${A}`].join(";"),
-      ...l.map((x) => { const c = d.combos[x.c] || {}; return [x.lig, txt(x.nome), nomeSup(c.sup), c.cidade, c.grupo, n(x.valor), x.dias].join(";"); })].join("\r\n");
+    const cad = !!m.cadastro, CAB_CAD = ["Endereço da ligação", "Grupo", "Rota", "Situação da ligação"];
+    const csv = "\ufeff" + [["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...(cad ? CAB_CAD : []), `Valor pago em ${A}`, `Dias com pagamento em ${A}`].join(";"),
+      ...l.map((x) => { const c = d.combos[x.c] || {}; return [x.lig, txt(x.nome), nomeSup(c.sup), c.cidade, c.grupo, ...(cad ? (x.fat || ["", "", "", ""]).map(txt) : []), n(x.valor), x.dias].join(";"); })].join("\r\n");
     const nome = `Base_cobranca_pagou_${cobA}_nao_pagou_${cobB}.csv`;
     $("cobResultado").innerHTML = (cids.length ? `<table class="compacta base-tabela"><thead><tr><th>Cidade</th><th>Matrículas</th><th>Pago em ${A} (R$)</th></tr></thead><tbody>`
       + cids.map(([c, o]) => `<tr>${td(esc(c || "—"), "rot")}${td(fmt(o.n))}${td(fmt(o.v))}</tr>`).join("")
