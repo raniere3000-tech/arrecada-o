@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v34-20261028">
+<link rel="stylesheet" href="assets/painel.css?v=v35-20261028">
 </head>
 <body>
 
@@ -172,9 +172,23 @@
       </div>
     </section>
     <section class="painel-aba" data-painel="fxv" hidden>
-      <div class="card"><h2>Faturamento x Arrecadação — mesmo vencimento <label class="opcao">Mês da arrecadação <select id="fxvMes"></select></label></h2>
+      <div class="card"><h2>Faturamento x Arrecadação — mesmo vencimento</h2>
+        <p class="nota">Para cada mês da arrecadação (Data Crédito), cada pagamento é procurado no faturamento pela <b>matrícula + data de vencimento</b>, e entra o
+          <b>faturado dessa conta</b>, seja qual for a referência dela. Ex.: em out/2026, a matrícula A paga R$ 100 com vencimento 01/10, a B R$ 200 com vencimento 25/09 e a
+          C R$ 300 com vencimento 10/10: as três contas são achadas no faturamento (cada uma pode ser de uma referência diferente) e o faturado delas é somado e comparado
+          com os R$ 600 arrecadados.</p>
         <p class="nota" id="fxvNota"></p><div id="fxvAviso"></div></div>
       <div id="fxvCorpo">
+        <div class="card"><h2>Mês a mês: arrecadado × faturado das mesmas contas</h2>
+          <p class="nota" id="fxvNotaSerie"></p>
+          <div class="legenda-g"><span><i class="cor-fat"></i>Faturado das contas pagas no mês</span><span><i class="cor-at"></i>Arrecadado com conta identificada</span></div>
+          <div class="grafico" id="fxvSerie"></div></div>
+        <div class="card"><h2>Mês a mês <small>clique num mês para ver o detalhe abaixo</small><button type="button" class="btn sec csv" id="fxvMesesCsv">Baixar CSV</button></h2>
+          <div class="wrap"><table id="fxvMeses" class="compacta clicavel"></table></div>
+          <p class="nota">Arrecadado − faturado acima de zero: juros e multas pagos junto com a conta; abaixo de zero: pagamento parcial. Sem conta identificada: pagamentos
+            cujo vencimento não está em nenhuma fatura da pasta (ex.: conta de referência anterior à 1ª fatura da pasta) e parcelas de acordos, que têm vencimento próprio.</p></div>
+        <div class="card"><h2>Detalhe do mês por referência de origem <label class="opcao">Mês da arrecadação <select id="fxvMes"></select></label></h2>
+          <p class="nota">De que referências vieram as contas pagas no mês escolhido.</p></div>
         <div class="kpis" id="fxvKpis"></div>
         <div class="card"><h2>Arrecadado no mês por referência de origem</h2>
           <p class="nota">Cada pagamento do mês ligado à conta que ele pagou (matrícula + data de vencimento); a barra fica na referência dessa conta.</p>
@@ -418,6 +432,8 @@
         </ul></div>
 
       <div class="card"><h2>Fat. x Arrec. — mesmo vencimento</h2>
+        <p><b>Mês a mês</b>: para cada mês da arrecadação, o arrecadado com conta identificada (pagamento achado no faturamento pela matrícula + vencimento) ao lado do
+          faturado dessas mesmas contas, seja qual for a referência delas, e o que ficou sem conta. <b>Detalhe do mês</b>:</p>
         <p>Escolhe-se o <b>mês da arrecadação</b> (mês de crédito). Cada pagamento do Interior nesse mês é ligado à conta que ele pagou pela <b>matrícula + data de vencimento</b>,
           e a conta traz a sua <b>referência</b> (ex.: arrecadado em out/26 de uma conta com vencimento em out/26 que é da referência ago/26 aparece na linha ago/26).
           Ao lado vai o <b>faturado dessas mesmas contas</b>. É uma ligação conta a conta, não uma comparação de períodos.</p>
@@ -493,9 +509,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v34-20261028"></script>
-<script src="assets/calculos.js?v=v34-20261028"></script>
-<script>const VERSAO_SITE = "v34-20261028"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v34-20261028"></script>
+<script src="assets/regras.js?v=v35-20261028"></script>
+<script src="assets/calculos.js?v=v35-20261028"></script>
+<script>const VERSAO_SITE = "v35-20261028"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v35-20261028"></script>
 </body>
 </html>

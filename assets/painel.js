@@ -1077,6 +1077,7 @@
     baixa("\ufeff" + linhas.join("\r\n"), `Faturamento_x_Arrecadacao_${id === "fxaCid" ? "cidades" : "subcategorias"}_${fxaMesEscolhido}.csv`);
   }));
   // ===== Fat. x Arrec. — mesmo vencimento: arrecadação do mês ligada às contas que ela pagou (referência de origem) =====
+  let fxvSerieLinhas = [];
   let fxvMesEscolhido = "", fxvOrdem = { fxvCid: ["pago", -1], fxvSub: ["pago", -1] }, fxvLinhas = {};
   function desenhaFxv() {
     const cz = E.res.cruzamento && E.res.cruzamento.fat.length ? E.res.cruzamento : null, d = E.res.dados;
@@ -1096,10 +1097,34 @@
     if (E.sup && E.sup !== "INTERIOR") avisos.push(`O faturamento é só do Interior: o filtro Superintendência = ${nomeSup(E.sup)} não se aplica aqui.`);
     $("fxvAviso").innerHTML = avisos.map((a) => `<p class="aviso-pdf">${esc(a)}</p>`).join("");
     const refs = [...new Set(cz.fat.map((r) => r.ref))].sort();
-    $("fxvNota").textContent = `${["Interior", E.cidade, filtroG].filter(Boolean).join(" · ")} · pagamentos creditados em ${C.rotuloMes(M)} ligados às contas pela matrícula + vencimento`
-      + ` · faturas na pasta: ${C.rotuloMes(refs[0])} a ${C.rotuloMes(refs[refs.length - 1])}.`;
+    $("fxvNota").textContent = `${["Interior", E.cidade, filtroG].filter(Boolean).join(" · ")} · faturas na pasta: ${C.rotuloMes(refs[0])} a ${C.rotuloMes(refs[refs.length - 1])}.`;
     const linhas = cz.pagas.filter((r) => r.mes === M && ok(cz.combos[r.c]));
     const soma = (l, k) => l.reduce((x, r) => x + r[k], 0);
+    // mês a mês: arrecadado com conta identificada × faturado dessas mesmas contas; o total e o que ficou sem conta são do
+    // Interior inteiro (a conciliação não tem cidade nem subcategoria), por isso só aparecem sem os filtros
+    const semFiltro = !(E.cidade || filtroG);
+    fxvSerieLinhas = meses.filter((m) => temPg.has(m)).map((m) => {
+      const l = cz.pagas.filter((r) => r.mes === m && ok(cz.combos[r.c])), c = cz.concil.find((x) => x.mes === m);
+      const sem = c.semConta.reduce((x, v) => x + v, 0);
+      return { mes: m, total: c.achou.reduce((x, v) => x + v, 0) + sem, pago: soma(l, "pago"), faturado: soma(l, "faturado"), contas: soma(l, "contas"),
+        semNF: c.semConta[0] + c.semConta[1] + c.semConta[2], parc: c.semConta[3] };
+    });
+    const S = fxvSerieLinhas;
+    $("fxvNotaSerie").textContent = `${["Interior", E.cidade, filtroG].filter(Boolean).join(" · ")} · ${S.length ? `${C.rotuloMes(S[0].mes)} a ${C.rotuloMes(S[S.length - 1].mes)}` : ""}`
+      + " · arrecadado sem o desconto comercial (o desconto não é por conta). Conta paga em parcelas em meses diferentes entra em cada mês com o faturado inteiro.";
+    grafico("fxvSerie", S.length && ((W) => barras({ cats: S.map((x) => C.rotuloMes(x.mes)), series: [[S.map((x) => x.faturado), "b-fat"], [S.map((x) => x.pago), "b-at"]], rotulo: curto,
+      titulo: (i) => `${C.rotuloMes(S[i].mes)}\nArrecadado com conta identificada: ${rs(S[i].pago)}\nFaturado dessas contas: ${rs(S[i].faturado)}\nDiferença: ${rs(S[i].pago - S[i].faturado)}` }, W)),
+      '<p class="nota">Nenhum pagamento ligado a conta da fatura.</p>');
+    const tdS = (v, f = fmt) => (semFiltro ? td(f(v)) : "");
+    const linS = S.map((x) => `<tr data-mes="${x.mes}"${x.mes === M ? ' class="sel"' : ""}>${td(C.rotuloMes(x.mes), "rot")}${tdS(x.total)}${td(fmt(x.pago))}`
+      + `${semFiltro ? td(x.total ? pct(x.pago / x.total) : "") : ""}${td(fmt(x.faturado))}${tdNum(x.pago - x.faturado, fmt)}${td(x.faturado ? pct(x.pago / x.faturado - 1) : "")}`
+      + `${td(fmt(x.contas))}${tdS(x.semNF)}${tdS(x.parc)}</tr>`);
+    const tS = S.reduce((a, x) => ({ total: a.total + x.total, pago: a.pago + x.pago, faturado: a.faturado + x.faturado, contas: a.contas + x.contas, semNF: a.semNF + x.semNF, parc: a.parc + x.parc }),
+      { total: 0, pago: 0, faturado: 0, contas: 0, semNF: 0, parc: 0 });
+    linS.push(`<tr class="total">${td("Total", "rot")}${tdS(tS.total)}${td(fmt(tS.pago))}${semFiltro ? td(tS.total ? pct(tS.pago / tS.total) : "") : ""}${td(fmt(tS.faturado))}`
+      + `${tdNum(tS.pago - tS.faturado, fmt)}${td(tS.faturado ? pct(tS.pago / tS.faturado - 1) : "")}${td(fmt(tS.contas))}${tdS(tS.semNF)}${tdS(tS.parc)}</tr>`);
+    tabela("fxvMeses", ["Mês da arrecadação", ...(semFiltro ? ["Arrecadado no Interior (R$)"] : []), "Com conta identificada (R$)", ...(semFiltro ? ["% identificado"] : []),
+      "Faturado dessas contas (R$)", "Arrecadado − faturado (R$)", "Arrecadado ÷ faturado − 1", "Contas", ...(semFiltro ? ["Sem conta: NF/fatura (R$)", "Sem conta: parcelas (R$)"] : [])], linS);
     const pago = soma(linhas, "pago"), faturado = soma(linhas, "faturado"), contas = soma(linhas, "contas");
     const cc = cz.concil.find((c) => c.mes === M) || { achou: [0, 0, 0, 0], semConta: [0, 0, 0, 0] };
     const semNF = cc.semConta[1] + cc.semConta[2], parc = cc.semConta[3], outros = cc.semConta[0];   // o que achou conta já está em pago
@@ -1144,6 +1169,19 @@
     desenhaTabelaFxv("fxvSub", "Subcategoria");
   }
   $("fxvMes").addEventListener("change", (e) => { fxvMesEscolhido = e.target.value; desenha(); });
+  $("fxvMeses").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-mes]");
+    if (!tr) return;
+    fxvMesEscolhido = tr.dataset.mes;
+    desenha();
+    $("fxvMes").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  $("fxvMesesCsv").addEventListener("click", () => {
+    const n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ",");
+    const linhas = [["Mês da arrecadação", "Arrecadado no Interior", "Com conta identificada", "Faturado dessas contas", "Arrecadado - faturado", "Contas", "Sem conta: NF/fatura", "Sem conta: parcelas"].join(";"),
+      ...fxvSerieLinhas.map((x) => [C.rotuloMes(x.mes), n(x.total), n(x.pago), n(x.faturado), n(x.pago - x.faturado), x.contas, n(x.semNF), n(x.parc)].join(";"))];
+    baixa("\ufeff" + linhas.join("\r\n"), "Mesmo_vencimento_mes_a_mes.csv");
+  });
   const COLS_FXV = [["nome", null], ["contas", "Contas"], ["matriculas", "Matrículas"], ["faturado", "Faturado (R$)"], ["pago", "Arrecadado (R$)"], ["dif", "Arrecadado − faturado"], ["part", "Part. no arrecadado"]];
   function desenhaTabelaFxv(id, titulo) {
     const [col, dir] = fxvOrdem[id], linhas = [...fxvLinhas[id]].sort((a, b) => (col === "nome" ? a.nome.localeCompare(b.nome, "pt-BR") : a[col] - b[col]) * dir);
