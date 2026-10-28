@@ -524,28 +524,15 @@
       + `${td(fmt(tA.clientes))}${td(fmt(tA.contas))}${td(tA.contas ? fmt(tic(tA), 2) : "")}</tr>`);
     tabela("tConsolidado", ["Dia útil", "Data", `Arrecadação ${C.rotuloMes(E.mes)}`, `Arrecadação ${C.rotuloMes(ant)}`, "Δ (%)", "Clientes pagantes", "Contas pagas", "Ticket médio"], linhas);
   }
-  // barras por dia útil: mês anterior × mês atual (rótulos dos dois se couberem; senão só o do mês atual)
+  // barras por dia útil: mês anterior × mês atual (barra do mês atual pintada quando varia mais de ±40%)
   function svgDias(dias, at, an, cal, nAt, nAnt, W) {
-    const rot = (k) => (k ? `Dia ${k}` : "Fins de semana"), n = Math.max(1, dias.length);
-    const base = 222, topo = 34, max = Math.max(1, ...at, ...an);
-    const { larg, passo, ex } = ajustaEixo(dias.map(rot), W, n * 52, base + 18), bw = Math.min(36, passo * 0.32);
-    const lv = Math.max(0, ...at.concat(an).filter((v) => v).map((v) => larguraTexto(curto(v), 10)));
-    const dois = passo >= 2 * lv + 10, umSo = !dois && passo >= lv + 6;
-    const alt = 270 + ex.extra;
-    let svg = abreSvg(larg, alt, ex.pad, ' role="img" aria-label="Arrecadação por dia útil"') + `<line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`;
-    dias.forEach((k, i) => {
-      const cx = passo * i + passo / 2, h1 = ((base - topo) * an[i]) / max, h2 = ((base - topo) * at[i]) / max;
-      const v = an[i] > 0 ? at[i] / an[i] - 1 : NaN;
-      const cls = v <= -ALERTA ? "b-queda" : v >= ALERTA ? "b-alta" : "b-at";
-      const data = k ? dataBR(cal.dataDoDia[k]).slice(0, 5) : "";
-      svg += `<g><title>${rot(k)}${data ? ` (${data})` : ""}\n${nAnt}: ${rs(an[i])}\n${nAt}: ${rs(at[i])}${isFinite(v) ? `\nΔ ${pct(v)}` : ""}</title>`
-        + `<rect class="b-ant" x="${cx - bw - 3}" y="${base - h1}" width="${bw}" height="${Math.max(0, h1)}" rx="2"/>`
-        + `<rect class="${cls}" x="${cx + 3}" y="${base - h2}" width="${bw}" height="${Math.max(0, h2)}" rx="2"/>`
-        + (dois && an[i] ? `<text class="r-ant" x="${cx - bw / 2 - 3}" y="${base - h1 - 5}">${curto(an[i])}</text>` : "")
-        + ((dois || umSo) && at[i] ? `<text class="r-at" x="${dois ? cx + bw / 2 + 3 : cx}" y="${base - h2 - 5}">${curto(at[i])}</text>` : "")
-        + (ex.extra ? "" : `<text class="x2" x="${cx}" y="${base + 32}">${data}</text>`) + "</g>";
-    });
-    return svg + ex.svg + "</g></svg>";
+    const rot = (k) => (k ? `Dia ${k}` : "Fins de semana"), data = (k) => (k ? dataBR(cal.dataDoDia[k]).slice(0, 5) : "");
+    const varDe = (i) => (an[i] > 0 ? at[i] / an[i] - 1 : NaN);
+    return barras({
+      cats: dias.map(rot), sub: dias.map(data), rotulo: curto,
+      series: [[an, "b-ant"], [at, (i) => { const v = varDe(i); return v <= -ALERTA ? "b-queda" : v >= ALERTA ? "b-alta" : "b-at"; }]],
+      titulo: (i) => { const k = dias[i], v = varDe(i); return `${rot(k)}${data(k) ? ` (${data(k)})` : ""}\n${nAnt}: ${rs(an[i])}\n${nAt}: ${rs(at[i])}${isFinite(v) ? `\nΔ ${pct(v)}` : ""}`; },
+    }, W);
   }
   function destaquesClientes(m) {
     if (m.id !== idResumo || !$("destAumentos")) return;
@@ -1256,7 +1243,7 @@
     const n = Math.max(ultK + 1, ...media.map((v, k) => (v != null ? k + 1 : 0)));
     const cats = Array.from({ length: n }, (_, k) => rotOff(k, mz));
     $("cvNotaG").textContent = `${porValor ? "Valor recebido ÷ faturado" : "Contas pagas ÷ contas faturadas"}, acumulado do mês da referência em diante. A média usa só referências anteriores com o mês completo.`;
-    const serieCv = [[minha.slice(0, n).concat(Array(Math.max(0, n - minha.length)).fill(null)), "l-at"], [media.slice(0, n), "l-fat", true]];
+    const serieCv = [[minha.slice(0, n).concat(Array(Math.max(0, n - minha.length)).fill(null)), "l-at"], [media.slice(0, n), "l-fat"]];
     grafico("cvG1", n && ((W) => svgLinhas(cats, serieCv, (v) => fmt(v * 100, 1) + "%", W)));
     // por cidade
     const cidades = [...new Set(cz_combos().filter(ok).map((c) => c.cidade))];
@@ -1679,28 +1666,22 @@
     });
     return svg + "</svg>";
   }
-  // Pareto: barras (queda) e linha do acumulado (0–100%), com a marca dos 80%
+  // Pareto: barras (queda) e linha do acumulado (0–100% da altura das barras), com a marca dos 80%
   function svgPareto(itens, W) {
-    const esq = 70, larg = Math.max(W, esq + itens.length * 40), alt = 330, topo = 26, base = 220, passo = (larg - esq) / itens.length, bw = Math.min(34, passo * 0.6);
-    const max = Math.max(1, ...itens.map((x) => x.v)), y = (v) => base - ((base - topo) * v) / max, ya = (a) => base - (base - topo) * a;
-    let svg = `<svg width="${larg}" height="${alt}" viewBox="0 0 ${larg} ${alt}" class="pareto"><line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`
-      + `<line x1="0" y1="${ya(0.8)}" x2="${larg}" y2="${ya(0.8)}" class="ref80"/><text class="ref80t" x="${larg - 4}" y="${ya(0.8) - 4}">80%</text>`;
-    const pts = [];
-    itens.forEach((x, i) => {
-      const cx = esq + passo * i + passo / 2, nome = x.rot.length > 22 ? x.rot.slice(0, 21) + "…" : x.rot;
-      svg += `<g><title>${esc(x.rot)}: queda de ${rs(x.v)} · acumulado ${pct(x.acum)}</title><rect class="b-queda" x="${cx - bw / 2}" y="${y(x.v)}" width="${bw}" height="${base - y(x.v)}" rx="2"/>`
-        + (passo >= 44 ? `<text class="r-ant" x="${cx}" y="${y(x.v) - 4}">${curto(x.v)}</text>` : "") + "</g>"
-        + `<text class="x-rot" transform="translate(${cx},${base + 12}) rotate(-35)">${esc(nome)}</text>`;
-      pts.push(`${cx},${ya(x.acum)}`);
-    });
-    svg += `<polyline class="l-at" points="${pts.join(" ")}"/>`;
-    itens.forEach((x, i) => { const cx = esq + passo * i + passo / 2; svg += `<circle class="l-at" cx="${cx}" cy="${ya(x.acum)}" r="3.5"/>`; });
-    return svg + "</svg>";
+    return barras({
+      cats: itens.map((x) => (x.rot.length > 22 ? x.rot.slice(0, 21) + "…" : x.rot)), series: [[itens.map((x) => x.v), "b-queda"]], rotulo: curto,
+      titulo: (i) => `${itens[i].rot}: queda de ${rs(itens[i].v)} · acumulado ${pct(itens[i].acum)}`, fundo: true,
+      sobre: ({ cx, base, plot, larg }) => {
+        const ya = (a) => base - plot * a, pts = itens.map((x, i) => `${cx(i)},${ya(x.acum)}`);
+        return `<line x1="0" y1="${ya(0.8)}" x2="${larg}" y2="${ya(0.8)}" class="ref80"/><text class="ref80t" x="${larg - 4}" y="${ya(0.8) - 4}">80%</text>`
+          + `<polyline class="l-at" points="${pts.join(" ")}"/>` + itens.map((x, i) => `<circle class="l-at" cx="${cx(i)}" cy="${ya(x.acum)}" r="3.5"/>`).join("");
+      },
+    }, W);
   }
   // ----- gráficos responsivos -----
-  // Cada gráfico é desenhado na largura real do quadro (1 unidade do SVG = 1 px, o texto não encolhe nem cresce) e
-  // redesenhado quando o quadro muda de largura (janela, celular, PDF). Abaixo da largura mínima por categoria, o quadro
-  // rola para o lado; rótulos de valor que não cabem saem (o valor fica no passar do mouse) e os do eixo inclinam.
+  // Cada gráfico é desenhado na largura real do quadro (1 unidade do SVG = 1 px, o texto não encolhe nem cresce),
+  // nunca mais largo que ele (sem barra de rolagem), e redesenhado quando o quadro muda de largura (janela, celular, PDF).
+  // Todo valor aparece: na horizontal se couber, senão na vertical; os rótulos do eixo inclinam quando não cabem.
   const graficos = new Map();                          // id do quadro → { fn(largura) → svg, larg }
   const obsGraficos = typeof ResizeObserver !== "undefined" ? new ResizeObserver((ents) => ents.forEach((e) => redesenhaGrafico(e.target.id))) : null;
   const larguraDe = (el) => Math.max(260, Math.floor(el.clientWidth || (el.parentElement && el.parentElement.clientWidth) || 900));
@@ -1720,64 +1701,149 @@
     g.larg = larg;
     el.innerHTML = g.fn(larg);
   }
-  const larguraTexto = (t, px = 11.5) => String(t).length * px * 0.56;   // estimativa (fonte do painel)
+  // largura de um texto na fonte do painel, medida no navegador (sem canvas: estimativa pelo nº de letras)
+  const ctxTexto = document.createElement("canvas").getContext("2d");
+  const fonteGraficos = () => getComputedStyle(document.body).getPropertyValue("--fonte").trim() || "sans-serif";
+  function larguraTexto(t, px = 11.5, negrito = false) {
+    if (!ctxTexto) return String(t).length * px * (negrito ? 0.6 : 0.56);
+    ctxTexto.font = `${negrito ? 700 : 400} ${px}px ${fonteGraficos()}`;
+    return ctxTexto.measureText(String(t)).width;
+  }
+  // a fonte do site chega depois: redesenha os gráficos com as medidas dela
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => graficos.forEach((g, id) => { const el = $(id); if (el && el.offsetParent) el.innerHTML = g.fn(g.larg); }));
   // eixo das categorias: na horizontal se couber; senão, inclinado (devolve o espaço extra que precisa embaixo)
   function eixoX(cats, x, passo, y) {
     const maior = Math.max(0, ...cats.map((c) => larguraTexto(c)));
-    if (maior + 8 <= passo) return { svg: cats.map((c, i) => `<text class="x" x="${x(i)}" y="${y}">${c}</text>`).join(""), extra: 0, pad: 0 };
-    return { svg: cats.map((c, i) => `<text class="x-rot" transform="translate(${x(i) + 4},${y - 8}) rotate(-35)">${c}</text>`).join(""),
+    if (maior + 8 <= passo) return { svg: cats.map((c, i) => `<text class="x" x="${x(i)}" y="${y}">${esc(c)}</text>`).join(""), extra: 0, pad: 0 };
+    return { svg: cats.map((c, i) => `<text class="x-rot" transform="translate(${x(i) + 4},${y - 8}) rotate(-35)">${esc(c)}</text>`).join(""),
       extra: Math.ceil(maior * 0.6), pad: Math.max(0, Math.ceil(maior * 0.82 - x(0))) };   // pad: o 1º rótulo inclinado não sai pela esquerda
   }
-  // largura útil e eixo: a margem dos rótulos inclinados entra na largura do quadro (só passa dela se faltar espaço)
-  function ajustaEixo(cats, W, minL, y) {
+  // largura útil e eixo: a margem dos rótulos inclinados sai da largura do quadro (o gráfico nunca fica mais largo que ele)
+  function ajustaEixo(cats, W, y) {
     const n = Math.max(1, cats.length), calc = (larg) => ({ larg, passo: larg / n, ex: eixoX(cats, (i) => (larg / n) * i + larg / n / 2, larg / n, y) });
-    let r = calc(Math.max(W, minL));
-    if (r.ex.pad && r.larg > minL) r = calc(Math.max(minL, r.larg - r.ex.pad - 2));
+    let r = calc(W);
+    for (let t = 0; t < 3 && r.larg + r.ex.pad > W; t++) r = calc(W - r.ex.pad - 2);   // a margem cresce um pouco quando as colunas estreitam
     return r;
   }
-  // abre o SVG com a margem esquerda do eixo (o conteúdo é deslocado e o SVG fica mais largo)
+  // abre o SVG com a margem esquerda do eixo (o conteúdo é deslocado para a direita)
   const abreSvg = (larg, alt, pad, extra = "") => `<svg width="${larg + pad}" height="${alt}" viewBox="0 0 ${larg + pad} ${alt}"${extra}><g transform="translate(${pad},0)">`;
-  // barras agrupadas; null = sem dado (não desenha)
-  function svgBarras(cats, series, rotulo, W) {
-    const n = Math.max(1, cats.length), minL = n * (12 * series.length + 20), base = 214, topo = 30;
-    const max = Math.max(1, ...series.flatMap(([v]) => v.filter((x) => x != null)));
-    const { larg, passo, ex } = ajustaEixo(cats, W, minL, base + 18), bw = Math.min(30, (passo * 0.7) / series.length), cx = (i) => passo * i + passo / 2;
-    // rótulos de valor: todos se couberem lado a lado; só o da última série se couber um; senão nenhum
-    const lv = Math.max(0, ...series.flatMap(([v]) => v.filter((x) => x != null).map((x) => larguraTexto(rotulo(x), 10))));
-    const quais = passo >= series.length * (lv + 4) ? "todos" : passo >= lv + 2 ? "ultimo" : "nenhum";
-    const alt = 260 + ex.extra;
-    let svg = abreSvg(larg, alt, ex.pad) + `<line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>`;
-    cats.forEach((cat, i) => {
-      series.forEach(([v, cls], j) => {
-        if (v[i] == null) return;
-        const h = ((base - topo) * Math.max(0, v[i])) / max, x = cx(i) + (j - series.length / 2) * (bw + 4) + 2;
-        const mostra = quais === "todos" || (quais === "ultimo" && j === series.length - 1);
-        svg += `<g><title>${cat}: ${rotulo(v[i])}</title><rect class="${cls}" x="${x}" y="${base - h}" width="${bw}" height="${h}" rx="2"/>`
-          + (mostra ? `<text class="r-${j ? "at" : "ant"}" x="${quais === "ultimo" ? cx(i) : x + bw / 2}" y="${base - h - 4}">${rotulo(v[i])}</text>` : "") + "</g>";
-      });
-    });
-    return svg + ex.svg + "</g></svg>";
+  // rótulo de valor: na horizontal (x, y = centro e base do texto) ou na vertical, subindo (y = onde começa) ou descendo.
+  // fundo: caixa branca atrás do número, para uma linha que passe por ali não atrapalhar a leitura (Pareto e linhas)
+  function rotuloValor(cls, px, modo, x, y, txt, desce = false, fundo = false) {
+    const w = larguraTexto(txt, px, true), caixa = (x0) => (fundo ? `<rect class="fundo-rot" x="${x0 - 2}" y="${-px + 1}" width="${w + 4}" height="${px + 2}" rx="2"/>` : "");
+    if (modo === "h") return `<g transform="translate(${x},${y})">${caixa(-w / 2)}<text class="${cls}" style="font-size:${px}px">${txt}</text></g>`;
+    return `<g transform="translate(${x + px * 0.36},${y}) rotate(-90)">${caixa(desce ? -w : 0)}<text class="${cls} ${desce ? "rve" : "rv"}" style="font-size:${px}px">${txt}</text></g>`;
   }
-  // linhas; abaixo (3º item da série): rótulos sob os pontos, para não sobrepor a outra série
+
+  // Barras agrupadas, com o valor em todas as barras:
+  //  - em pé, com o valor na horizontal (fonte 10 ou 9) se couber sobre a barra sem encostar na vizinha; senão na vertical;
+  //  - barras finas demais até para o valor na vertical (celular, muitos dias): barras deitadas, uma linha por categoria,
+  //    que crescem para baixo em vez de rolar para o lado.
+  // o = { cats, sub (2ª linha do rótulo, opcional), series: [[valores, classe | (i) => classe]], rotulo, titulo(i) (opcional),
+  //       sobre({ cx, base, plot, larg }) → svg desenhado por cima das barras e por baixo dos valores (ex.: a linha do Pareto) }
+  // null = sem dado; valor 0 não tem barra nem rótulo.
+  function barras(o, W) {
+    const k = o.series.length, n = Math.max(1, o.cats.length), plot = 180;
+    const vals = o.series.flatMap(([v]) => v.filter((x) => x != null && x !== 0)), max = Math.max(1e-9, ...vals.map((x) => Math.max(0, x)));
+    const lvDe = (px) => Math.max(0, ...vals.map((x) => larguraTexto(o.rotulo(x), px, true)));
+    const cls = (s, i) => (typeof s[1] === "function" ? s[1](i) : s[1]), rotCls = (j) => (j === k - 1 ? "r-at" : "r-ant");
+    const titulo = (i) => (o.titulo ? o.titulo(i)
+      : `${o.cats[i]}${o.sub && o.sub[i] ? ` (${o.sub[i]})` : ""}: ${o.series.map(([v]) => (v[i] == null ? "—" : o.rotulo(v[i]))).join(" · ")}`);
+    const geo = (larg) => {
+      const passo = larg / n, gap = k > 1 ? 2 : 0, bw = Math.max(2, Math.min(46, (passo * (k > 1 ? 0.86 : 0.6) - gap * (k - 1)) / k));
+      return { passo, gap, bw, vizinho: k > 1 ? bw + gap : passo * 0.92 };   // espaço até o rótulo da barra ao lado
+    };
+    const modoDe = (g) => {
+      for (const px of [10, 9]) if (lvDe(px) + 3 <= g.vizinho) return { modo: "h", px };
+      return g.vizinho >= 11 ? { modo: "v", px: g.vizinho >= 12.5 ? 10 : 9 } : { modo: "deitado", px: 10 };
+    };
+    let g = geo(W), m = modoDe(g), topo = 0, base = 0, r = null;
+    for (let t = 0; t < 3 && m.modo !== "deitado"; t++) {
+      topo = m.modo === "v" ? Math.ceil(lvDe(m.px)) + 10 : 20;
+      base = topo + plot;
+      r = ajustaEixo(o.cats, W, base + 18);
+      g = geo(r.larg);
+      const m2 = modoDe(g);
+      if (m2.modo === m.modo && m2.px === m.px) break;
+      m = m2;
+    }
+    if (m.modo !== "deitado") {
+      const { larg, ex } = r, cx = (i) => g.passo * i + g.passo / 2, sub = o.sub && !ex.extra;
+      const alt = base + 24 + (sub ? 14 : 0) + ex.extra;
+      let svgB = "", svgR = "";
+      o.cats.forEach((_, i) => {
+        const x0 = cx(i) - (k * g.bw + (k - 1) * g.gap) / 2;
+        let gb = `<g><title>${esc(titulo(i))}</title>`;
+        o.series.forEach((s, j) => {
+          const v = s[0][i];
+          if (v == null || v === 0) return;
+          const h = (plot * Math.max(0, v)) / max, x = x0 + j * (g.bw + g.gap), topoB = base - h;
+          gb += `<rect class="${cls(s, i)}" x="${x}" y="${topoB}" width="${g.bw}" height="${h}" rx="2"/>`;
+          svgR += rotuloValor(rotCls(j), m.px, m.modo, x + g.bw / 2, topoB - 4, o.rotulo(v), false, !!o.fundo);
+        });
+        svgB += gb + "</g>";
+        if (sub && o.sub[i]) svgB += `<text class="x2" x="${cx(i)}" y="${base + 32}">${o.sub[i]}</text>`;
+      });
+      const sobre = o.sobre ? o.sobre({ cx, base, plot, larg }) : "";
+      return abreSvg(larg, alt, ex.pad) + `<line x1="0" y1="${base}" x2="${larg}" y2="${base}" class="eixo"/>` + svgB + sobre + svgR + ex.svg + "</g></svg>";
+    }
+    // barras deitadas: nome da categoria à esquerda, uma barra por série e o valor logo depois da barra
+    const larg = Math.max(260, W), nomeCat = (i) => o.cats[i] + (o.sub && o.sub[i] ? ` · ${o.sub[i]}` : "");
+    const esq = Math.min(Math.round(larg * 0.34), Math.ceil(Math.max(...o.cats.map((_, i) => larguraTexto(nomeCat(i))))) + 10);
+    const cabe = Math.max(4, Math.floor((esq - 10) / (11.5 * 0.56))), lv = Math.ceil(lvDe(10)) + 8;
+    const faixa = Math.max(20, larg - esq - lv), bh = k > 1 ? 10 : 14, linha = k * (bh + 3) + 9, alt = n * linha + 4;
+    let svg = `<svg width="${larg}" height="${alt}" viewBox="0 0 ${larg} ${alt}"><line x1="${esq}" y1="0" x2="${esq}" y2="${alt}" class="eixo"/>`;
+    o.cats.forEach((_, i) => {
+      const y0 = i * linha + 4, nome = nomeCat(i).length > cabe ? nomeCat(i).slice(0, cabe - 1) + "…" : nomeCat(i);
+      svg += `<g><title>${esc(titulo(i))}</title><text class="x-cat" x="${esq - 6}" y="${y0 + (k * (bh + 3)) / 2 + 3}">${esc(nome)}</text>`;
+      o.series.forEach((s, j) => {
+        const v = s[0][i];
+        if (v == null || v === 0) return;
+        const w = (faixa * Math.max(0, v)) / max, y = y0 + j * (bh + 3);
+        svg += `<rect class="${cls(s, i)}" x="${esq}" y="${y}" width="${w}" height="${bh}" rx="2"/>`
+          + `<text class="${rotCls(j)} rh" x="${esq + w + 4}" y="${y + bh - 1}">${o.rotulo(v)}</text>`;
+      });
+      svg += "</g>";
+    });
+    return svg + "</svg>";
+  }
+  const svgBarras = (cats, series, rotulo, W) => barras({ cats, series, rotulo }, W);
+
+  // Linhas, com o valor em todos os pontos: em cada categoria, o valor da série mais alta fica acima do ponto e o da mais
+  // baixa, abaixo (não se sobrepõem); na horizontal se couber entre os pontos vizinhos, senão na vertical.
   function svgLinhas(cats, series, rotulo, W) {
-    const n = Math.max(1, cats.length), topo = 24, baixo = 200, { larg, passo, ex } = ajustaEixo(cats, W, n * 34, baixo + 26);
-    const vals = series.flatMap(([v]) => v.filter((x) => x != null));
-    const max = Math.max(0.01, ...vals), min = Math.min(-0.01, ...vals), y = (v) => topo + ((max - v) / (max - min)) * (baixo - topo);
-    const x = (i) => passo * i + passo / 2;
-    const lv = Math.max(0, ...vals.map((v) => larguraTexto(rotulo(v), 10))), comRotulo = passo >= lv + 6;
-    const alt = 240 + ex.extra;
-    let svg = abreSvg(larg, alt, ex.pad) + `<line x1="0" y1="${y(0)}" x2="${larg}" y2="${y(0)}" class="eixo"/>`;
-    series.forEach(([v, cls, abaixo]) => {
+    const n = Math.max(1, cats.length), plot = 170, vals = series.flatMap(([v]) => v.filter((x) => x != null));
+    const max = Math.max(0.01, ...vals), min = Math.min(-0.01, ...vals);
+    const lvDe = (px) => Math.max(0, ...vals.map((v) => larguraTexto(rotulo(v), px, true)));
+    const modoDe = (passo) => {
+      for (const px of [10, 9]) if (lvDe(px) + 4 <= passo) return { modo: "h", px };
+      return { modo: "v", px: passo >= 13 ? 10 : 9 };
+    };
+    let m = modoDe(W / n), r = null, margem = 0;
+    for (let t = 0; t < 3; t++) {
+      margem = m.modo === "h" ? 22 : Math.ceil(lvDe(m.px)) + 14;
+      r = ajustaEixo(cats, W, margem + plot + margem + 14);
+      const m2 = modoDe(r.passo);
+      if (m2.modo === m.modo && m2.px === m.px) break;
+      m = m2;
+    }
+    const { larg, passo, ex } = r, topo = margem, alt = margem + plot + margem + 22 + ex.extra;
+    const y = (v) => topo + ((max - v) / (max - min)) * plot, x = (i) => passo * i + passo / 2;
+    const abaixo = (j, i) => series.some(([v], jj) => jj !== j && v[i] != null && (v[i] > series[j][0][i] || (v[i] === series[j][0][i] && jj < j)));
+    let linhas = "", pontos = "", rots = "";
+    series.forEach(([v, cls], j) => {
       const pts = v.map((p, i) => (p == null ? null : `${x(i)},${y(p)}`)).filter(Boolean);
-      if (pts.length > 1) svg += `<polyline class="${cls}" points="${pts.join(" ")}"/>`;
+      if (pts.length > 1) linhas += `<polyline class="${cls}" points="${pts.join(" ")}"/>`;
       v.forEach((p, i) => {
         if (p == null) return;
-        svg += `<g><title>${cats[i]}: ${rotulo(p)}</title><circle class="${cls}" cx="${x(i)}" cy="${y(p)}" r="4"/>`
-          + (comRotulo ? `<text class="r-at" x="${x(i)}" y="${abaixo ? y(p) + 20 : y(p) - 8}">${rotulo(p)}</text>` : "") + "</g>";
+        const yy = y(p), ab = abaixo(j, i);
+        pontos += `<g><title>${esc(cats[i])}: ${rotulo(p)}</title><circle class="${cls}" cx="${x(i)}" cy="${yy}" r="4"/></g>`;
+        rots += rotuloValor(`r-at rl-${cls}`, m.px, m.modo, x(i), m.modo === "h" ? (ab ? yy + 8 + m.px : yy - 8) : (ab ? yy + 8 : yy - 8), rotulo(p), ab, true);
       });
     });
-    return svg + ex.svg + "</g></svg>";
+    return abreSvg(larg, alt, ex.pad) + `<line x1="0" y1="${y(0)}" x2="${larg}" y2="${y(0)}" class="eixo"/>` + linhas + pontos + rots + ex.svg + "</g></svg>";
   }
+
   // ----- Dados: os números por trás do que está na tela -----
   function desenhaDados() {
     const d = E.res.dados, mi = idxMes(E.mes), cal = C.calendario(E.mes), mk = marcas();

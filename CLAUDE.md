@@ -10,4 +10,6 @@
   Aumente `CACHE_FATURAMENTO` (a arrecadação não é relida).
 - Regras de negócio (cidades, subcategorias, feriados) ficam em `assets/regras.js`.
 - Gráficos: desenhe com `grafico(id, (largura) => svg…)` em `painel.js`, que usa a largura real do quadro e redesenha
-  quando ela muda (celular, janela, PDF). Não use `viewBox` fixo esticado: o texto ficaria gigante ou ilegível.
+  quando ela muda (celular, janela, PDF). Não use `viewBox` fixo esticado: o texto ficaria gigante ou ilegível. O gráfico
+  nunca passa da largura do quadro (sem rolagem lateral) e mostra o valor de todas as barras/pontos sem sobreposição:
+  use `barras(...)` e `svgLinhas(...)`, que escolhem o valor na horizontal, na vertical ou barras deitadas.
