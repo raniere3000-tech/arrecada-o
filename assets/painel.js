@@ -576,24 +576,25 @@
   const carregaXLSX = () => (window.XLSX ? Promise.resolve() : new Promise((ok, erro) => {
     const sc = document.createElement("script"); sc.src = "lib/xlsx.full.min.js"; sc.onload = ok; sc.onerror = erro; document.head.append(sc);
   }));
-  // Curva em Excel (para o BI): Dia útil, Data e Peso usado (o da tela: a média ou o editado), e uma aba com as informações
+  // Curva em Excel (para o BI): uma linha por dia do mês, na ordem das datas, com Data, Dia útil e Peso (o peso usado da tela:
+  // a média ou o editado). Os fins de semana e feriados (dia útil 0) vêm cada um com a sua data e o peso do 0 dividido
+  // igualmente entre eles. Uma 2ª aba traz as informações da curva.
   async function baixaCurvaExcel() {
     try { await carregaXLSX(); } catch (e) { toast("Não foi possível carregar a biblioteca de planilhas.", true); return; }
     const cal = C.calendario(E.mes), sup = E.sup, orc = orcadoMensal(E.mes, sup), cv = curvaDoMes(E.mes, sup), X = window.XLSX;
     const data = (iso) => new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
-    const linhas = [["Dia útil", "Data", "Peso usado"]];
-    for (let k = 1; k <= cal.uteis; k++) linhas.push([k, data(cal.dataDoDia[k]), cv.pesos[k]]);
-    linhas.push([0, null, cv.pesos[0]]);                   // 0 = fins de semana e feriados do mês (sem data)
+    const peso0 = cal.naoUteis ? cv.pesos[0] / cal.naoUteis : 0;
+    const linhas = [["Data", "Dia útil", "Peso"], ...cal.dias.map((x) => [data(x.data), x.ordem, x.ordem ? cv.pesos[x.ordem] : peso0])];
     const ws = X.utils.aoa_to_sheet(linhas, { cellDates: true });
     for (let r = 1; r < linhas.length; r++) {
-      const d = ws[X.utils.encode_cell({ r, c: 1 })], p = ws[X.utils.encode_cell({ r, c: 2 })];
+      const d = ws[X.utils.encode_cell({ r, c: 0 })], p = ws[X.utils.encode_cell({ r, c: 2 })];
       if (d) d.z = "dd/mm/yyyy";
       if (p) p.z = "0.00%";
     }
-    ws["!cols"] = [{ wch: 9 }, { wch: 12 }, { wch: 12 }];
+    ws["!cols"] = [{ wch: 12 }, { wch: 9 }, { wch: 12 }];
     const info = X.utils.aoa_to_sheet([
       ["Mês", C.rotuloMes(E.mes)], ["Superintendência", nomeSup(sup)], ["Dias úteis", cal.uteis],
-      ["Fins de semana e feriados (dia útil 0)", cal.naoUteis], ["Orçado mensal", orc.valor != null ? orc.valor : "sem orçado"], ["Fonte do orçado", orc.fonte || "—"],
+      ["Fins de semana e feriados (dia útil 0)", `${cal.naoUteis} dias, cada um com ${pct(peso0)} (peso do 0 de ${pct(cv.pesos[0])} dividido igualmente)`], ["Orçado mensal", orc.valor != null ? orc.valor : "sem orçado"], ["Fonte do orçado", orc.fonte || "—"],
       ["Curva", cv.editada ? "editada no painel" : "média dos meses anteriores"],
       ["Meses da média", cv.mesesMedia.length ? cv.mesesMedia.map(C.rotuloMes).join(", ") : "nenhum (dividida igualmente)"],
       ["Soma dos pesos", cv.pesos.reduce((a, b) => a + b, 0)], ["Gerado em", new Date().toLocaleString("pt-BR")], ["Versão do painel", VERSAO_SITE],
@@ -644,7 +645,7 @@
         o 0 vale para os fins de semana e feriados do mês. Edite o <b>peso usado</b> e salve: a soma é ajustada para 100% e vale para todos que usam a pasta.</p>
       <div class="wrap"><table class="tcurva"><thead><tr><th>Dia útil</th><th>Data</th><th>Média</th><th>Peso usado (%)</th><th>Orçado do dia</th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>
       <div class="orc-linha"><button type="button" class="btn" id="btnSalvaCurva">Salvar curva</button>
-        <button type="button" class="btn sec" id="btnCurvaExcel" title="Dia útil, data e peso usado, para usar no BI">Baixar Excel</button>
+        <button type="button" class="btn sec" id="btnCurvaExcel" title="Data, dia útil e peso de cada dia do mês (fins de semana e feriados com o peso do 0 dividido igualmente), para usar no BI">Baixar Excel</button>
         ${cv.editada ? '<button type="button" class="btn sec" id="btnLimpaCurva">Voltar à média</button>' : ""}</div>`;
     const chaveSup = sup || "TODAS";
     $("btnSalvaOrc").onclick = async () => {
