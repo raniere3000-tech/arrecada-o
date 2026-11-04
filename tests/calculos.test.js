@@ -495,3 +495,19 @@ test("base de oportunidades: colunas da base de contas a receber e situação da
   assert.deepEqual(C.colunasReceber(undefined, "A-Ativa"), { saldo: null, sit: "Ativa" });
   assert.deepEqual(C.colunasReceber(undefined, ""), { saldo: null, sit: "" });
 });
+
+test("fechamento: com o último dia útil marcado, entram os dias úteis seguintes dos meses mais longos", () => {
+  const ate21 = C.mascaraAte(21, true);
+  assert.deepEqual(C.diasDaMascara(C.estendeSel(ate21, 21)), [...Array(24).keys()]);          // 0 e 1 a 23
+  assert.equal(C.estendeSel(C.mascaraAte(13), 21), C.mascaraAte(13));                          // mês em andamento: igual
+  assert.deepEqual(C.diasDaMascara(C.estendeSel(1 << 21, 21)), [21, 22, 23]);                  // só o último dia: também
+  assert.deepEqual(C.diasDaMascara(C.estendeSel((1 << 5) | (1 << 22), 21)), [5, 22]);          // 22 marcado à mão vale
+  // julho/2026 (23 dias úteis) comparado com outubro/2026 (21) fechado: entram os dias 22 e 23 de julho
+  const a = new C.Agregador();
+  a.adiciona(linha(1, "30/07/2026", "100,00")); a.adiciona(linha(2, "31/07/2026", "50,00"));   // 22º e 23º dias úteis de julho
+  a.adiciona(linha(3, "01/07/2026", "10,00")); a.adiciona(linha(4, "30/10/2026", "7,00"));     // 1º de julho e 21º de outubro
+  const d = a.resultado(new Map()), tudo = C.marcaCombos(d, {}), jul = d.meses.indexOf("2026-07");
+  assert.equal(C.calendario("2026-07").uteis, 23);
+  perto(C.totalDoMes(d, jul, tudo, C.mascaraAte(21)).valor, 10);
+  perto(C.totalDoMes(d, jul, tudo, C.estendeSel(C.mascaraAte(21), 21)).valor, 160);
+});

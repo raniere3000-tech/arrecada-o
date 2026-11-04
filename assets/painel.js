@@ -369,16 +369,25 @@
     desenhaDias();
     const filtros = [`Superintendência: ${nomeSup(E.sup)}`, E.cidade ? `Cidade: ${E.cidade}` : "", E.grupo ? `Subcategoria: ${E.grupo}` : "",
       `Mês: ${C.rotuloMes(E.mes)}`, `Orçado: ${fonteAtiva(E.mes) === DIGITADO ? "digitado" : fonteAtiva(E.mes)}`,
-      `dias úteis: ${rotuloSel(E.sel)}`].filter(Boolean).join(" · ");
+      `dias úteis: ${rotuloDias()}`].filter(Boolean).join(" · ");
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
-    document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloSel(E.sel)} de cada mês`; });
+    document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloDias()} de cada mês`; });
     $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && !["localidade", "analise", "clientes"].includes(E.aba));   // Diagnóstico, Ranking e Clientes usam os dias marcados
     ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
       conversao: desenhaConversao, clientes: desenhaClientes, localidade: desenhaLocalidade })[E.aba]();
   }
 
   // "1 a 12", "1, 5 e 10", "0 (fins de semana e feriados) e 1 a 3"
+  // Seleção usada nos cálculos: a marcada, mais (com o último dia útil do mês marcado) os dias úteis seguintes dos meses
+  // comparados que têm mais dias úteis. Orçado e curva do mês escolhido não mudam: os dias a mais não existem nele.
+  const selCalc = () => C.estendeSel(E.sel, C.calendario(E.mes).uteis);
+  // Texto dos dias marcados, com o aviso dos dias a mais (22 e 23) quando eles entram
+  function rotuloDias() {
+    const U = C.calendario(E.mes).uteis, extra = C.diasDaMascara(selCalc()).filter((d) => d > U);
+    const base = rotuloSel((E.sel & C.mascaraAte(U, true)) >>> 0);
+    return extra.length ? `${base} + ${extra.join(" e ")} nos meses com mais dias úteis` : base;
+  }
   function rotuloSel(sel) {
     const dias = C.diasDaMascara(sel).filter((d) => d > 0), partes = [];
     for (let i = 0; i < dias.length; i++) {
@@ -394,15 +403,24 @@
   function desenhaDias() {
     const cal = C.calendario(E.mes), ult = ultimoDiaComDados(E.mes);
     let h = `<button type="button" data-d="0" class="zero${E.sel & 1 ? " sel" : ""}" title="Fins de semana e feriados (${cal.naoUteis} dias)">0</button>`;
-    for (let k = 1; k <= cal.uteis; k++) {
+    const auto = selCalc();
+    for (let k = 1; k <= C.MAX_DIA; k++) {
+      if (k > cal.uteis) {                             // não existe neste mês: vale para os meses comparados mais longos
+        const marcado = E.sel & (1 << k), entra = auto & (1 << k);
+        h += `<button type="button" data-d="${k}" class="extra${marcado ? " sel" : entra ? " auto" : ""}" title="${C.rotuloMes(E.mes)} tem ${cal.uteis} dias úteis: o ${k}º vale para os meses `
+          + `comparados com mais dias úteis${entra && !marcado ? " (já entra porque o último dia útil está marcado)" : ""}">${k}</button>`;
+        continue;
+      }
       const cls = [E.sel & (1 << k) ? "sel" : "", k > ult ? "futuro" : ""].filter(Boolean).join(" ");
       h += `<button type="button" data-d="${k}" class="${cls}" title="${dataBR(cal.dataDoDia[k])}">${k}</button>`;
     }
     h += `<span class="dias-acoes sem-pdf"><button type="button" data-acao="ate" title="Marca do dia útil 1 ao último com dados">1 a ${ult || cal.uteis}</button>`
       + `<button type="button" data-acao="limpa">Limpar</button></span>`;
     $("dias").innerHTML = h;
-    $("diasNota").textContent = `${C.rotuloMes(E.mes)}: ${cal.uteis} dias úteis · marcados: ${rotuloSel(E.sel)} · clique em cada dia para marcar ou desmarcar;`
-      + " os outros meses usam os mesmos dias úteis · 0 = fins de semana e feriados";
+    $("diasNota").textContent = `${C.rotuloMes(E.mes)}: ${cal.uteis} dias úteis · marcados: ${rotuloDias()} · clique em cada dia para marcar ou desmarcar;`
+      + " os outros meses usam os mesmos dias úteis · 0 = fins de semana e feriados"
+      + (cal.uteis < C.MAX_DIA ? ` · ${cal.uteis + 1 === C.MAX_DIA ? C.MAX_DIA : cal.uteis + 2 === C.MAX_DIA ? `${cal.uteis + 1} e ${C.MAX_DIA}` : `${cal.uteis + 1} a ${C.MAX_DIA}`}`
+        + `: só existem em meses mais longos e entram sozinhos quando o ${cal.uteis}º (último) está marcado` : "");
   }
   $("dias").addEventListener("click", (e) => {
     const b = e.target.closest("button");
@@ -420,7 +438,7 @@
 
   // ----- Resumo -----
   function desenhaResumo() {
-    const d = E.res.dados, mi = idxMes(E.mes), mk = marcas(), cal = C.calendario(E.mes), sel = E.sel;
+    const d = E.res.dados, mi = idxMes(E.mes), mk = marcas(), cal = C.calendario(E.mes), sel = selCalc();
     const s = C.serieDoMes(d, mi, mk), tot = C.totalDoMes(d, mi, mk, sel), ult = ultimoDiaComDados(E.mes);
     const dias = C.diasDaMascara(sel).filter((k) => k <= cal.uteis);   // só os dias marcados, nesta ordem (0 primeiro)
     const orc = filtroParcial() ? { valor: null, fonte: "" } : orcadoMensal(E.mes, E.sup);
@@ -491,10 +509,10 @@
     // faixa: dias úteis dos dois meses
     $("faixaDias").innerHTML = `<b>Dias úteis no mês</b><span>${nAt}: <b>${cal.uteis} dias</b></span><span>${nAnt}: <b>${calAnt.uteis} dias</b></span>`
       + `<span><b>Δ ${cal.uteis - calAnt.uteis >= 0 ? "" : "−"}${Math.abs(cal.uteis - calAnt.uteis)} dia${Math.abs(cal.uteis - calAnt.uteis) === 1 ? "" : "s"}</b></span>`
-      + `<span>Dias marcados: <b>${rotuloSel(E.sel)}</b></span>`;
+      + `<span>Dias marcados: <b>${rotuloDias()}</b></span>`;
     // destaques
     $("destTitulo").textContent = `Destaques do mês — ${nAt} — ${filtro.toUpperCase()}`;
-    const tA = C.totalDoMes(d, idxMes(E.mes), mk, E.sel), tB = miAnt >= 0 ? C.totalDoMes(d, miAnt, mk, E.sel) : null;
+    const tA = C.totalDoMes(d, idxMes(E.mes), mk, selCalc()), tB = miAnt >= 0 ? C.totalDoMes(d, miAnt, mk, selCalc()) : null;
     const delta = (a, b, f) => (b ? ` (${a - b >= 0 ? "+" : "−"}${f(Math.abs(a - b))} vs ${nAnt})` : "");
     const tic = (t) => (t && t.contas ? t.valor / t.contas : 0);
     const porDia = dias.map((k, i) => ({ k, dif: at[i] - an[i], dt: (s.contas[k] ? s.valor[k] / s.contas[k] : 0) - (sa && sa.contas[k] ? sa.valor[k] / sa.contas[k] : 0), temAnt: !!(sa && sa.contas[k]) && !!s.contas[k] }));
@@ -511,7 +529,7 @@
       ["Top clientes — Quedas", '<li id="destQuedas">calculando…</li>'],
     ];
     $("destaques").innerHTML = blocos.map(([t, li]) => `<div class="dest"><h3>${t}</h3><ul>${li}</ul></div>`).join("");
-    if (worker) worker.postMessage({ tipo: "analise", para: "resumo", id: ++idResumo, mi: idxMes(E.mes), miAnt, marcas: mk, sel: E.sel, n: 100 });
+    if (worker) worker.postMessage({ tipo: "analise", para: "resumo", id: ++idResumo, mi: idxMes(E.mes), miAnt, marcas: mk, sel: selCalc(), n: 100 });
     // consolidado por dia útil
     $("consNota").textContent = "valores do dia sem o desconto; o total tem o desconto comercial, como nas outras tabelas";
     const linhas = dias.map((k, i) => {
@@ -637,8 +655,8 @@
   // linhas: [{rot, chave, cls}] → três tabelas (valor, clientes, contas)
   function tresTabelas(ids, grupoDe, ordemRot, opcoes = {}) {
     const d = E.res.dados, meses = mesesDaComparacao(), idx = meses.map(idxMes), mk = marcas();
-    const g = C.porGrupo(d, idx, mk, E.sel, grupoDe);
-    const det = opcoes.detalheDe ? C.porGrupo(d, idx, mk, E.sel, opcoes.detalheDe) : null;
+    const g = C.porGrupo(d, idx, mk, selCalc(), grupoDe);
+    const det = opcoes.detalheDe ? C.porGrupo(d, idx, mk, selCalc(), opcoes.detalheDe) : null;
     const rotulos = ordemRot([...g.keys()]);
     const cab = [opcoes.titulo, ...meses.map(C.rotuloMes)];
     const total = (campo) => idx.map((m) => { let s = 0; for (const l of g.values()) { const c = l.get(m); if (c) s += c[campo]; } return s; });
@@ -690,7 +708,7 @@
   // ----- Escada -----
   function desenhaEscada() {
     const d = E.res.dados, meses = mesesDaComparacao(), idx = meses.map(idxMes);
-    const esq = C.escada(d, idx, marcas(), E.sel);
+    const esq = C.escada(d, idx, marcas(), selCalc());
     // no painel, todos os vencimentos; no PDF (executivo), até 2 meses depois do mês escolhido e o resto numa linha só
     const limite = C.mesAnterior(E.mes, -2), POST = "\u0002depois";
     const resumida = document.body.classList.contains("gerando-pdf");
@@ -745,10 +763,10 @@
   function desenhaAnalise() {
     const mi = idxMes(E.mes), ant = C.mesAnterior(E.mes);
     const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
-    $("analiseNota").textContent = `${C.rotuloMes(E.mes)} × ${C.rotuloMes(ant)} · dias úteis ${rotuloSel(E.sel)} · ${filtro}. Calculando…`;
+    $("analiseNota").textContent = `${C.rotuloMes(E.mes)} × ${C.rotuloMes(ant)} · dias úteis ${rotuloDias()} · ${filtro}. Calculando…`;
     document.querySelectorAll(".analise-sub").forEach((x) => { x.textContent = C.rotuloMes(E.mes); });
     if (!worker) return;
-    worker.postMessage({ tipo: "analise", id: ++idAnalise, mi, miAnt: idxMes(ant), marcas: marcas(), sel: E.sel, n: 100 });
+    worker.postMessage({ tipo: "analise", id: ++idAnalise, mi, miAnt: idxMes(ant), marcas: marcas(), sel: selCalc(), n: 100 });
   }
   function recebeAnalise(m) {
     if (m.para === "resumo") { if (!m.erro) destaquesClientes(m); return; }
@@ -1379,17 +1397,17 @@
     const corteIso = corteD.toISOString().slice(0, 10), filtroG = E.grupo ? grupoCruz(E.grupo) : "";
     const okFat = (c) => (!E.sup || E.sup === "INTERIOR") && (!E.cidade || c.cidade === E.cidade) && (!filtroG || c.grupo === filtroG);
     $("clNota").textContent = `${[nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ")} · faturado sem pagamento: contas vencidas até ${dataBR(corteIso)}`
-      + ` (último crédito da pasta: ${dataBR(hojeIso)}) · deixaram/voltaram: ${C.rotuloMes(E.mes)}, dias úteis ${rotuloSel(E.sel)}, contra os 3 meses anteriores.`;
+      + ` (último crédito da pasta: ${dataBR(hojeIso)}) · deixaram/voltaram: ${C.rotuloMes(E.mes)}, dias úteis ${rotuloDias()}, contra os 3 meses anteriores.`;
     const avisos = [];
     if (!cz) avisos.push("Sem faturamento aproveitado na pasta: só as listas de deixaram e voltaram a pagar e a arrecadação da matrícula.");
     else if (E.sup && E.sup !== "INTERIOR") avisos.push(`O faturamento é só do Interior: com Superintendência = ${nomeSup(E.sup)}, o faturado sem pagamento fica vazio.`);
     $("clAviso").innerHTML = avisos.map((a) => `<p class="aviso-pdf">${esc(a)}</p>`).join("");
-    const chave = [E.mes, E.sel, E.sup, E.cidade, E.grupo, dias, E.recTipo].join("|");
+    const chave = [E.mes, selCalc(), E.sup, E.cidade, E.grupo, dias, E.recTipo].join("|");
     if (chave === chaveCl && clRes) { desenhaListasCl(); return; }
     chaveCl = chave; clRes = null;
     $("clKpis").innerHTML = '<p class="nota">Calculando…</p>';
     ["clFaixas", "clRefs", "clCid", "clSem", "clDeixaram", "clVoltaram"].forEach((id) => { $(id).innerHTML = ""; });
-    worker.postMessage({ tipo: "clientes", id: ++idCl, mi, marcas: marcas(), sel: E.sel, aceitaFat: cz ? cz.combos.map((c) => (okFat(c) ? 1 : 0)) : [],
+    worker.postMessage({ tipo: "clientes", id: ++idCl, mi, marcas: marcas(), sel: selCalc(), aceitaFat: cz ? cz.combos.map((c) => (okFat(c) ? 1 : 0)) : [],
       hoje: isoNum(hojeIso), corte: isoNum(corteIso), inicio: isoNum(d.meses[0] + "-01"), meses: d.meses, filtroRec: { sup: E.sup, cidade: E.cidade, grupoFat: filtroG }, recTipo: E.recTipo });
   }
   function recebeClientes(m) {
@@ -1443,7 +1461,7 @@
       }));
     const m3 = [3, 2, 1].map((n) => C.rotuloMes(C.mesAnterior(E.mes, n)));
     $("clNotaD").textContent = r.temHist
-      ? `${fmt(r.deixaram.length)} matrículas pagaram nos dias úteis ${rotuloSel(E.sel)} de ${m3.join(", ")} e ainda não pagaram nesses dias em ${C.rotuloMes(E.mes)}.`
+      ? `${fmt(r.deixaram.length)} matrículas pagaram nos dias úteis ${rotuloDias()} de ${m3.join(", ")} e ainda não pagaram nesses dias em ${C.rotuloMes(E.mes)}.`
       : "Faltam na pasta os 3 meses anteriores ao mês escolhido.";
     tabela("clDeixaram", ["Matrícula", "Nome", "Cidade", "Subcategoria", ...m3.map((m) => m + " (R$)"), "Média (R$)", ...(comRec ? ["Saldo vencido na base (R$)"] : [])],
       r.deixaram.slice(0, 100).map((x) => {
@@ -1452,7 +1470,7 @@
       }));
     desenhaReceber(r.receber);
     $("clNotaV").textContent = r.temHist
-      ? `${fmt(r.voltaram.length)} matrículas pagaram nos dias úteis ${rotuloSel(E.sel)} de ${C.rotuloMes(E.mes)} sem nenhum pagamento em ${m3.join(", ")}.`
+      ? `${fmt(r.voltaram.length)} matrículas pagaram nos dias úteis ${rotuloDias()} de ${C.rotuloMes(E.mes)} sem nenhum pagamento em ${m3.join(", ")}.`
       : "Faltam na pasta os 3 meses anteriores ao mês escolhido.";
     tabela("clVoltaram", ["Matrícula", "Nome", "Cidade", "Subcategoria", `${C.rotuloMes(E.mes)} (R$)`],
       r.voltaram.slice(0, 100).map((x) => {
@@ -1612,7 +1630,7 @@
   const NIVEIS_DG = { cidade: ["Cidade", (c) => c.cidade], grupo: ["Subcategoria", (c) => c.grupo], sup: ["Superintendência", (c) => nomeSup(c.sup)],
     cidgrupo: ["Cidade × subcategoria", (c) => `${c.cidade} · ${c.grupo}`] };
   function desenhaLocalidade() {
-    const d = E.res.dados, mi = idxMes(E.mes), mk = marcas(), sel = E.sel, nivel = $("dgNivel").value, [titulo, grupoDe] = NIVEIS_DG[nivel];
+    const d = E.res.dados, mi = idxMes(E.mes), mk = marcas(), sel = selCalc(), nivel = $("dgNivel").value, [titulo, grupoDe] = NIVEIS_DG[nivel];
     const baseSel = $("dgBase").value, metodo = $("dgMetodo").value;
     const mesesBase = baseSel === "ant" ? [C.mesAnterior(E.mes)] : baseSel === "ano" ? [C.mesAnterior(E.mes, 12)] : [1, 2, 3].map((n) => C.mesAnterior(E.mes, n));
     const comDados = mesesBase.filter((m) => idxMes(m) >= 0);
@@ -1976,7 +1994,7 @@
   // ----- Dados: os números por trás do que está na tela -----
   function desenhaDados() {
     const d = E.res.dados, mi = idxMes(E.mes), cal = C.calendario(E.mes), mk = marcas();
-    const tot = C.totalDoMes(d, mi, mk, E.sel), orc = filtroParcial() ? null : orcadoMensal(E.mes, E.sup), cv = curvaDoMes(E.mes, E.sup);
+    const tot = C.totalDoMes(d, mi, mk, selCalc()), orc = filtroParcial() ? null : orcadoMensal(E.mes, E.sup), cv = curvaDoMes(E.mes, E.sup);
     const feriados = cal.dias.filter((x) => x.feriado).map((x) => dataBR(x.data));
     const marcados = C.diasDaMascara(E.sel).filter((k) => k <= cal.uteis);
     const datas = marcados.map((k) => (k ? dataBR(cal.dataDoDia[k]) : "fins de semana e feriados")).join(", ");
@@ -1984,7 +2002,7 @@
     const linhas = [
       ["Mês", `${C.rotuloMes(E.mes)}: ${cal.uteis} dias úteis e ${cal.naoUteis} dias de fim de semana ou feriado`],
       ["Feriados no mês", feriados.length ? feriados.join(", ") : "nenhum"],
-      ["Dias úteis marcados", `${rotuloSel(E.sel)}${datas ? ` (${datas})` : ""}`],
+      ["Dias úteis marcados", `${rotuloDias()}${datas ? ` (${datas})` : ""}`],
       ["Arrecadação nos dias", `${rs(tot.valor - tot.desconto)} de Val. Autenticado − ${rs(-tot.desconto)} de desconto = ${rs(tot.valor)}`],
       ["Contas pagas e clientes", `${fmt(tot.contas)} contas pagas · ${fmt(tot.clientes)} clientes distintos · ticket ${tot.contas ? fmt(tot.valor / tot.contas, 2) : "—"}`],
       ["Orçado mensal", orc ? (orc.valor != null ? `${rs(orc.valor)} (${esc(orc.fonte)})` : "sem orçado no mês para o orçado escolhido") : "por superintendência (escolha Cidade e Subcategoria = Todas)"],

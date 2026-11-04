@@ -419,6 +419,14 @@
   const mascaraAte = (N, incl0 = false) => { let m = incl0 ? 1 : 0; for (let d = 1; d <= N; d++) m |= 1 << d; return m >>> 0; };
   const diasDaMascara = (sel) => { const out = []; for (let d = 0; d <= MAX_DIA; d++) if (sel & (1 << d)) out.push(d); return out; };
   const noCorte = (d, sel) => (sel & (1 << d)) !== 0;
+  // Fechamento: com o último dia útil do mês escolhido (uteis) marcado, entram também os dias úteis seguintes (até o 23º)
+  // dos outros meses comparados, que podem ter mais dias úteis. Os botões 22 e 23 marcados à mão também valem.
+  function estendeSel(sel, uteis) {
+    if (!uteis || !(sel & (1 << uteis))) return sel >>> 0;
+    let m = sel;
+    for (let d = uteis + 1; d <= MAX_DIA; d++) m |= 1 << d;
+    return m >>> 0;
+  }
   const flagsMeses = (dados, mesesIdx) => { const q = new Uint8Array(dados.meses.length + 1); mesesIdx.forEach((m) => { if (m >= 0) q[m] = 1; }); return q; };
 
   // Por dia útil (0..23) de um mês: valor (sem desconto), contas, clientes distintos no dia
@@ -1025,7 +1033,7 @@
 
   return {
     MAX_DIA, MESES_CURTOS, chave, separaCsv, refDeTexto, vencNum, consertaAcento, LeituraFaturamento, cruzaFaturamento, matrizConversao, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
-    zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
+    zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, estendeSel, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
     clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes, faixaNum, montaReceber, analisaReceber, situacaoPadrao, colunasReceber,

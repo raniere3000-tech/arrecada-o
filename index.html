@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v36-20261028">
+<link rel="stylesheet" href="assets/painel.css?v=v37-20261104">
 </head>
 <body>
 
@@ -361,6 +361,9 @@
           <li><b>Mês</b>: mês da Data Crédito. As abas Subcategoria, Perfil, Cidades e Escada mostram o mês escolhido e os 13 anteriores que estão na pasta; o Resumo compara com os 2 anteriores.</li>
           <li><b>Dia útil</b>: cada Data Crédito recebe a ordem do dia útil no mês (1º, 2º…). Sábados, domingos e feriados nacionais e do RJ ficam com 0. Feriados usados: Confraternização, Carnaval (segunda e terça), Paixão de Cristo, Tiradentes, São Jorge, Dia do Trabalho, Corpus Christi, Independência, N. Sra. Aparecida, Finados, Proclamação da República, Consciência Negra e Natal.</li>
           <li><b>Dias marcados</b>: só os dias úteis marcados entram em todas as contas, e os outros meses usam os mesmos números de dia útil (comparação “até o mesmo dia útil”). O 0 junta todos os fins de semana e feriados do mês.</li>
+          <li><b>Fechamento do mês</b>: os meses têm de 18 a 23 dias úteis. Com o <b>último dia útil do mês escolhido</b> marcado, entram também os dias úteis seguintes
+            (até o 23º) dos meses comparados que têm mais dias úteis, e eles entram inteiros (ex.: out/2026, com 21 dias úteis, de 1 a 21, contra jul/2026, com 23, de 1 a 23).
+            Os botões depois do último dia útil (tracejados) também podem ser marcados à mão. Vale para todas as abas; o orçado e a curva do mês escolhido não mudam.</li>
         </ul></div>
 
       <div class="card"><h2>Resumo</h2>
@@ -509,9 +512,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v36-20261028"></script>
-<script src="assets/calculos.js?v=v36-20261028"></script>
-<script>const VERSAO_SITE = "v36-20261028"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v36-20261028"></script>
+<script src="assets/regras.js?v=v37-20261104"></script>
+<script src="assets/calculos.js?v=v37-20261104"></script>
+<script>const VERSAO_SITE = "v37-20261104"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v37-20261104"></script>
 </body>
 </html>
