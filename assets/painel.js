@@ -12,9 +12,14 @@
   const NOME_SUP = { INTERIOR: "Interior", LESTE: "Leste", [R.SEM_SUP]: "Sem SUP" };
   const DIGITADO = "__digitado";                      // opção do seletor de orçado: o valor digitado no painel
   const E = {
-    res: null, sup: "INTERIOR", cidade: "", grupo: "", mes: "", sel: 0, aba: "resumo",
+    res: null, sups: ["INTERIOR"], cidades: [], grupos: [], mes: "", sel: 0, aba: "resumo",
     abertos: new Set(["PUBLICO"]), ajustes: { orcado: {}, curva: {} }, pasta: null, rodando: false,
   };
+  // Filtros do cabeçalho com vários itens: E.sups, E.cidades e E.grupos (lista vazia = todas). E.sup, E.cidade e E.grupo
+  // dão o item quando só um está escolhido (senão ""): servem ao orçado e à curva, que são por superintendência. Para
+  // filtrar, use marcas(), okCombo() ou okFat() — nunca E.cidade/E.grupo, que ficam "" com dois ou mais escolhidos.
+  const unico = (l) => (l.length === 1 ? l[0] : "");
+  Object.defineProperties(E, { sup: { get: () => unico(E.sups) }, cidade: { get: () => unico(E.cidades) }, grupo: { get: () => unico(E.grupos) } });
   try { $("versao").textContent = VERSAO_SITE.split("-")[0]; } catch (e) { /* sem versão */ }
 
   // ===== formatação =====
@@ -204,7 +209,9 @@
       + (d.ultimaAtualizacao ? ` · atualizado em ${dataBR(d.ultimaAtualizacao.slice(0, 10))}${esc(d.ultimaAtualizacao.slice(10))}` : ""));
     $("vazio").hidden = true; $("area").hidden = false; $("abas").hidden = false; $("btnPdf").disabled = false;
     const sups = supsDisponiveis();
-    if (!sups.includes(E.sup)) E.sup = sups.includes("INTERIOR") ? "INTERIOR" : sups[0] || "";
+    E.sups = E.sups.filter((x) => sups.includes(x));
+    if (!E.sups.length && !E.res.__filtrosIniciados) E.sups = sups.includes("INTERIOR") ? ["INTERIOR"] : [];
+    E.res.__filtrosIniciados = true;
     if (!d.meses.includes(E.mes)) E.mes = d.meses[d.meses.length - 1];
     E.sel = selDoMes(E.mes);
     montaFiltros();
@@ -260,13 +267,13 @@
   }
   function montaFiltros() {
     const d = E.res.dados;
-    opcoes($("selSup"), [...supsDisponiveis().map((s) => [s, nomeSup(s)]), ["", "Todas"]], E.sup);
-    const cidades = [...new Set(d.combos.filter((c) => !E.sup || c.sup === E.sup).map((c) => c.cidade))].sort();
-    if (!cidades.includes(E.cidade)) E.cidade = "";
-    opcoes($("selCidade"), [["", "Todas"], ...cidades.map((c) => [c, c])], E.cidade);
+    filtroSup.define(supsDisponiveis().map((s) => [s, nomeSup(s)]), E.sups);
+    const cidades = [...new Set(d.combos.filter((c) => passa(E.sups, c.sup)).map((c) => c.cidade))].sort();
+    E.cidades = E.cidades.filter((c) => cidades.includes(c));                       // cidade fora das superintendências escolhidas sai
+    filtroCidade.define(cidades.map((c) => [c, c]), E.cidades);
     const grupos = ordena([...new Set(d.combos.map((c) => c.grupo))], R.ORDEM_SUBCATEGORIAS);
-    if (!grupos.includes(E.grupo)) E.grupo = "";
-    opcoes($("selGrupo"), [["", "Todas"], ...grupos.map((g) => [g, g])], E.grupo);
+    E.grupos = E.grupos.filter((g) => grupos.includes(g));
+    filtroGrupo.define(grupos.map((g) => [g, g]), E.grupos);
     opcoes($("selMes"), [...d.meses].reverse().map((m) => [m, C.rotuloMes(m)]), E.mes);
     montaSeletorOrcado();
   }
@@ -291,9 +298,54 @@
     desenha();
   });
   try { E.fonte = localStorage.getItem("arrecadacao_orcado") || ""; } catch (x) { E.fonte = ""; }
-  $("selSup").addEventListener("change", (e) => { E.sup = e.target.value; montaFiltros(); desenha(); });
-  $("selCidade").addEventListener("change", (e) => { E.cidade = e.target.value; desenha(); });
-  $("selGrupo").addEventListener("change", (e) => { E.grupo = e.target.value; desenha(); });
+  // Filtro de vários itens: botão com o resumo da escolha e, ao clicar, a lista com caixas de marcar. "Todas" limpa a
+  // escolha; com muitos itens, uma caixa de busca. Cada marcação já atualiza o painel.
+  function multiFiltro(id, nomePlural, aoMudar) {
+    const raiz = $(id), botao = raiz.querySelector(".multi-botao"), lista = raiz.querySelector(".multi-lista");
+    let itens = [], sel = [], busca = "";
+    const rot = (v) => (itens.find(([x]) => x === v) || [v, v])[1];
+    const resumo = () => (!sel.length ? "Todas" : sel.length <= 2 ? sel.map(rot).join(" + ") : `${sel.length} ${nomePlural}`);
+    function desenhaLista() {
+      const vis = itens.filter(([, t]) => !busca || C.chave(t).includes(C.chave(busca)));
+      lista.innerHTML = (itens.length > 8 ? `<input type="search" class="multi-busca" placeholder="Buscar…" value="${esc(busca)}">` : "")
+        + `<label class="multi-item multi-todas"><input type="checkbox" data-todas${sel.length ? "" : " checked"}> Todas</label>`
+        + vis.map(([v, t]) => `<label class="multi-item"><input type="checkbox" value="${esc(v)}"${sel.includes(v) ? " checked" : ""}> ${esc(t)}</label>`).join("")
+        + (vis.length ? "" : '<p class="multi-vazio">Nada encontrado.</p>');
+    }
+    const fecha = () => { lista.hidden = true; botao.setAttribute("aria-expanded", "false"); };
+    botao.addEventListener("click", () => {
+      const abrir = lista.hidden;
+      document.querySelectorAll(".multi-lista").forEach((l) => { l.hidden = true; });
+      if (!abrir) { fecha(); return; }
+      busca = ""; desenhaLista(); lista.hidden = false; botao.setAttribute("aria-expanded", "true");
+      const b = lista.querySelector(".multi-busca"); if (b) b.focus();
+    });
+    lista.addEventListener("input", (e) => {
+      if (e.target.classList.contains("multi-busca")) { busca = e.target.value; desenhaLista(); const b = lista.querySelector(".multi-busca"); b.focus(); b.setSelectionRange(busca.length, busca.length); }
+    });
+    lista.addEventListener("change", (e) => {
+      const cx = e.target;
+      if (cx.type !== "checkbox") return;
+      if (cx.hasAttribute("data-todas")) sel = [];
+      else sel = cx.checked ? [...sel, cx.value] : sel.filter((x) => x !== cx.value);
+      sel = itens.map(([v]) => v).filter((v) => sel.includes(v));                   // na ordem da lista
+      botao.textContent = resumo(); botao.title = sel.length ? sel.map(rot).join(", ") : "Todas";
+      desenhaLista();
+      aoMudar([...sel]);
+    });
+    document.addEventListener("click", (e) => { if (!raiz.contains(e.target)) fecha(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") fecha(); });
+    return {
+      define(novos, escolhidos) {
+        itens = novos; sel = escolhidos.filter((v) => itens.some(([x]) => x === v));
+        botao.disabled = false; botao.textContent = resumo(); botao.title = sel.length ? sel.map(rot).join(", ") : "Todas";
+        if (!lista.hidden) desenhaLista();
+      },
+    };
+  }
+  const filtroSup = multiFiltro("selSup", "superintendências", (l) => { E.sups = l; montaFiltros(); desenha(); });
+  const filtroCidade = multiFiltro("selCidade", "cidades", (l) => { E.cidades = l; desenha(); });
+  const filtroGrupo = multiFiltro("selGrupo", "subcategorias", (l) => { E.grupos = l; desenha(); });
   $("selMes").addEventListener("change", (e) => { E.mes = e.target.value; E.sel = selDoMes(E.mes); montaSeletorOrcado(); desenha(); });
 
   function ordena(lista, ordem) {
@@ -328,9 +380,22 @@
 
   // ===== dados filtrados =====
   const idxMes = (m) => E.res.dados.meses.indexOf(m);
-  const marcas = () => C.marcaCombos(E.res.dados, { sup: E.sup, cidade: E.cidade, grupo: E.grupo });
+  const marcas = () => C.marcaCombos(E.res.dados, { sup: E.sups, cidade: E.cidades, grupo: E.grupos });
+  const passa = (lista, v) => !lista.length || lista.includes(v);
+  const okCombo = (c) => passa(E.sups, c.sup) && passa(E.cidades, c.cidade) && passa(E.grupos, c.grupo);
+  // faturamento (só Interior): subcategorias escolhidas no padrão dele (Pequeno Comércio vai junto com Comercial)
+  const gruposFat = () => [...new Set(E.grupos.map((g) => grupoCruz(g)))];
+  const okFat = (c) => passa(E.cidades, c.cidade) && passa(gruposFat(), c.grupo);
+  const comInterior = () => passa(E.sups, "INTERIOR");
+  const supsTexto = () => (!E.sups.length ? "Todas" : E.sups.map(nomeSup).join(" + "));
+  // texto dos filtros (títulos, notas, PDF): "Interior · Rio Bonito + Cordeiro · 3 subcategorias"
+  function filtroTexto(sep = " · ", todas = "Todas") {
+    const parte = (l, nome) => (l.length <= 2 ? l.join(" + ") : `${l.length} ${nome}`);
+    return [E.sups.length ? E.sups.map(nomeSup).join(" + ") : todas, E.cidades.length ? parte(E.cidades, "cidades") : "", E.grupos.length ? parte(E.grupos, "subcategorias") : ""]
+      .filter(Boolean).join(sep);
+  }
   const marcasSup = (sup) => C.marcaCombos(E.res.dados, { sup });
-  const filtroParcial = () => !!(E.cidade || E.grupo);
+  const filtroParcial = () => !!(E.cidades.length || E.grupos.length);
 
   // Orçado mensal da SUP ("" = todas) no orçado escolhido: uma planilha RF ou o valor digitado no painel
   function orcadoMensal(mes, sup) {
@@ -367,7 +432,7 @@
   function desenha() {
     if (!E.res) return;
     desenhaDias();
-    const filtros = [`Superintendência: ${nomeSup(E.sup)}`, E.cidade ? `Cidade: ${E.cidade}` : "", E.grupo ? `Subcategoria: ${E.grupo}` : "",
+    const filtros = [`Superintendência: ${supsTexto()}`, E.cidades.length ? `Cidade: ${E.cidades.join(", ")}` : "", E.grupos.length ? `Subcategoria: ${E.grupos.join(", ")}` : "",
       `Mês: ${C.rotuloMes(E.mes)}`, `Orçado: ${fonteAtiva(E.mes) === DIGITADO ? "digitado" : fonteAtiva(E.mes)}`,
       `dias úteis: ${rotuloDias()}`].filter(Boolean).join(" · ");
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
@@ -498,7 +563,7 @@
     const d = E.res.dados, mk = marcas(), ant = C.mesAnterior(E.mes), miAnt = idxMes(ant);
     const sa = miAnt >= 0 ? C.serieDoMes(d, miAnt, mk) : null, calAnt = C.calendario(ant);
     const dias = C.diasDaMascara(E.sel).filter((k) => k <= cal.uteis);
-    const nAt = mesLongo(E.mes), nAnt = mesLongo(ant), filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" — ");
+    const nAt = mesLongo(E.mes), nAnt = mesLongo(ant), filtro = filtroTexto(" — ");
     const at = dias.map((k) => s.valor[k]), an = dias.map((k) => (sa ? sa.valor[k] : 0));
     const rot = (k) => (k ? `Dia ${k}` : "Fins de semana");
     // gráfico de barras (SVG): mês anterior × mês atual em cada dia útil marcado
@@ -798,7 +863,7 @@
   let idAnalise = 0, ultimaAnalise = null;
   function desenhaAnalise() {
     const mi = idxMes(E.mes), ant = C.mesAnterior(E.mes);
-    const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
+    const filtro = filtroTexto();
     $("analiseNota").textContent = `${C.rotuloMes(E.mes)} × ${C.rotuloMes(ant)} · dias úteis ${rotuloDias()} · ${filtro}. Calculando…`;
     document.querySelectorAll(".analise-sub").forEach((x) => { x.textContent = C.rotuloMes(E.mes); });
     if (!worker) return;
@@ -899,7 +964,7 @@
     if (m.id !== idCmp) return;
     $("cmpGerar").disabled = false;
     if (m.erro) { $("cmpStatus").textContent = "Erro: " + m.erro; return; }
-    const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
+    const filtro = filtroTexto();
     $("cmpStatus").textContent = `${fmt(m.linhas)} matrículas com pagamento em pelo menos um dos meses · ${filtro}.${textoCadastro(m.cadastro)}${textoReceber(m.comReceber)}`;
     const nome = `Comparativo_por_mes_${cmpPedido[0]}${cmpPedido.length > 1 ? "_a_" + cmpPedido[cmpPedido.length - 1] : ""}.csv`;
     $("cmpResultado").innerHTML = `<table class="compacta base-tabela"><thead><tr><th>Mês</th><th>Matrículas com pagamento</th><th>Arrecadado (R$)</th></tr></thead><tbody>`
@@ -995,7 +1060,7 @@
     $("opGerar").disabled = false;
     if (m.erro) { $("opStatus").textContent = "Erro: " + m.erro; return; }
     const d = E.res.dados, l = m.lista, total = l.reduce((a, x) => a + x.valor, 0), A = C.rotuloMes(opA), B = C.rotuloMes(opB);
-    const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
+    const filtro = filtroTexto();
     const ultB = d.ultimoCredito[opB];
     $("opStatus").textContent = `${fmt(l.length)} matrículas pagaram em ${A} e não pagaram em ${B}${ultB && opB === d.meses[d.meses.length - 1] ? ` (até ${dataBR(ultB)})` : ""} · ${filtro} · ${rs(total)} pagos em ${A}.${textoCadastro(m.cadastro)}${textoReceber(m.comReceber)}`;
     const porCid = new Map();
@@ -1052,14 +1117,13 @@
     if (!meses.includes(fxaMesEscolhido)) fxaMesEscolhido = refs[refs.length - 1] || d.meses[d.meses.length - 1];
     $("fxaMes").innerHTML = [...meses].reverse().map((m) => `<option value="${m}"${m === fxaMesEscolhido ? " selected" : ""}>${C.rotuloMes(m)}${refs.includes(m) ? "" : " (sem faturamento)"}</option>`).join("");
     const M = fxaMesEscolhido, Mant = C.mesAnterior(M);
-    const filtroG = E.grupo ? grupoCruz(E.grupo) : "";
-    const okFat = (c) => (!E.cidade || c.cidade === E.cidade) && (!filtroG || c.grupo === filtroG);
-    const mkArr = Uint8Array.from(d.combos, (c) => (c.sup === "INTERIOR" && (!E.cidade || c.cidade === E.cidade) && (!filtroG || grupoCruz(c.grupo) === filtroG) ? 1 : 0));
+    const filtroG = gruposFat().join(" + ");
+    const mkArr = Uint8Array.from(d.combos, (c) => (c.sup === "INTERIOR" && passa(E.cidades, c.cidade) && passa(gruposFat(), grupoCruz(c.grupo)) ? 1 : 0));
     const avisos = [];
-    if (E.sup && E.sup !== "INTERIOR") avisos.push(`O faturamento é só do Interior: o filtro Superintendência = ${nomeSup(E.sup)} não se aplica aqui (a comparação usa o Interior).`);
-    if (E.grupo === "PEQUENO COMERCIO") avisos.push("No cruzamento, Pequeno Comércio está junto com Comercial (o faturamento não separa).");
+    if (!comInterior()) avisos.push(`O faturamento é só do Interior: o filtro Superintendência = ${supsTexto()} não se aplica aqui (a comparação usa o Interior).`);
+    if (E.grupos.includes("PEQUENO COMERCIO")) avisos.push("No cruzamento, Pequeno Comércio está junto com Comercial (o faturamento não separa).");
     $("fxaAviso").innerHTML = avisos.map((a) => `<p class="aviso-pdf">${esc(a)}</p>`).join("");
-    const filtroTxt = ["Interior", E.cidade, filtroG].filter(Boolean).join(" · ");
+    const filtroTxt = ["Interior", E.cidades.length > 2 ? `${E.cidades.length} cidades` : E.cidades.join(" + "), filtroG].filter(Boolean).join(" · ");
     const ultimoArr = d.meses[d.meses.length - 1], parcial = M === ultimoArr ? ` · arrecadação de ${C.rotuloMes(M)} até ${dataBR(d.ultimoCredito[M])} (mês em andamento)` : "";
     $("fxaNota").textContent = `${filtroTxt} · faturado pela referência, arrecadado pelo mês de crédito${parcial}.`;
     // séries por mês
@@ -1162,18 +1226,17 @@
     if (!meses.includes(fxvMesEscolhido)) fxvMesEscolhido = meses.includes(E.mes) ? E.mes : meses[meses.length - 1];
     const temPg = new Set(cz.pagas.map((r) => r.mes));
     $("fxvMes").innerHTML = [...meses].reverse().map((m) => `<option value="${m}"${m === fxvMesEscolhido ? " selected" : ""}>${C.rotuloMes(m)}${temPg.has(m) ? "" : " (sem contas ligadas)"}</option>`).join("");
-    const M = fxvMesEscolhido, filtroG = E.grupo ? grupoCruz(E.grupo) : "";
-    const ok = (c) => (!E.cidade || c.cidade === E.cidade) && (!filtroG || c.grupo === filtroG);
+    const M = fxvMesEscolhido, filtroG = gruposFat().join(" + "), ok = okFat;
     const avisos = [];
-    if (E.sup && E.sup !== "INTERIOR") avisos.push(`O faturamento é só do Interior: o filtro Superintendência = ${nomeSup(E.sup)} não se aplica aqui.`);
+    if (!comInterior()) avisos.push(`O faturamento é só do Interior: o filtro Superintendência = ${supsTexto()} não se aplica aqui.`);
     $("fxvAviso").innerHTML = avisos.map((a) => `<p class="aviso-pdf">${esc(a)}</p>`).join("");
     const refs = [...new Set(cz.fat.map((r) => r.ref))].sort();
-    $("fxvNota").textContent = `${["Interior", E.cidade, filtroG].filter(Boolean).join(" · ")} · faturas na pasta: ${C.rotuloMes(refs[0])} a ${C.rotuloMes(refs[refs.length - 1])}.`;
+    $("fxvNota").textContent = `${["Interior", E.cidades.length > 2 ? `${E.cidades.length} cidades` : E.cidades.join(" + "), filtroG].filter(Boolean).join(" · ")} · faturas na pasta: ${C.rotuloMes(refs[0])} a ${C.rotuloMes(refs[refs.length - 1])}.`;
     const linhas = cz.pagas.filter((r) => r.mes === M && ok(cz.combos[r.c]));
     const soma = (l, k) => l.reduce((x, r) => x + r[k], 0);
     // mês a mês: arrecadado com conta identificada × faturado dessas mesmas contas; o total e o que ficou sem conta são do
     // Interior inteiro (a conciliação não tem cidade nem subcategoria), por isso só aparecem sem os filtros
-    const semFiltro = !(E.cidade || filtroG);
+    const semFiltro = !(E.cidades.length || E.grupos.length);
     fxvSerieLinhas = meses.filter((m) => temPg.has(m)).map((m) => {
       const l = cz.pagas.filter((r) => r.mes === m && ok(cz.combos[r.c])), c = cz.concil.find((x) => x.mes === m);
       const sem = c.semConta.reduce((x, v) => x + v, 0);
@@ -1181,7 +1244,7 @@
         semNF: c.semConta[0] + c.semConta[1] + c.semConta[2], parc: c.semConta[3] };
     });
     const S = fxvSerieLinhas;
-    $("fxvNotaSerie").textContent = `${["Interior", E.cidade, filtroG].filter(Boolean).join(" · ")} · ${S.length ? `${C.rotuloMes(S[0].mes)} a ${C.rotuloMes(S[S.length - 1].mes)}` : ""}`
+    $("fxvNotaSerie").textContent = `${["Interior", E.cidades.length > 2 ? `${E.cidades.length} cidades` : E.cidades.join(" + "), filtroG].filter(Boolean).join(" · ")} · ${S.length ? `${C.rotuloMes(S[0].mes)} a ${C.rotuloMes(S[S.length - 1].mes)}` : ""}`
       + " · arrecadado sem o desconto comercial (o desconto não é por conta). Conta paga em parcelas em meses diferentes entra em cada mês com o faturado inteiro.";
     grafico("fxvSerie", S.length && ((W) => barras({ cats: S.map((x) => C.rotuloMes(x.mes)), series: [[S.map((x) => x.faturado), "b-fat"], [S.map((x) => x.pago), "b-at"]], rotulo: curto,
       titulo: (i) => { const x = S[i];
@@ -1208,7 +1271,7 @@
     for (const r of linhas) { const o = porRef.get(r.ref) || { ref: r.ref, pago: 0, faturado: 0, contas: 0, matriculas: 0 }; o.pago += r.pago; o.faturado += r.faturado; o.contas += r.contas; o.matriculas += r.matriculas; porRef.set(r.ref, o); }
     const refsOrdem = [...porRef.values()].sort((a, b) => b.ref.localeCompare(a.ref));
     const mesmaRef = porRef.get(M), anterior = porRef.get(C.mesAnterior(M));
-    const filtrado = !!(E.cidade || filtroG);
+    const filtrado = !!(E.cidades.length || E.grupos.length);
     const card = (t, v, sub) => `<div class="kpi"><span>${t}</span><b>${v}</b><small>${sub}</small></div>`;
     $("fxvKpis").innerHTML = [
       card(`Arrecadado em ${C.rotuloMes(M)} com conta identificada`, milhoes(pago), filtrado ? "nos filtros de cidade/subcategoria" : `${total ? pct(pago / total) : "—"} do arrecadado no Interior (${rs(total)}, sem desconto)`),
@@ -1293,17 +1356,16 @@
       $("cvAviso").innerHTML = '<p class="aviso-pdf">Sem faturamento aproveitado na pasta: veja a aba Faturamento x Arrecadação para o motivo.</p>';
       return;
     }
-    const filtroG = E.grupo ? grupoCruz(E.grupo) : "";
-    const ok = (c) => (!E.cidade || c.cidade === E.cidade) && (!filtroG || c.grupo === filtroG);
-    $("cvAviso").innerHTML = E.sup && E.sup !== "INTERIOR"
-      ? `<p class="aviso-pdf">${esc(`O faturamento é só do Interior: o filtro Superintendência = ${nomeSup(E.sup)} não se aplica aqui.`)}</p>` : "";
+    const filtroG = gruposFat().join(" + "), ok = okFat;
+    $("cvAviso").innerHTML = !comInterior()
+      ? `<p class="aviso-pdf">${esc(`O faturamento é só do Interior: o filtro Superintendência = ${supsTexto()} não se aplica aqui.`)}</p>` : "";
     const meses = cz.concil.map((c) => c.mes), mz = C.matrizConversao(cz, ok, meses);
     cvMz = mz;
     $("cvCorpo").hidden = !mz.linhas.length;
     if (!mz.linhas.length) { $("cvNota").textContent = ""; $("cvAviso").innerHTML += '<p class="aviso-pdf">Nenhuma conta faturada nos filtros escolhidos.</p>'; return; }
     const porValor = $("cvMedida").value === "valor", acum = $("cvModo").value === "acum";
     const base = (l) => (porValor ? l.faturado : l.contas), med = (c) => (porValor ? c.valor : c.contas);
-    $("cvNota").textContent = `${["Interior", E.cidade, filtroG].filter(Boolean).join(" · ")} · faturas ${C.rotuloMes(mz.linhas[0].ref)} a ${C.rotuloMes(mz.linhas[mz.linhas.length - 1].ref)}`
+    $("cvNota").textContent = `${["Interior", E.cidades.length > 2 ? `${E.cidades.length} cidades` : E.cidades.join(" + "), filtroG].filter(Boolean).join(" · ")} · faturas ${C.rotuloMes(mz.linhas[0].ref)} a ${C.rotuloMes(mz.linhas[mz.linhas.length - 1].ref)}`
       + ` · arrecadação ${C.rotuloMes(meses[0])} a ${C.rotuloMes(mz.ultimo)} (crédito até ${dataBR(E.res.dados.ultimoCredito[mz.ultimo])}).`;
     $("cvLegenda").textContent = `${porValor ? "Valor recebido ÷ faturado da referência" : "Contas pagas pela 1ª vez ÷ contas faturadas"}, ${acum ? "acumulado até o mês" : "em cada mês"}. M = mês da referência.`;
     // matriz
@@ -1431,21 +1493,20 @@
     const ultimoMes = d.meses[d.meses.length - 1], hojeIso = d.ultimoCredito[ultimoMes], dias = +$("clCorte").value;
     const corteD = new Date(hojeIso + "T12:00:00Z");
     corteD.setUTCDate(corteD.getUTCDate() - dias);
-    const corteIso = corteD.toISOString().slice(0, 10), filtroG = E.grupo ? grupoCruz(E.grupo) : "";
-    const okFat = (c) => (!E.sup || E.sup === "INTERIOR") && (!E.cidade || c.cidade === E.cidade) && (!filtroG || c.grupo === filtroG);
-    $("clNota").textContent = `${[nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ")} · faturado sem pagamento: contas vencidas até ${dataBR(corteIso)}`
+    const corteIso = corteD.toISOString().slice(0, 10), okFatCl = (c) => comInterior() && okFat(c);
+    $("clNota").textContent = `${filtroTexto()} · faturado sem pagamento: contas vencidas até ${dataBR(corteIso)}`
       + ` (último crédito da pasta: ${dataBR(hojeIso)}) · deixaram/voltaram: ${C.rotuloMes(E.mes)}, dias úteis ${rotuloDias()}, contra os 3 meses anteriores.`;
     const avisos = [];
     if (!cz) avisos.push("Sem faturamento aproveitado na pasta: só as listas de deixaram e voltaram a pagar e a arrecadação da matrícula.");
-    else if (E.sup && E.sup !== "INTERIOR") avisos.push(`O faturamento é só do Interior: com Superintendência = ${nomeSup(E.sup)}, o faturado sem pagamento fica vazio.`);
+    else if (!comInterior()) avisos.push(`O faturamento é só do Interior: com Superintendência = ${supsTexto()}, o faturado sem pagamento fica vazio.`);
     $("clAviso").innerHTML = avisos.map((a) => `<p class="aviso-pdf">${esc(a)}</p>`).join("");
-    const chave = [E.mes, selCalc(), E.sup, E.cidade, E.grupo, dias, E.recTipo].join("|");
+    const chave = JSON.stringify([E.mes, selCalc(), E.sups, E.cidades, E.grupos, dias, E.recTipo]);
     if (chave === chaveCl && clRes) { desenhaListasCl(); return; }
     chaveCl = chave; clRes = null;
     $("clKpis").innerHTML = '<p class="nota">Calculando…</p>';
     ["clFaixas", "clRefs", "clCid", "clSem", "clDeixaram", "clVoltaram"].forEach((id) => { $(id).innerHTML = ""; });
-    worker.postMessage({ tipo: "clientes", id: ++idCl, mi, marcas: marcas(), sel: selCalc(), aceitaFat: cz ? cz.combos.map((c) => (okFat(c) ? 1 : 0)) : [],
-      hoje: isoNum(hojeIso), corte: isoNum(corteIso), inicio: isoNum(d.meses[0] + "-01"), meses: d.meses, filtroRec: { sup: E.sup, cidade: E.cidade, grupoFat: filtroG }, recTipo: E.recTipo });
+    worker.postMessage({ tipo: "clientes", id: ++idCl, mi, marcas: marcas(), sel: selCalc(), aceitaFat: cz ? cz.combos.map((c) => (okFatCl(c) ? 1 : 0)) : [],
+      hoje: isoNum(hojeIso), corte: isoNum(corteIso), inicio: isoNum(d.meses[0] + "-01"), meses: d.meses, filtroRec: { sups: E.sups, cidades: E.cidades, gruposFat: gruposFat() }, recTipo: E.recTipo });
   }
   function recebeClientes(m) {
     if (m.id !== idCl) return;
@@ -1586,7 +1647,7 @@
       return;
     }
     const t = rc.tot, M = C.rotuloMes(E.mes), d = E.res.dados;
-    const filtro = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
+    const filtro = filtroTexto();
     $("crNota").textContent = `${filtro} · posição de ${dataBR(ri.data)}: ${fmt(t.matriculas)} matrículas na base (${fmt(ri.matriculas)} sem filtros). `
       + `Saldo vencido = todas as faixas menos “00 - A Vencer”. Pagamentos de ${M} até ${dataBR(d.ultimoCredito[E.mes])}.`;
     const ano = rc.porFaixa.filter((f) => f.num >= 366).reduce((a, f) => a + f.saldo, 0);
@@ -1686,22 +1747,22 @@
     const fechado = (d.ultimoCredito[E.mes] || "") >= cal.dias[cal.dias.length - 1].data, mesInteiro = fechado ? C.totalDoMes(d, mi, mk, C.MASCARA_MES).valor : null;
     const criterio = { iguais: `meses de ${E.mes.slice(0, 4)} com ${cal.uteis} dias úteis`, iguais12: `últimos 12 meses com ${cal.uteis} dias úteis (nenhum no ano)`,
       ano: `meses anteriores de ${E.mes.slice(0, 4)} (nenhum com ${cal.uteis} dias úteis)`, ult12: "últimos 12 meses" }[mm.criterio];
-    $("dgNota").textContent = `${[nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ")} · ${C.rotuloMes(E.mes)}, dias úteis ${rotuloSel(sel)}`
+    $("dgNota").textContent = `${filtroTexto()} · ${C.rotuloMes(E.mes)}, dias úteis ${rotuloSel(sel)}`
       + ` (crédito até ${dataBR(d.ultimoCredito[E.mes])}; dia útil ${N} de ${cal.uteis}) · comparação com ${baseSel === "media3" ? "a média de " + mesesBase.map(C.rotuloMes).join(", ") : rotBase}, nos mesmos dias.`;
     $("dgAviso").innerHTML = comDados.length < mesesBase.length
       ? `<p class="aviso-pdf">${esc(comDados.length ? `Sem dados de ${mesesBase.filter((m) => !comDados.includes(m)).map(C.rotuloMes).join(", ")} na pasta: a média usa só ${comDados.map(C.rotuloMes).join(", ")}.` : `Sem dados de ${mesesBase.map(C.rotuloMes).join(", ")} na pasta para comparar.`)}</p>` : "";
     // faturado (Interior, referência = mês escolhido) por cidade / superintendência
-    const cz = E.res.cruzamento && E.res.cruzamento.fat.length ? E.res.cruzamento : null, filtroG = E.grupo ? grupoCruz(E.grupo) : "";
+    const cz = E.res.cruzamento && E.res.cruzamento.fat.length ? E.res.cruzamento : null;
     const fatRef = cz ? cz.fat.filter((f) => f.ref === E.mes) : [];
-    const comFat = fatRef.length && (nivel === "cidade" || nivel === "sup") && (!E.sup || E.sup === "INTERIOR");
+    const comFat = fatRef.length && (nivel === "cidade" || nivel === "sup") && comInterior();
     const fatDe = new Map();
     if (comFat) for (const f of fatRef) {
       const c = cz.combos[f.c];
-      if ((E.cidade && c.cidade !== E.cidade) || (filtroG && c.grupo !== filtroG)) continue;
+      if (!okFat(c)) continue;
       const k = nivel === "cidade" ? c.cidade : nomeSup(c.sup), o = fatDe.get(k) || { valor: 0, matriculas: 0 };
       o.valor += f.valor; o.matriculas += f.matriculas; fatDe.set(k, o);
     }
-    const comOrc = nivel === "sup" && !E.cidade && !E.grupo;
+    const comOrc = nivel === "sup" && !filtroParcial();
     const supDe = new Map(d.combos.map((c) => [nomeSup(c.sup), c.sup]));
     dgLinhas = linhas.map((l) => {
       const a = l.atual, b = l.base, f = fracao(l.rot), pj = proj(a.valor, f), fat = fatDe.get(l.rot);
@@ -2046,7 +2107,7 @@
       ["Curva do orçado", cv.mesesMedia.length ? `média de ${cv.mesesMedia.map(C.rotuloMes).join(", ")}${cv.editada ? " · pesos editados no painel" : ""}` : "sem meses anteriores: dividida igualmente"],
       ["Leitura", `${nArq} arquivo(s) de arrecadação · ${fmt(d.linhas)} linhas usadas · crédito até ${dataBR(d.ultimoCredito[d.meses[d.meses.length - 1]])}`],
     ];
-    $("dadosFiltros").textContent = [nomeSup(E.sup), E.cidade, E.grupo].filter(Boolean).join(" · ");
+    $("dadosFiltros").textContent = filtroTexto();
     $("dadosParametros").innerHTML = `<table class="explica"><tbody>${linhas.map(([a, b]) => `<tr><td class="rot"><b>${a}</b></td><td class="rot">${b}</td></tr>`).join("")}</tbody></table>`
       + `<details class="arquivos-dados"><summary>Arquivos lidos e avisos</summary>${E.htmlArquivos || ""}</details>`;
   }
@@ -2267,7 +2328,7 @@
     return `<section class="op-secao${cls ? " " + cls : ""}">${titulo ? `<h3>${titulo}${extra || ""}</h3>` : ""}`;
   }
   function desenhaOnePage() {
-    const D = opDados(), filtro = [E.sup ? nomeSup(E.sup) : "Todas as superintendências", E.cidade, E.grupo].filter(Boolean).join(" · ");
+    const D = opDados(), filtro = filtroTexto(" · ", "Todas as superintendências");
     const dataCab = D.ult ? dataBR(D.ult).slice(0, 6) + D.ult.slice(2, 4) : opMes(E.mes);
     const dest = opBlocoDestaque(D), S = opSemanas(D);
     let h = `<header class="op-cab"><span class="op-cab-sub">Águas do Rio · One page</span><h2>${esc(filtro)}: Acompanhamento da Arrecadação — ${esc(dataCab)}</h2></header>`;
@@ -2287,7 +2348,7 @@
     $("opFolha").innerHTML = h;
     grafico("opGrafico", (W) => svgOpDias(D, W));
     // Top 5: o worker calcula (mesma análise do Ranking de clientes); refaz só quando os filtros mudam
-    const chave = [E.mes, D.sel, E.sup, E.cidade, E.grupo].join("|");
+    const chave = JSON.stringify([E.mes, D.sel, E.sups, E.cidades, E.grupos]);
     if (chave !== opChaveTop) {
       opChaveTop = chave; opTop = null;
       if (worker) worker.postMessage({ tipo: "analise", para: "onepage", id: ++idOnePage, mi: D.mi, miAnt: D.miAnt, marcas: D.mk, sel: D.sel, n: 5 });
@@ -2338,7 +2399,7 @@
       const PW = 210, PH = (PW * foto.height) / foto.width;
       const pdf = new window.jspdf.jsPDF({ orientation: "portrait", unit: "mm", format: [PW, PH], compress: true });
       pdf.addImage(foto.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, PW, PH);
-      pdf.save(`OnePage_Arrecadacao_${(E.sup || "Todas").replace(/\s+/g, "_")}${E.cidade ? "_" + E.cidade.replace(/[^A-Za-z0-9]+/g, "_") : ""}_${E.mes}.pdf`);
+      pdf.save(`OnePage_Arrecadacao_${filtroTexto("_").normalize("NFD").replace(/[^A-Za-z0-9_]+/g, "_")}_${E.mes}.pdf`);
     } catch (e) {
       toast("Não foi possível gerar o PDF: " + esc(e.message || e), true);
     } finally {
@@ -2392,7 +2453,7 @@
         pdf.rect(0, 0, W, H, "F");
         pdf.addImage(cv.toDataURL("image/png"), "PNG", (W - w) / 2, M, w, h, undefined, "FAST");
       }
-      pdf.save(`Arrecadacao_${E.mes}_${(E.sup || "todas").toLowerCase()}.pdf`);
+      pdf.save(`Arrecadacao_${E.mes}_${(E.sups.join("_") || "todas").toLowerCase()}.pdf`);
     } catch (e) {
       toast("Não foi possível gerar o PDF: " + esc(e.message || e), true);
     } finally {

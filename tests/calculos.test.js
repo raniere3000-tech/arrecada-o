@@ -511,3 +511,19 @@ test("fechamento: com o último dia útil marcado, entram os dias úteis seguint
   perto(C.totalDoMes(d, jul, tudo, C.mascaraAte(21)).valor, 10);
   perto(C.totalDoMes(d, jul, tudo, C.estendeSel(C.mascaraAte(21), 21)).valor, 160);
 });
+
+test("filtros de vários itens: listas de superintendências, cidades e subcategorias", () => {
+  const a = new C.Agregador();
+  a.adiciona(linha(1, "01/10/2026", "10,00"));                                                        // Rio Bonito, Interior
+  a.adiciona({ ...linha(2, "01/10/2026", "20,00"), zona: "7-CORDEIRO" });                            // Cordeiro, Interior
+  a.adiciona({ ...linha(3, "01/10/2026", "40,00"), zona: "16-SAO GONCALO" });                        // São Gonçalo, Leste
+  a.adiciona({ ...linha(4, "01/10/2026", "80,00"), util: "200-COMERCIAL" });                         // Rio Bonito, Comercial
+  const d = a.resultado(new Map()), mi = d.meses.indexOf("2026-10"), sel = 1 << 1;
+  const tot = (f) => C.totalDoMes(d, mi, C.marcaCombos(d, f), sel).valor;
+  perto(tot({}), 150);
+  perto(tot({ sup: [] }), 150);                                                                       // lista vazia = todas
+  perto(tot({ sup: ["INTERIOR", "LESTE"] }), 150);
+  perto(tot({ cidade: ["RIO BONITO", "CORDEIRO"] }), 110);
+  perto(tot({ cidade: ["RIO BONITO"], grupo: ["RESIDENCIAL"] }), 10);
+  perto(tot({ sup: "LESTE" }), 40);                                                                   // um valor só continua valendo
+});

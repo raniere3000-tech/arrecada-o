@@ -406,11 +406,12 @@
 
   // ---------- consultas (página) ----------
   // dados = resultado(); filtro = { sup, cidade, grupo } ("" = todos)
+  // cada filtro: um valor, uma lista de valores (filtros de vários itens do cabeçalho) ou vazio = todos
+  const passaFiltro = (f, v) => (Array.isArray(f) ? !f.length || f.includes(v) : !f || f === v);
   function marcaCombos(dados, filtro = {}) {
     const f = new Uint8Array(dados.combos.length);
     dados.combos.forEach((c, i) => {
-      f[i] = (!filtro.sup || c.sup === filtro.sup) && (!filtro.cidade || c.cidade === filtro.cidade)
-        && (!filtro.grupo || c.grupo === filtro.grupo) ? 1 : 0;
+      f[i] = passaFiltro(filtro.sup, c.sup) && passaFiltro(filtro.cidade, c.cidade) && passaFiltro(filtro.grupo, c.grupo) ? 1 : 0;
     });
     return f;
   }

@@ -13,3 +13,6 @@
   quando ela muda (celular, janela, PDF). Não use `viewBox` fixo esticado: o texto ficaria gigante ou ilegível. O gráfico
   nunca passa da largura do quadro (sem rolagem lateral) e mostra o valor de todas as barras/pontos sem sobreposição:
   use `barras(...)` e `svgLinhas(...)`, que escolhem o valor na horizontal, na vertical ou barras deitadas.
+- Filtros do cabeçalho (Superintendência, Cidade, Subcategoria) são de vários itens: `E.sups`, `E.cidades`, `E.grupos`
+  (lista vazia = todas). Para filtrar use `marcas()`, `okCombo()` ou `okFat()`; `E.sup`/`E.cidade`/`E.grupo` só dão o
+  item quando há um só escolhido (servem ao orçado e à curva, que são por superintendência).

@@ -101,7 +101,8 @@ function respondeClientes(o) {
     r.semPagamento.confirmacao = conf;
     for (const x of r.deixaram) { const rc = receber.get(x.lig); x.saldo = rc && rc.vencido > 0 ? rc.vencido : null; }
     const f = o.filtroRec || {}, sup = supDaCidade();
-    const aceita = (x) => (!f.sup || sup.get(x.cidade) === f.sup) && (!f.cidade || x.cidade === f.cidade) && (!f.grupoFat || grupoFatDe(x.lig) === f.grupoFat);
+    const passa = (l, v) => !l || !l.length || l.includes(v);           // listas dos filtros de vários itens (vazia = todas)
+    const aceita = (x) => passa(f.sups, sup.get(x.cidade)) && passa(f.cidades, x.cidade) && passa(f.gruposFat, grupoFatDe(x.lig));
     r.receber = C.analisaReceber(receber, analise, o.mi, aceita, o.meses);
     for (const x of r.receber.lista) { x.nome = x.nome || nomeDe(x.lig); x.lig = ligTxt(x.lig); }
   }
