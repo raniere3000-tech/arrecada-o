@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v44-20261106">
+<link rel="stylesheet" href="assets/painel.css?v=v45-20261106">
 </head>
 <body>
 
@@ -137,8 +137,10 @@
 
     <section class="painel-aba onepage" data-painel="onepage" hidden>
       <div class="op-acoes"><button type="button" class="btn" id="opPdf">📄 Baixar PDF (uma página)</button>
-        <span class="nota">Acompanhamento da arrecadação numa folha (mesmo modelo do painel de faturamento). Segue os filtros do cabeçalho e os dias úteis marcados;
-          passe o mouse no gráfico para ver os valores exatos. Não entra no PDF executivo: tem o seu próprio PDF.</span></div>
+        <span class="nota">Acompanhamento diário numa folha (modelo do One page em PowerPoint). Interior ou Leste: escolha no filtro Superintendência.
+          Segue os dias úteis marcados; clique na semana para abrir ou fechar os dias. Economias e maiores inadimplentes vêm dos prints do BI na pasta <b>One Page</b>
+          (imagens ou um Excel com as imagens, cada uma numa aba chamada “Economias” ou “Inadimplentes”).</span></div>
+      <div class="op-acoes op-prints nota" id="opPrints"></div>
       <div class="op-folha" id="opFolha"></div>
     </section>
     <section class="painel-aba" data-painel="escada" hidden>
@@ -537,9 +539,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v44-20261106"></script>
-<script src="assets/calculos.js?v=v44-20261106"></script>
-<script>const VERSAO_SITE = "v44-20261106"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v44-20261106"></script>
+<script src="assets/regras.js?v=v45-20261106"></script>
+<script src="assets/calculos.js?v=v45-20261106"></script>
+<script>const VERSAO_SITE = "v45-20261106"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v45-20261106"></script>
 </body>
 </html>

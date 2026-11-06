@@ -7,7 +7,7 @@ para a internet: tudo é processado no navegador.
 ## Navegação
 
 - **Executivo** (acompanhamento e resultado): Resumo, Subcategoria, Perfil de pagamento, Cidades, Escada, One page (folha de
-  acompanhamento da arrecadação no modelo do painel de faturamento, com PDF de uma página) e Base (extração das linhas
+  acompanhamento diário no modelo do One page em PowerPoint, para Interior ou Leste pelo filtro, com PDF de uma página) e Base (extração das linhas
   completas por matrículas ou a base completa dos meses marcados, a base de oportunidades: pagaram num mês e não pagaram em outro;
   e o comparativo por mês: uma linha por matrícula e uma coluna de valor por mês; as duas podem trazer endereço,
   grupo e rota do faturamento mais recente e, no fim, o saldo vencido e a SIT_LIG da base de contas a receber).
@@ -23,6 +23,9 @@ para a internet: tudo é processado no navegador.
   faturado sem pagamento a investigar, deixaram e voltaram a pagar, histórico de uma matrícula; com a base de
   contas a receber na pasta, o “a investigar” é conferido por matrícula). O PDF é só do Executivo.
 - **Dados**: área à parte com as regras e a conferência dos números.
+- **Pasta One Page** (na pasta principal): prints do BI para o One page — imagens (PNG/JPG) ou um Excel com as imagens coladas.
+  Cada print vai para o seu lugar pelo nome da aba do Excel (ou do arquivo): “Economias” (cartão dos volumes acumulados) e
+  “Inadimplentes” (maiores inadimplentes). Os arquivos dessa pasta não entram na leitura da arrecadação.
 
 ## Como usar
 
