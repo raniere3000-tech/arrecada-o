@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v39-20261104">
+<link rel="stylesheet" href="assets/painel.css?v=v40-20261106">
 </head>
 <body>
 
@@ -57,6 +57,7 @@
     <button type="button" data-aba="perfil">Perfil de pagamento</button>
     <button type="button" data-aba="cidades">Cidades</button>
     <button type="button" data-aba="escada">Escada</button>
+    <button type="button" data-aba="onepage">One page</button>
     <button type="button" data-aba="base">Base</button>
   </div>
   <div class="toggle" role="tablist" data-grupo="analises" hidden>
@@ -133,6 +134,12 @@
       <div class="card"><h2>Contas pagas <small class="ate-dia"></small></h2><div class="wrap"><table id="tCidCon"></table></div></div>
     </section>
 
+    <section class="painel-aba onepage" data-painel="onepage" hidden>
+      <div class="op-acoes"><button type="button" class="btn" id="opPdf">📄 Baixar PDF (uma página)</button>
+        <span class="nota">Acompanhamento da arrecadação numa folha (mesmo modelo do painel de faturamento). Segue os filtros do cabeçalho e os dias úteis marcados;
+          passe o mouse no gráfico para ver os valores exatos. Não entra no PDF executivo: tem o seu próprio PDF.</span></div>
+      <div class="op-folha" id="opFolha"></div>
+    </section>
     <section class="painel-aba" data-painel="escada" hidden>
       <div class="card"><h2>Arrecadação por mês de vencimento × mês de crédito <small class="ate-dia"></small>
           <label class="opcao sem-pdf"><input type="checkbox" id="escadaLimpa" checked> Só valores a partir de R$ 50 mil</label></h2>
@@ -498,6 +505,17 @@
           <li><b>Buscar matrícula</b>: arrecadação de cada mês (com o desconto à parte) e cada conta da fatura com o valor pago e o mês do pagamento.</li>
         </ul></div>
 
+      <div class="card"><h2>One page</h2>
+        <p>Folha de acompanhamento da arrecadação no mesmo modelo do painel de faturamento (água e esgoto), com os filtros do cabeçalho e os dias úteis marcados.</p>
+        <ul>
+          <li><b>Arrecadação</b>: Val. Autenticado com o desconto comercial (como no Resumo), contra o <b>orçado até o dia</b> (orçado mensal × parte da curva nos dias marcados);
+            sem orçado (Cidade ou Subcategoria escolhida), contra o mês anterior nos mesmos dias úteis.</li>
+          <li><b>Tendência</b>: projeção do fechamento pelos meses com os mesmos dias úteis (como no Diagnóstico por localidade). Cartões: os 3 orçados (RF) mais recentes do mês.</li>
+          <li><b>Semanal</b>: semanas de domingo a sábado; cada dia útil com o arrecadado (sem o desconto), o orçado do dia pela curva e o mesmo dia útil do mês anterior.</li>
+          <li><b>Top 5 clientes</b>: maiores aumentos e quedas por matrícula contra o mês anterior, nos dias marcados (a mesma conta do Ranking de clientes).</li>
+          <li><b>PDF</b>: uma página do tamanho da folha (largura de uma A4).</li>
+        </ul></div>
+
       <div class="card"><h2>Diferenças em relação ao BI</h2>
         <ul>
           <li>Feriados: o painel considera São Jorge (23/04) e Consciência Negra (20/11) em todos os anos; o BI só os tinha em 2025.</li>
@@ -512,9 +530,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v39-20261104"></script>
-<script src="assets/calculos.js?v=v39-20261104"></script>
-<script>const VERSAO_SITE = "v39-20261104"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v39-20261104"></script>
+<script src="assets/regras.js?v=v40-20261106"></script>
+<script src="assets/calculos.js?v=v40-20261106"></script>
+<script>const VERSAO_SITE = "v40-20261106"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v40-20261106"></script>
 </body>
 </html>

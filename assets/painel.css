@@ -336,3 +336,132 @@ textarea:disabled { opacity: .5; }
 .matriz-cv tbody tr[data-ref]:hover td.rot { text-decoration: underline; }
 .matriz-cv tbody tr.sel td { box-shadow: inset 0 2px 0 #1A2740, inset 0 -2px 0 #1A2740; }
 .matriz-cv tbody tr.sel td.rot { font-weight: 700; }
+
+/* ===== One page: folha vertical (900 px no PDF; no celular ocupa a largura da tela) ===== */
+.painel-aba.onepage { padding-bottom:24px; }
+.op-btn-pdf { background:var(--marinho); color:#fff; border-color:var(--marinho); }
+.op-folha { --op-azul:#1A2740; --op-azul-esc:#102840; --op-claro:#EEF4F8; --op-medio:#C9D6E3; --op-pos:#1f8a70; --op-neg:#C2560C;
+    width:100%; max-width:900px; margin:10px auto 0; box-sizing:border-box; background:#FFFFFF; padding:22px 26px 18px;
+    box-shadow:0 2px 14px rgba(16,40,64,.14); font-family:var(--fonte); color:#334155; font-size:13px; line-height:1.35; font-variant-numeric:tabular-nums; }
+.op-folha.op-pdf { box-shadow:none; margin:0; }
+.op-cab { background:linear-gradient(135deg, #0b2447 0%, #14375e 60%, #1b4a76 100%); margin:-22px -26px 16px; padding:16px 26px 14px; }
+.op-cab h2 { margin:0; font-size:20px; font-weight:700; color:#FFFFFF; line-height:1.25; }
+.op-cab .op-cab-sub { display:block; color:#5ee7c8; font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; margin-bottom:3px; }
+.op-secao { margin:0 0 18px; }
+.op-secao > h3 { margin:0 0 8px; font-size:15px; font-weight:600; color:var(--op-azul-esc); display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.op-h-dir { margin-left:auto; font-size:11.5px; color:#475569; font-weight:400; }
+.op-rot { display:block; font-size:11.5px; color:#475569; text-transform:uppercase; letter-spacing:.02em; }
+.op-painel { background:var(--op-claro); border-left:6px solid var(--op-azul); border-radius:0 8px 8px 0; padding:16px 20px 14px; }
+.op-hero { display:flex; justify-content:space-between; align-items:flex-start; gap:12px 20px; flex-wrap:wrap; margin-bottom:10px; }
+.op-hero-val { display:block; font-size:40px; font-weight:600; color:var(--op-azul); line-height:1.1; letter-spacing:-.01em; }
+.op-hero-dir { text-align:right; margin-left:auto; }
+.op-hero-pct { display:block; font-size:32px; font-weight:400; color:#475569; line-height:1.1; }
+.op-hero-pct.op-pos { color:var(--op-pos); } .op-hero-pct.op-neg { color:var(--op-neg); }
+.op-hero-dir span { font-size:11.5px; color:#475569; }
+.op-barra-lin { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:11.5px; color:#334155; margin-top:8px; }
+.op-barra-lin span:last-child { color:#64748b; }
+.op-barra { height:12px; background:#DCE6EE; border-radius:6px; overflow:hidden; margin-top:3px; }
+.op-barra i { display:block; height:100%; background:var(--op-azul); }
+.op-barra.op-barra-clara i { background:#176b9c; }
+.op-cards { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; margin-top:12px; }
+.op-card { background:#FFFFFF; border:1px solid var(--linha); border-top:3px solid var(--op-azul); border-radius:0 0 8px 8px; padding:10px 12px; min-width:0; }
+.op-card.op-card-tend { border-top-color:#176b9c; }
+.op-card b { display:block; font-size:21px; font-weight:600; color:var(--op-azul); margin:2px 0 3px; white-space:nowrap; }
+.op-card .op-var { font-size:11.5px; white-space:normal; }
+.op-var { color:#64748b; font-weight:600; white-space:nowrap; }
+.op-var.op-pos { color:var(--op-pos); } .op-var.op-neg { color:var(--op-neg); }
+.op-nota { margin:4px 0 0; font-size:11px; color:#64748b; }
+.op-vazio { margin:6px 0; color:#94a3b8; font-size:12px; }
+table.op-tab { width:100%; border-collapse:collapse; font-family:var(--fonte); font-size:13px; line-height:1.3; }
+table.op-tab th { background:none; border:0; color:#64748b; font-size:11px; font-weight:500; text-align:left; padding:3px 8px; text-transform:none; }
+table.op-tab td { border:0; border-bottom:1px solid #EEF1F6; background:transparent !important; padding:5px 8px; text-align:left; white-space:nowrap; }
+table.op-tab .num { text-align:right; }
+table.op-tab td small { color:#64748b; font-size:10.5px; margin-left:4px; }
+table.op-tab tr.op-tot td { background:var(--op-claro) !important; color:var(--op-azul); font-weight:600; border-left:0; }
+table.op-tab tr.op-tot td:first-child { box-shadow:inset 5px 0 0 var(--op-azul); padding-left:14px; }
+table.op-tab tr.op-sem td { background:var(--op-claro) !important; color:var(--op-azul-esc); font-weight:600; cursor:pointer; border-bottom:2px solid #FFFFFF; }
+table.op-tab tr.op-sem td:first-child { box-shadow:inset 5px 0 0 var(--op-azul); padding-left:12px; }
+table.op-tab tr.op-sem:hover td { background:#E2ECF3 !important; }
+table.op-tab tr.op-sem small { font-weight:400; }
+.op-seta-sem { display:inline-block; width:12px; color:#176b9c; }
+table.op-tab tr.op-grp td:first-child { padding-left:30px; }
+table.op-tab-aberta tr.op-sub td { background:var(--op-claro) !important; color:var(--op-azul-esc); font-weight:600; }
+.op-pdf .op-seta-sem { display:none; }
+table.op-tab tfoot td { border-top:2px solid var(--op-azul); }
+.op-apagado { color:#94a3b8; } .op-forte { color:var(--op-azul); font-weight:700; }
+.op-grafico { position:relative; height:260px; margin-top:10px; }
+.op-grafico canvas, .op-grafico-img { position:absolute; inset:0; width:100% !important; height:100% !important; }
+.op-faixa { background:linear-gradient(135deg, #0b2447 0%, #14375e 60%, #1b4a76 100%); color:#fff; text-align:center; font-size:17px; font-weight:600; padding:10px 14px; border-radius:8px; margin-bottom:10px; }
+.op-vols { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:1px; background:var(--linha); border:1px solid var(--linha); border-radius:8px; overflow:hidden; }
+.op-vol { background:#FFFFFF; border-top:3px solid var(--op-azul); padding:8px 10px; min-width:0; }
+.op-vol .op-var { font-size:11.5px; }
+.op-vol b { display:block; font-size:20px; font-weight:600; color:var(--op-azul); line-height:1.2; }
+.op-vol small { display:block; font-size:10.5px; color:#64748b; }
+.op-tops { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:14px; }
+.op-top { min-width:0; }
+.op-top-tit { background:var(--op-claro); border-left:5px solid var(--op-neg); font-weight:600; padding:7px 12px; font-size:12px; color:var(--op-azul-esc); text-transform:uppercase; margin-bottom:2px; }
+.op-top-pos .op-top-tit { border-left-color:var(--op-pos); }
+/* três colunas de largura fixa (nome | grupo | valor): grupo e valor ficam alinhados em todas as linhas, qualquer que seja o tamanho do nome */
+.op-top-lin { display:grid; grid-template-columns:minmax(0,1fr) 6em 7.2em 4.6em; column-gap:10px; align-items:baseline; padding:5px 12px; font-size:12px; border-bottom:1px solid #EEF1F6; }
+.op-top-lin:nth-child(odd) { background:#F7F8FC; }
+.op-top-lin span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-transform:uppercase; }
+/* nome comprido quebra em duas linhas (nada cortado); grupo e valor acompanham a primeira linha */
+.op-top-lin .op-top-nome { white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; line-height:1.35; }
+.op-top-lin .op-top-grupo { overflow:visible; color:#475569; font-size:11px; text-align:left; }
+.op-secao-top > h3 .op-top-chave { align-self:center; margin-left:auto; padding:3px 10px; font-size:11.5px; }
+.op-secao-top > h3 .op-h-dir + .op-top-chave { margin-left:0; }
+.op-top-lin b { color:var(--op-azul); white-space:nowrap; text-align:right; }
+.op-pdf table.op-mini { width:100%; border-collapse:collapse; font-family:var(--fonte); font-size:12.5px; line-height:1.3; }
+table.op-mini th { background:none; border:0; color:#64748b; font-size:11px; font-weight:500; text-align:left; padding:3px 6px; border-bottom:1px solid #E2E8F0; text-transform:none; }
+table.op-mini td { padding:4px 6px; border:0; border-bottom:1px solid #EEF1F6; background:transparent !important; text-align:left; white-space:normal; }
+table.op-mini .num { text-align:right; }
+.op-rodape { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; border-top:1px solid #E2E8F0; padding-top:8px; font-size:10.5px; color:#64748b; }
+.op-marca { font-size:18px; font-weight:700; color:var(--op-azul-esc); letter-spacing:-.02em; white-space:nowrap; }
+.op-pdf, .op-pdf .pl-status { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+/* celular: tudo em uma coluna ou duas, números menores, tabelas sem cortar */
+@media (max-width: 640px) {
+
+    .op-folha { padding:14px 12px 12px; font-size:12.5px; }
+    .op-cab { margin:-14px -12px 12px; padding:12px 12px 10px; }
+    .op-cab h2 { font-size:16px; }
+    .op-secao > h3 { font-size:14px; }
+    .op-painel { padding:12px 12px 10px; }
+    .op-hero-val { font-size:32px; } .op-hero-pct { font-size:24px; }
+    .op-hero-dir { text-align:left; margin-left:0; }
+    .op-cards, .op-vols { grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
+    .op-card b, .op-vol b { font-size:18px; }
+    .op-faixa { font-size:15px; padding:9px 10px; }
+    .op-tops { grid-template-columns:minmax(0,1fr); } table.op-tab { font-size:12px; } table.op-tab td, table.op-tab th { padding:4px 5px; }
+    table.op-tab td small { display:block; margin-left:0; }
+    .op-col-val { display:none; }
+    table.op-tab tr.op-grp td:first-child { padding-left:16px; }
+    .op-grafico { height:220px; }
+    .op-rodape { flex-direction:column; align-items:flex-start; }
+}
+
+/* ajustes da arrecadação (copiado do painel de faturamento água e esgoto; paleta One page da Águas do Rio) */
+.op-acoes { display:flex; gap:12px; align-items:center; flex-wrap:wrap; max-width:900px; margin:0 auto 4px; }
+.op-acoes .nota { margin:0; flex:1; min-width:240px; }
+.op-folha table.op-tab th { position:static; }
+table.op-tab tr.op-sem.op-sem-fixa td { cursor:default; }
+table.op-tab tr.op-desc td { color:#64748b; font-style:italic; }
+.op-folha .grafico.op-grafico { height:auto; margin-top:10px; overflow:hidden; }
+.grafico .op-b-base { fill:#C9D6E3; }
+.grafico text.op-r-real { fill:#1A2740; }
+.grafico text.op-r-dif { font-size:9.5px; font-weight:600; fill:#64748b; }
+.grafico text.op-r-dif.op-r-pos { fill:#1f8a70; }
+.grafico text.op-r-dif.op-r-neg { fill:#C2560C; }
+.op-pdf .op-seta-sem { display:none; }
+/* barrinha azul à esquerda das linhas de semana e de total: borda comum (a sombra interna do modelo sai errada no PDF) */
+.op-folha table.op-tab tr.op-sem td:first-child, .op-folha table.op-tab tr.op-tot td:first-child { box-shadow:none; border-left:5px solid #1A2740; }
+/* Top 5: aqui a coluna do meio é a cidade (nomes mais longos que o grupo de leitura) */
+.op-folha .op-top-lin { grid-template-columns:minmax(0,1fr) 10em 6.6em 4.6em; }
+.op-folha .op-top-lin .op-top-grupo { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* celular: as tabelas da folha cabem na tela (textos quebram linha em vez de alargar a página) */
+@media (max-width: 640px) {
+  .op-folha table.op-tab { table-layout:auto; }
+  .op-folha table.op-tab td, .op-folha table.op-tab th { white-space:normal; overflow-wrap:anywhere; }
+  .op-folha table.op-tab .op-var { white-space:normal; }
+  .op-folha table.op-tab td:first-child { min-width:0; }
+  .op-folha .op-top-lin { grid-template-columns:minmax(0,1fr) 6.5em 6.2em 4.2em; column-gap:6px; padding:5px 8px; }
+}

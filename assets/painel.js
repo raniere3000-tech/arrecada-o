@@ -4,7 +4,7 @@
   const C = window.CALC, R = window.REGRAS;
   const $ = (id) => document.getElementById(id);
   const ARQ_AJUSTES = "ajustes_arrecadacao.json";
-  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", analise: "Ranking de clientes", base: "Base", dados: "Dados",
+  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", onepage: "One page", analise: "Ranking de clientes", base: "Base", dados: "Dados",
     fxa: "Faturamento x Arrecadação", fxv: "Fat. x Arrec. — mesmo vencimento", conversao: "Conversão por referência", localidade: "Diagnóstico por localidade", clientes: "Clientes e oportunidades" };
   const AREA_DA_ABA = { fxa: "analises", fxv: "analises", conversao: "analises", localidade: "analises", analise: "analises", clientes: "analises", dados: "dados" };   // as outras: Executivo
   const ultimaDaArea = { executivo: "resumo", analises: "fxa", dados: "dados" };
@@ -374,7 +374,7 @@
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloDias()} de cada mês`; });
     $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && !["localidade", "analise", "clientes"].includes(E.aba));   // Diagnóstico, Ranking e Clientes usam os dias marcados
-    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
+    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, onepage: desenhaOnePage, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
       conversao: desenhaConversao, clientes: desenhaClientes, localidade: desenhaLocalidade })[E.aba]();
   }
 
@@ -806,6 +806,7 @@
   }
   function recebeAnalise(m) {
     if (m.para === "resumo") { if (!m.erro) destaquesClientes(m); return; }
+    if (m.para === "onepage") { recebeTopOnePage(m); return; }
     if (m.id !== idAnalise) return;                  // resposta de um pedido antigo (filtro já mudou)
     if (m.erro) { $("analiseNota").textContent = "Análise indisponível: " + m.erro; return; }
     ultimaAnalise = m;
@@ -2049,6 +2050,302 @@
     $("dadosParametros").innerHTML = `<table class="explica"><tbody>${linhas.map(([a, b]) => `<tr><td class="rot"><b>${a}</b></td><td class="rot">${b}</td></tr>`).join("")}</tbody></table>`
       + `<details class="arquivos-dados"><summary>Arquivos lidos e avisos</summary>${E.htmlArquivos || ""}</details>`;
   }
+
+  // ===== One page: acompanhamento da arrecadação numa folha vertical (mesmo modelo do painel de faturamento água e esgoto;
+  // lê bem no celular; PDF de uma página). Segue os filtros do cabeçalho e os dias úteis marcados (com o fechamento do mês).
+  // Arrecadação = Val. Autenticado com o desconto comercial (como no Resumo); por dia útil, sem o desconto (o total o desconta).
+  // Orçado até o dia = orçado mensal × parte da curva nos dias marcados; tendência = projeção pelos meses com os mesmos dias
+  // úteis (aba Diagnóstico por localidade). A folha não tem nada editável.
+  const OP_W = 900, OP_RELEVANTE = 0.03, OP_MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  let opAbertas = null, opChaveTop = "", idOnePage = 0, opTop = null;
+  const opMes = (m) => `${OP_MESES[+m.slice(5, 7) - 1]}/${m.slice(2, 4)}`;
+  function opMoeda(v, dec) {
+    if (v == null || !isFinite(v)) return "–";
+    const a = Math.abs(v), s = v < 0 ? "-" : "";
+    if (a >= 1e6) return `${s}R$ ${fmt(a / 1e6, dec == null ? 2 : dec)} mi`;
+    if (a >= 1e3) return `${s}R$ ${fmt(a / 1e3, dec == null ? 1 : dec)} mil`;
+    return `${s}R$ ${fmt(a)}`;
+  }
+  const opPct = (v, sinal) => (v == null || !isFinite(v) ? "–" : (sinal && v > 0 ? "+" : "") + fmt(v * 100, 1) + "%");
+  const opVar = (a, b) => (a == null || b == null || !b ? null : (a - b) / Math.abs(b));
+  function opSeta(v, rot = "") {                       // ▲ 3,5% vs Set/26 — com cor só quando o desvio passa de 3%
+    if (v == null || !isFinite(v)) return `<span class="op-var">– ${esc(rot)}</span>`;
+    const cls = Math.abs(v) < OP_RELEVANTE ? "" : v > 0 ? " op-pos" : " op-neg";
+    return `<span class="op-var${cls}">${v > 0 ? "▲" : v < 0 ? "▼" : "■"} ${opPct(Math.abs(v))} ${esc(rot)}</span>`;
+  }
+  // orçado mensal de uma planilha RF para a superintendência ("" = soma das superintendências)
+  function orcadoDaFonte(mes, sup, fonte) {
+    const sups = sup ? [sup] : supsDisponiveis().filter((s) => R.SUPS.includes(s));
+    const l = E.res.orcados.filter((o) => o.fonte === fonte && o.mes === mes && sups.includes(o.sup));
+    return l.length ? l.reduce((a, o) => a + o.valor, 0) : null;
+  }
+  // semana do calendário (domingo a sábado) de uma data do mês: { n, rot: "05 a 11/10" }
+  function opSemana(iso) {
+    const d = new Date(iso + "T12:00:00"), desl = new Date(d.getFullYear(), d.getMonth(), 1, 12).getDay();
+    const n = Math.floor((d.getDate() + desl - 1) / 7) + 1, ult = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const ini = Math.max(1, (n - 1) * 7 - desl + 1), fim = Math.min(ult, n * 7 - desl), p2 = (x) => String(x).padStart(2, "0");
+    return { n, rot: `${p2(ini)} a ${p2(fim)}/${iso.slice(5, 7)}` };
+  }
+
+  function opDados() {
+    const d = E.res.dados, mi = idxMes(E.mes), mk = marcas(), sel = selCalc(), cal = C.calendario(E.mes), U = cal.uteis;
+    const ant = C.mesAnterior(E.mes), miAnt = idxMes(ant), dias = C.diasDaMascara(sel).filter((k) => k <= U);
+    const tot = C.totalDoMes(d, mi, mk, sel), totA = miAnt >= 0 ? C.totalDoMes(d, miAnt, mk, sel) : null;
+    const s = C.serieDoMes(d, mi, mk), sa = miAnt >= 0 ? C.serieDoMes(d, miAnt, mk) : null;
+    const parcial = filtroParcial(), orc = parcial ? { valor: null, fonte: "" } : orcadoMensal(E.mes, E.sup), cv = curvaDoMes(E.mes, E.sup);
+    const fracCurva = dias.reduce((a, k) => a + (cv.pesos[k] || 0), 0);
+    const mm = C.mesesMesmosUteis(d, E.mes), frT = C.fracaoAteDias(d, mm.meses, mk, sel, () => "T").get("T");
+    return { d, mi, miAnt, mk, sel, cal, U, ant, dias, tot, totA, s, sa, parcial, orc, cv, fracCurva, mm,
+      orcAte: orc.valor != null ? orc.valor * fracCurva : null, proj: frT > 0 ? tot.valor / frT : null,
+      fr: (grupoDe) => C.fracaoAteDias(d, mm.meses, mk, sel, grupoDe), frT,
+      ult: d.ultimoCredito[E.mes], N: ultimoDiaComDados(E.mes) };
+  }
+
+  // ---- Destaque: arrecadado no mês contra o orçado até o dia e a tendência de fechamento ----
+  const opBarra = (rot, dir, frac, cls) => `<div class="op-barra-lin"><span>${rot}</span><span>${dir}</span></div>`
+    + `<div class="op-barra${cls ? " " + cls : ""}"><i style="width:${Math.max(0, Math.min(1, frac || 0)) * 100}%"></i></div>`;
+  function opBlocoDestaque(D) {
+    const A = D.tot.valor, temOrc = D.orcAte != null && D.orcAte > 0, base = temOrc ? D.orcAte : D.totA ? D.totA.valor : null;
+    const dv = opVar(A, base), cls = dv == null || Math.abs(dv) < OP_RELEVANTE ? "" : dv > 0 ? " op-pos" : " op-neg";
+    const rotBase = temOrc ? `${esc(D.orc.fonte)} até o dia` : `${opMes(D.ant)} nos mesmos dias`;
+    let h = `<div class="op-hero"><div class="op-hero-esq"><span class="op-rot">Arrecadado até ${D.ult ? dataBR(D.ult).slice(0, 5) : "—"} · dias úteis ${esc(rotuloDias())}</span>`
+      + `<b class="op-hero-val">${opMoeda(A, 2)}</b></div>`
+      + `<div class="op-hero-dir"><b class="op-hero-pct${cls}">${dv == null ? "–" : (dv > 0 ? "▲ " : dv < 0 ? "▼ " : "") + opPct(Math.abs(dv))}</b>`
+      + `<span>${base != null ? `vs ${rotBase}: ${opMoeda(A - base, 2)} (${temOrc ? "orçado" : "mês anterior"} ${opMoeda(base, 2)})` : "sem orçado e sem mês anterior"}</span></div></div>`;
+    if (D.orc.valor) {
+      h += opBarra(`Arrecadado × orçado do mês (${esc(D.orc.fonte)})`, `${opMoeda(A, 2)} de ${opMoeda(D.orc.valor, 2)} · ${opPct(A / D.orc.valor)}`, A / D.orc.valor);
+      if (D.proj != null) h += opBarra("Tendência de fechamento (projeção pelos meses com os mesmos dias úteis)",
+        `${opMoeda(D.proj, 2)} de ${opMoeda(D.orc.valor, 2)} · ${opPct(D.proj / D.orc.valor)}`, D.proj / D.orc.valor, "op-barra-clara");
+    } else if (D.parcial) h += '<p class="op-nota">O orçado é por superintendência: com Cidade ou Subcategoria escolhida, a comparação é com o mês anterior.</p>';
+    const antTxt = D.totA ? `${opMes(D.ant)} até o mesmo dia útil: ${opMoeda(D.totA.valor, 2)} (${opPct(opVar(A, D.totA.valor), true)})` : "";
+    return { html: h, ant: antTxt };
+  }
+  // Quatro quadros: os 3 orçados (RF) mais recentes do mês, cada um contra o arrecadado até o dia, e a tendência
+  function opBlocoCards(D) {
+    const A = D.tot.valor, quadros = [];
+    if (!D.parcial) {
+      const rfs = fontesOrcado().filter((f) => orcadoDaFonte(E.mes, E.sup, f) != null).slice(0, 3).reverse();
+      for (const f of rfs) {
+        const o = orcadoDaFonte(E.mes, E.sup, f), ate = o * D.fracCurva;
+        quadros.push(`<div class="op-card"><span class="op-rot">${esc(f)} — ${opMes(E.mes)}</span><b>${opMoeda(o, 2)}</b>`
+          + `${opSeta(opVar(A, ate), "arrecadado vs orçado até o dia")}</div>`);
+      }
+    }
+    if (D.totA && quadros.length < 3) quadros.push(`<div class="op-card"><span class="op-rot">Mês anterior — ${opMes(D.ant)}</span><b>${opMoeda(D.totA.valor, 2)}</b>`
+      + `${opSeta(opVar(A, D.totA.valor), "nos mesmos dias úteis")}</div>`);
+    if (D.proj != null) quadros.push(`<div class="op-card op-card-tend"><span class="op-rot">Tendência — ${opMes(E.mes)}</span><b>${opMoeda(D.proj, 2)}</b>`
+      + (D.orc.valor ? opSeta(opVar(D.proj, D.orc.valor), "vs " + D.orc.fonte)
+        : D.miAnt >= 0 ? opSeta(opVar(D.proj, C.totalDoMes(D.d, D.miAnt, D.mk, C.MASCARA_MES).valor), `vs ${opMes(D.ant)} fechado`) : "")
+      + "</div>");
+    return quadros.length ? `<div class="op-cards">${quadros.join("")}</div>` : "";
+  }
+
+  // ---- Tabela aberta (subcategoria ou cidade): arrecadado, mês anterior nos mesmos dias, variação, tendência e participação ----
+  function opTabGrupos(D, grupoDe, ordem, titulo) {
+    const g = C.porGrupo(D.d, [D.mi, D.miAnt].filter((x) => x >= 0), D.mk, D.sel, grupoDe), fr = D.fr(grupoDe);
+    let L = [...g.entries()].map(([nome, l]) => ({ nome, r: (l.get(D.mi) || {}).valor || 0, a: D.miAnt >= 0 ? (l.get(D.miAnt) || {}).valor || 0 : null }))
+      .filter((x) => x.r || x.a);
+    L.forEach((x) => { const f = fr.get(x.nome) || D.frT; x.t = f > 0 ? x.r / f : null; });
+    L = ordem ? ordem(L) : L.sort((a, b) => b.r - a.r);
+    const T = { r: L.reduce((s, x) => s + x.r, 0), a: D.miAnt >= 0 ? L.reduce((s, x) => s + (x.a || 0), 0) : null, t: D.proj };
+    const cols = (x) => `<td class="num op-forte">${opMoeda(x.r, 2)}</td><td class="num op-col-val op-apagado">${opMoeda(x.a, 2)}</td>`
+      + `<td class="num">${x.a ? opSeta(opVar(x.r, x.a)) : "–"}</td><td class="num">${opMoeda(x.t, 2)}</td><td class="num op-col-val">${T.r ? opPct(x.r / T.r) : "–"}</td>`;
+    if (!L.length) return '<p class="op-vazio">Sem arrecadação nos filtros e dias escolhidos.</p>';
+    return `<table class="op-tab op-tab-aberta"><thead><tr><th>${titulo}</th><th class="num">Arrecadado</th><th class="num op-col-val">${opMes(D.ant)} (mesmos dias)</th>`
+      + `<th class="num">Δ ${opMes(D.ant)}</th><th class="num">Tendência</th><th class="num op-col-val">Part.</th></tr></thead>`
+      + `<tbody>${L.map((x) => `<tr><td>${esc(x.nome)}</td>${cols(x)}</tr>`).join("")}</tbody>`
+      + `<tfoot><tr class="op-tot"><td>Total</td>${cols(T)}</tr></tfoot></table>`;
+  }
+
+  // ---- Acompanhamento semanal: semanas (domingo a sábado) que abrem nos dias úteis: arrecadado × orçado do dia e mês anterior ----
+  function opSemanas(D) {
+    const temOrc = D.orc.valor != null, orcDia = (k) => (temOrc ? (D.cv.pesos[k] || 0) * D.orc.valor : null), mapa = new Map();
+    for (const k of D.dias) {
+      const linha = { k, r: D.s.valor[k], a: D.sa ? D.sa.valor[k] : null, o: orcDia(k), lido: k === 0 || k <= D.N };
+      if (k === 0) { linha.rot = `Fins de semana e feriados (${D.cal.naoUteis} dias)`; mapa.set(99, { n: 99, rot: "mês inteiro", dias: [linha] }); continue; }
+      const iso = D.cal.dataDoDia[k], sem = opSemana(iso);
+      linha.rot = `Dia útil ${k}`; linha.data = `${dataBR(iso).slice(0, 5)} · ${C.rotuloDia(iso).split(", ")[1]}`;
+      if (!mapa.has(sem.n)) mapa.set(sem.n, { n: sem.n, rot: sem.rot, dias: [] });
+      mapa.get(sem.n).dias.push(linha);
+    }
+    const soma = (l, c) => (l.some((x) => x[c] != null) ? l.reduce((t, x) => t + (x[c] || 0), 0) : null);
+    const lista = [...mapa.values()].sort((a, b) => a.n - b.n);
+    lista.forEach((w) => { const lidos = w.dias.filter((x) => x.lido); w.r = soma(lidos, "r"); w.a = soma(w.dias, "a"); w.o = soma(w.dias, "o"); w.lidos = lidos.length; });
+    return lista;
+  }
+  function opBlocoSemanas(D, S) {
+    if (!S.length) return '<p class="op-vazio">Nenhum dia útil marcado.</p>';
+    if (opAbertas === null) opAbertas = new Set(S.filter((w) => w.n !== 99 && w.lidos).slice(-2).map((w) => w.n));   // as duas últimas semanas com dados abertas
+    const temOrc = D.orc.valor != null;
+    const cols = (o, lido = true) => `<td class="num op-forte">${lido ? opMoeda(o.r, 2) : "–"}</td>`
+      + `<td class="num op-col-val op-apagado">${temOrc ? opMoeda(o.o, 2) : "–"}</td><td class="num">${temOrc && lido && o.o ? opSeta(opVar(o.r, o.o)) : "–"}</td>`
+      + `<td class="num op-col-val op-apagado">${opMoeda(o.a, 2)}</td><td class="num">${lido && o.a ? opSeta(opVar(o.r, o.a)) : "–"}</td>`;
+    const corpo = S.map((w) => {
+      if (w.n === 99) { const x = w.dias[0]; return `<tr class="op-sem op-sem-fixa"><td>${esc(x.rot)} <small>mês inteiro</small></td>${cols(x)}</tr>`; }
+      const aberta = opAbertas.has(w.n);
+      return `<tr class="op-sem${aberta ? " op-aberta" : ""}" data-semana="${w.n}" title="Clique para ${aberta ? "fechar" : "abrir"} os dias desta semana">`
+        + `<td><span class="op-seta-sem">${aberta ? "▾" : "▸"}</span> Semana ${w.n} <small>${esc(w.rot)} · ${w.dias.length} dia(s) útil(eis)</small></td>${cols(w, w.lidos > 0)}</tr>`
+        + (aberta ? w.dias.map((x) => `<tr class="op-grp"><td>${esc(x.rot)} <small>${esc(x.data)}${x.lido ? "" : " · sem crédito ainda"}</small></td>${cols(x, x.lido)}</tr>`).join("") : "");
+    }).join("");
+    const desc = D.tot.desconto ? `<tr class="op-desc"><td>Desconto comercial</td><td class="num">${opMoeda(D.tot.desconto, 2)}</td><td></td><td></td><td></td><td></td></tr>` : "";
+    const T = { r: D.tot.valor, o: D.orcAte, a: D.totA ? D.totA.valor : null };
+    return `<table class="op-tab op-tab-grupos"><thead><tr><th>Semana / dia útil</th><th class="num">Arrecadado</th>`
+      + `<th class="num op-col-val">${temOrc ? esc("Orçado " + D.orc.fonte) : "Orçado"}</th><th class="num">Δ orçado</th>`
+      + `<th class="num op-col-val">${opMes(D.ant)}</th><th class="num">Δ ${opMes(D.ant)}</th></tr></thead>`
+      + `<tbody>${corpo}</tbody><tfoot>${desc}<tr class="op-tot"><td>Total (com o desconto comercial)</td>${cols(T)}</tr></tfoot></table>`;
+  }
+  // Gráfico: arrecadado de cada dia útil em linha sobre o orçado do dia em barras (sem orçado: o mês anterior), em R$ mil,
+  // com a diferença no alto. Responsivo: valores na horizontal se couberem, senão na vertical.
+  function svgOpDias(D, W) {
+    const ks = D.dias.filter((k) => k > 0 && k <= D.N), temOrc = D.orc.valor != null;
+    if (!ks.length) return '<p class="op-vazio">Sem dia útil com crédito nos dias marcados.</p>';
+    const base = (k) => (temOrc ? (D.cv.pesos[k] || 0) * D.orc.valor : D.sa ? D.sa.valor[k] : null), rotBase = temOrc ? `Orçado ${D.orc.fonte}` : opMes(D.ant);
+    const mil = (v) => fmt(v / 1e3, Math.abs(v) >= 1e5 ? 0 : 1), cats = ks.map((k) => `${k}`);
+    const rots = ks.flatMap((k) => [mil(D.s.valor[k]), base(k) != null ? (D.s.valor[k] - base(k) > 0 ? "+" : "") + mil(D.s.valor[k] - base(k)) : ""]);
+    const lv = Math.max(0, ...rots.map((t) => larguraTexto(t, 10, true)));
+    let r = ajustaEixo(cats, W, 0), vert = lv + 4 > r.passo;
+    const topoRot = vert ? Math.ceil(lv) + 12 : 18, plot = 170, topo = topoRot + (vert ? Math.ceil(lv) + 8 : 22), baseY = topo + plot;
+    r = ajustaEixo(cats, W, baseY + 18);
+    const { larg, passo, ex } = r, cx = (i) => passo * i + passo / 2, bw = Math.max(3, Math.min(46, passo * 0.62));
+    const max = Math.max(1, ...ks.map((k) => Math.max(D.s.valor[k], base(k) || 0)));
+    const y = (v) => baseY - (plot * Math.max(0, v)) / max, px = 10;
+    let barras = "", alvos = "", textos = "";
+    const pts = ks.map((k, i) => `${cx(i)},${y(D.s.valor[k])}`);
+    ks.forEach((k, i) => {
+      const b = base(k), v = D.s.valor[k], dif = b != null ? v - b : null, iso = D.cal.dataDoDia[k];
+      const dica = linhaDica(`Dia útil ${k} (${dataBR(iso)})`, `Arrecadado: ${rs(v)}`, `${rotBase}: ${b == null ? "—" : rs(b)}`,
+        dif != null && `Diferença: ${rs(dif)}${b ? ` (${pct(dif / b)})` : ""}`, D.sa && `${opMes(D.ant)} (mesmo dia útil): ${rs(D.sa.valor[k])}`, "Valores do dia sem o desconto comercial");
+      alvos += `<g class="alvo" data-dica="${esc(dica)}"><rect class="hit" x="${cx(i) - passo / 2}" y="0" width="${passo}" height="${baseY + 4}"/></g>`;
+      if (b != null) barras += `<rect class="op-b-base" x="${cx(i) - bw / 2}" y="${y(b)}" width="${bw}" height="${baseY - y(b)}" rx="2"/>`;
+      textos += rotuloValor("r-at op-r-real", px, vert ? "v" : "h", cx(i), y(v) - 7, mil(v), false, true);
+      if (dif != null) textos += rotuloValor(`op-r-dif ${Math.abs(opVar(v, b) || 0) < OP_RELEVANTE ? "" : dif > 0 ? "op-r-pos" : "op-r-neg"}`, 9.5, vert ? "v" : "h", cx(i), vert ? topoRot - 4 : topoRot, (dif > 0 ? "+" : "") + mil(dif));   // na vertical, sobe a partir daqui
+    });
+    const alt = baseY + 24 + ex.extra;
+    return abreSvg(larg, alt, ex.pad) + alvos + `<line x1="0" y1="${baseY}" x2="${larg}" y2="${baseY}" class="eixo"/>` + barras
+      + `<polyline class="l-at" points="${pts.join(" ")}"/>` + ks.map((k, i) => `<circle class="l-at" cx="${cx(i)}" cy="${y(D.s.valor[k])}" r="3.5"/>`).join("")
+      + textos + ex.svg + "</g></svg>";
+  }
+
+  // ---- Indicadores do mês contra o anterior (mesmos dias úteis) ----
+  function opBlocoIndicadores(D) {
+    const t = D.tot, a = D.totA, ndias = D.dias.filter((k) => k > 0 && k <= D.N).length;
+    const tk = (x) => (x && x.contas ? x.valor / x.contas : null);
+    const card = (tit, val, atual, anterior, inverso) => `<div class="op-vol"><span class="op-rot">${tit}</span><b>${val}</b>`
+      + (anterior != null ? opSeta(inverso ? -opVar(atual, anterior) : opVar(atual, anterior), "vs " + opMes(D.ant)) : '<small>sem mês anterior</small>') + "</div>";
+    return '<div class="op-vols">' + [
+      card("Arrecadação", opMoeda(t.valor, 2), t.valor, a && a.valor),
+      card("Val. Autenticado", opMoeda(t.valor - t.desconto, 2), t.valor - t.desconto, a && a.valor - a.desconto),
+      card("Desconto comercial", opMoeda(-t.desconto, 2), -t.desconto, a && -a.desconto),
+      card("Clientes pagantes", fmt(t.clientes), t.clientes, a && a.clientes),
+      card("Contas pagas", fmt(t.contas), t.contas, a && a.contas),
+      card("Ticket médio", tk(t) == null ? "–" : "R$ " + fmt(tk(t), 2), tk(t), tk(a)),
+      card("Média por dia útil", ndias ? opMoeda(t.valor / ndias, 2) : "–", ndias ? t.valor / ndias : null, a && ndias ? a.valor / ndias : null),
+      `<div class="op-vol"><span class="op-rot">Dias úteis</span><b>${D.N} de ${D.U}</b><small>com crédito até ${D.ult ? dataBR(D.ult) : "—"}</small></div>`,
+    ].join("") + "</div>";
+  }
+
+  // ---- Top 5 clientes: maiores aumentos e quedas contra o mês anterior (nos mesmos dias úteis; o worker calcula) ----
+  function opTopPct(x) {
+    if (!x.anterior) return '<span class="op-top-pct op-top-novo" title="Sem pagamento no mês anterior">novo</span>';
+    const p = x.atual / x.anterior - 1;
+    return `<span class="op-top-pct ${p < 0 ? "neg" : "pos"}" title="Contra o mês anterior">${(p > 0 ? "+" : "") + fmt(p * 100, 1)}%</span>`;
+  }
+  function opBlocoTop(D) {
+    const combos = E.res.dados.combos;
+    const lista = (tit, cls, itens) => `<div class="op-top ${cls}"><div class="op-top-tit">${tit}</div>`
+      + (itens == null ? '<p class="op-vazio">Calculando…</p>' : itens.length ? itens.map((x, i) => {
+        const c = combos[x.c] || {}, dica = linhaDica(x.nome || `Matrícula ${x.lig}`, `Matrícula: ${x.lig}`, `${opMes(E.mes)}: ${rs(x.atual)}`, `${opMes(D.ant)}: ${rs(x.anterior)}`,
+          `Diferença: ${rs(x.dif)}`, `Cidade: ${c.cidade || "—"}`, `Subcategoria: ${c.grupo || "—"}`, "Nos dias úteis marcados, com o desconto comercial");
+        return `<div class="op-top-lin" title="${esc(dica.replace(/\n/g, " · "))}"><span class="op-top-nome">${i + 1}. ${esc(x.nome || "Matrícula " + x.lig)}</span>`
+          + `<span class="op-top-grupo">${esc(c.cidade || "")}</span><b>${opMoeda(Math.abs(x.dif), 2)}</b>${opTopPct(x)}</div>`;
+      }).join("") : '<p class="op-vazio">Sem clientes.</p>') + "</div>";
+    return `<div class="op-tops">${lista(`Maiores aumentos de arrecadação — ${opMes(E.mes)}`, "op-top-pos", opTop ? opTop.aumentos.slice(0, 5) : null)}`
+      + `${lista(`Maiores quedas de arrecadação — ${opMes(E.mes)}`, "op-top-neg", opTop ? opTop.quedas.slice(0, 5) : null)}</div>`;
+  }
+
+  function opSecao(titulo, extra, cls) {
+    return `<section class="op-secao${cls ? " " + cls : ""}">${titulo ? `<h3>${titulo}${extra || ""}</h3>` : ""}`;
+  }
+  function desenhaOnePage() {
+    const D = opDados(), filtro = [E.sup ? nomeSup(E.sup) : "Todas as superintendências", E.cidade, E.grupo].filter(Boolean).join(" · ");
+    const dataCab = D.ult ? dataBR(D.ult).slice(0, 6) + D.ult.slice(2, 4) : opMes(E.mes);
+    const dest = opBlocoDestaque(D), S = opSemanas(D);
+    let h = `<header class="op-cab"><span class="op-cab-sub">Águas do Rio · One page</span><h2>${esc(filtro)}: Acompanhamento da Arrecadação — ${esc(dataCab)}</h2></header>`;
+    h += opSecao("➤ Arrecadação", dest.ant ? `<small class="op-h-dir">${esc(dest.ant)}</small>` : "") + `<div class="op-painel">${dest.html}</div>${opBlocoCards(D)}</section>`;
+    h += opSecao("Arrecadação por subcategoria", `<small class="op-h-dir">${opMes(E.mes)} · tendência = projeção pelos meses com os mesmos dias úteis</small>`)
+      + opTabGrupos(D, (c) => c.grupo, (L) => ordena(L.map((x) => x.nome), R.ORDEM_SUBCATEGORIAS).map((n) => L.find((x) => x.nome === n)), "Subcategoria") + "</section>";
+    h += opSecao(`Acompanhamento semanal por dia útil — arrecadado × ${D.orc.valor != null ? esc("orçado " + D.orc.fonte) : "orçado"} e ${opMes(D.ant)}`,
+      `<small class="op-h-dir">${opMes(E.mes)} · dias úteis marcados · clique na semana para abrir</small>`)
+      + opBlocoSemanas(D, S) + '<div class="grafico op-grafico" id="opGrafico"></div>'
+      + `<p class="op-nota">Arrecadado de cada dia útil (linha) sobre o ${D.orc.valor != null ? "orçado do dia pela curva" : "mês anterior no mesmo dia útil"} (barras), em R$ mil; no alto, a diferença. Valores do dia sem o desconto comercial.</p></section>`;
+    h += `${opSecao("", "", "op-secao-faixa")}<div class="op-faixa">Indicadores do mês — ${opMes(E.mes)} vs ${opMes(D.ant)} (mesmos dias úteis)</div>${opBlocoIndicadores(D)}</section>`;
+    h += opSecao("Top 5 clientes", `<small class="op-h-dir">matrículas · nos dias úteis marcados, contra ${opMes(D.ant)}</small>`, "op-secao-top") + `<div id="opTopos">${opBlocoTop(D)}</div></section>`;
+    h += opSecao("Arrecadação por cidade", `<small class="op-h-dir">${opMes(E.mes)} · do maior arrecadado para o menor</small>`) + opTabGrupos(D, (c) => c.cidade, null, "Cidade") + "</section>";
+    h += `<footer class="op-rodape"><span>Fonte: painel de arrecadação · ${esc(filtro)} · competência ${opMes(E.mes)} · orçado ${esc(D.orc.fonte || "—")}`
+      + ` · dias úteis ${esc(rotuloDias())} · crédito até ${D.ult ? dataBR(D.ult) : "—"} · gerado em ${new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>`
+      + `<b class="op-marca">Águas do Rio</b></footer>`;
+    $("opFolha").innerHTML = h;
+    grafico("opGrafico", (W) => svgOpDias(D, W));
+    // Top 5: o worker calcula (mesma análise do Ranking de clientes); refaz só quando os filtros mudam
+    const chave = [E.mes, D.sel, E.sup, E.cidade, E.grupo].join("|");
+    if (chave !== opChaveTop) {
+      opChaveTop = chave; opTop = null;
+      if (worker) worker.postMessage({ tipo: "analise", para: "onepage", id: ++idOnePage, mi: D.mi, miAnt: D.miAnt, marcas: D.mk, sel: D.sel, n: 5 });
+    }
+  }
+  function recebeTopOnePage(m) {
+    if (m.id !== idOnePage || m.erro) return;
+    opTop = m;
+    if (E.aba === "onepage" && $("opTopos")) $("opTopos").innerHTML = opBlocoTop(opDados());
+  }
+  $("opFolha").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr.op-sem[data-semana]");
+    if (!tr) return;
+    const n = +tr.dataset.semana;
+    if (opAbertas.has(n)) opAbertas.delete(n); else opAbertas.add(n);
+    desenhaOnePage();
+  });
+
+  // PDF de uma página (largura de uma A4; a altura acompanha a folha): a folha é copiada numa largura fixa, o gráfico é
+  // redesenhado nela e vira imagem (o html2canvas não aplica o CSS dentro do SVG), e a cópia é fotografada.
+  const PROPS_SVG = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-dasharray", "stroke-linejoin", "paint-order", "font-family", "font-size",
+    "font-weight", "text-anchor", "opacity", "visibility"];
+  function svgParaImagem(svg) {
+    const clone = svg.cloneNode(true), orig = [svg, ...svg.querySelectorAll("*")], dest = [clone, ...clone.querySelectorAll("*")];
+    orig.forEach((el, i) => { const cs = getComputedStyle(el); dest[i].setAttribute("style", PROPS_SVG.map((p) => `${p}:${cs.getPropertyValue(p)}`).join(";")); });
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    const img = new Image();
+    img.width = +svg.getAttribute("width"); img.height = +svg.getAttribute("height"); img.style.display = "block";
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+    svg.replaceWith(img);
+    return new Promise((ok) => { if (img.complete) ok(); else { img.onload = ok; img.onerror = ok; } });
+  }
+  async function opPdf() {
+    if (!window.jspdf || !window.html2canvas) { toast("As bibliotecas do PDF ainda estão carregando; tente de novo.", true); return; }
+    const btn = $("opPdf");
+    btn.disabled = true; btn.textContent = "Gerando o PDF…";
+    const caixa = document.createElement("div");
+    caixa.style.cssText = `position:fixed; left:-${OP_W + 200}px; top:0; width:${OP_W}px; background:#fff;`;
+    const copia = $("opFolha").cloneNode(true);
+    copia.querySelectorAll("[id]").forEach((x) => x.removeAttribute("id"));
+    copia.removeAttribute("id"); copia.classList.add("op-pdf");
+    caixa.appendChild(copia); document.body.appendChild(caixa);
+    try {
+      const g = graficos.get("opGrafico"), alvo = copia.querySelector(".op-grafico");
+      if (g && alvo) alvo.innerHTML = g.fn(alvo.clientWidth);
+      await Promise.all([...copia.querySelectorAll("svg")].map(svgParaImagem));
+      const foto = await window.html2canvas(copia, { scale: 2, backgroundColor: "#FFFFFF", logging: false, width: OP_W, windowWidth: OP_W });
+      const PW = 210, PH = (PW * foto.height) / foto.width;
+      const pdf = new window.jspdf.jsPDF({ orientation: "portrait", unit: "mm", format: [PW, PH], compress: true });
+      pdf.addImage(foto.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, PW, PH);
+      pdf.save(`OnePage_Arrecadacao_${(E.sup || "Todas").replace(/\s+/g, "_")}${E.cidade ? "_" + E.cidade.replace(/[^A-Za-z0-9]+/g, "_") : ""}_${E.mes}.pdf`);
+    } catch (e) {
+      toast("Não foi possível gerar o PDF: " + esc(e.message || e), true);
+    } finally {
+      caixa.remove(); btn.disabled = false; btn.textContent = "📄 Baixar PDF (uma página)";
+    }
+  }
+  $("opPdf").addEventListener("click", opPdf);
 
   // ===== abas =====
   function mostraAba(aba) {
