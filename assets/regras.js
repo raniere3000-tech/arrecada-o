@@ -30,6 +30,15 @@
   };
   const SUPS = ["INTERIOR", "LESTE"];
   const SEM_SUP = "SEM SUP";
+  // Superintendência pelo cadastro (planilha com NUM_LIGACAO e SUPERINTENDENCIA): o nome do cadastro vira o do painel.
+  // LAGOS é o Interior (orçado e faturamento do Interior); as outras ficam com o nome do cadastro (sem orçado).
+  // Em branco ou "-": a matrícula fica sem SUP.
+  const SUP_DO_CADASTRO = { LAGOS: "INTERIOR", INTERIOR: "INTERIOR", LESTE: "LESTE" };
+  function supDoCadastro(t) {
+    const s = String(t == null ? "" : t).trim().replace(/^'+/, "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+    if (!s || /^[-–—]+$/.test(s)) return "";
+    return SUP_DO_CADASTRO[s] || s;
+  }
 
   // Utilização (Sub. Categ.) → [Subcategoria, detalhe (Utilização Atualizada)]
   const SUBCATEGORIAS = {
@@ -97,6 +106,6 @@
   }
 
   return { CATEGORIAS_FATURAMENTO, GRUPO_NO_CRUZAMENTO, SITUACOES_FORA_DO_FATURAMENTO,
-    ZONAS, SUPS, SEM_SUP, SUBCATEGORIAS, SEM_CLASSIFICACAO, SEM_PERFIL, ORDEM_SUBCATEGORIAS, ORDEM_PERFIS,
+    ZONAS, SUPS, SEM_SUP, SUP_DO_CADASTRO, supDoCadastro, SUBCATEGORIAS, SEM_CLASSIFICACAO, SEM_PERFIL, ORDEM_SUBCATEGORIAS, ORDEM_PERFIS,
     TIPOS_CONTA, FERIADOS_EXTRAS, feriados };
 });

@@ -17,6 +17,7 @@ let combosFat = null;                                  // combinações (cidade,
 // contas a receber: duas bases possíveis na pasta, a total e a só de notas fiscais ("NFC" no nome do arquivo);
 // cada uma é um Map matrícula → resumo. As consultas dizem qual usar (recTipo: "nfc" ou "total").
 let receberBases = { total: null, nfc: null };
+let cadastroSup = null;                                // Map ligação → superintendência do cadastro (null = sem cadastro na pasta)
 const recBase = (tipo) => receberBases[tipo] || null;
 
 self.onmessage = async (ev) => {
@@ -36,6 +37,8 @@ self.onmessage = async (ev) => {
     grupoFat = null;                                   // refeito na 1ª consulta desta pasta
     receberBases = r.receberMapas;
     delete r.receberMapas;
+    cadastroSup = r.cadastroMapa;
+    delete r.cadastroMapa;
     if (r.cruzamento) delete r.cruzamento.base;
     avisa("pronto", r, C.buffers(r.dados));          // as tabelas vão para a página sem cópia
   } catch (e) {
@@ -102,7 +105,8 @@ function respondeClientes(o) {
     for (const x of r.deixaram) { const rc = receber.get(x.lig); x.saldo = rc && rc.vencido > 0 ? rc.vencido : null; }
     const f = o.filtroRec || {}, sup = supDaCidade();
     const passa = (l, v) => !l || !l.length || l.includes(v);           // listas dos filtros de vários itens (vazia = todas)
-    const aceita = (x) => passa(f.sups, sup.get(x.cidade)) && passa(f.cidades, x.cidade) && passa(f.gruposFat, grupoFatDe(x.lig));
+    const supDe = (x) => (cadastroSup ? cadastroSup.get(C.ligacao(String(x.lig))) || R.SEM_SUP : sup.get(x.cidade));
+    const aceita = (x) => passa(f.sups, supDe(x)) && passa(f.cidades, x.cidade) && passa(f.gruposFat, grupoFatDe(x.lig));
     r.receber = C.analisaReceber(receber, analise, o.mi, aceita, o.meses);
     for (const x of r.receber.lista) { x.nome = x.nome || nomeDe(x.lig); x.lig = ligTxt(x.lig); }
   }
@@ -182,6 +186,7 @@ function achaCabecalho(linhas, colunas) {
 }
 const COLS_DESCONTO = ["NUMLIGACAO", "DESCONTO", "REFERENCIA"];
 const COLS_RECEBER = ["NUMLIGACAO", "SALDOTOTAL", "FAIXADESCRICAO"];   // contas a receber (vencidas e a vencer, por faixa de atraso)
+const COLS_CAD_SUP = ["NUMLIGACAO", "SUPERINTENDENCIA"];    // cadastro: superintendência de cada matrícula
 const COLS_PERFIL = ["NUMLIGACAO", "SEQRESPONSAVEL", "CLUSTERSALDO"];
 const COLS_ORCADO = ["SUP", "RUBRICA"];
 
@@ -192,6 +197,8 @@ async function classifica(item) {
   if (e === "csv" || e === "txt") {
     const linhas = await primeirasLinhas(file);
     if (ehArrecadacao(linhas[0] || "")) return { tipo: C.chave(rel).includes("DIARI") ? "diaria" : "acumulada" };
+    const iCad = linhas.findIndex((l) => COLS_CAD_SUP.every((c) => l.split(/[;,\t]/).map(C.chave).includes(c)));
+    if (iCad >= 0) return { tipo: "cadastro", csv: true };
     const iFat = linhas.findIndex(ehFaturamento);
     if (iFat >= 0) {
       if (C.chave(file.name).includes("AVULSO")) return { tipo: "ignorado", motivo: "serviço avulso: não entra no faturamento (os serviços já vêm nas rubricas da fatura)" };
@@ -213,12 +220,13 @@ async function classifica(item) {
   for (const aba of livro.SheetNames) {
     const linhas = linhasDaAba(livro, aba);
     const guarda = inteira ? { livro } : {};
+    if (achaCabecalho(linhas, COLS_CAD_SUP)) return { tipo: "cadastro", aba };
     if (achaCabecalho(linhas, COLS_RECEBER)) return { tipo: "receber", aba };
     if (achaCabecalho(linhas, COLS_PERFIL)) return { tipo: "perfil", aba, ...guarda };
     if (achaCabecalho(linhas, COLS_DESCONTO)) return { tipo: "desconto", aba, ...guarda };
     if (achaCabecalho(linhas, COLS_ORCADO)) return { tipo: "orcado", aba };
   }
-  return { tipo: "ignorado", motivo: "planilha não usada pelo painel (não é desconto, perfil do cliente, orçado nem contas a receber)" };
+  return { tipo: "ignorado", motivo: "planilha não usada pelo painel (não é desconto, perfil do cliente, orçado, contas a receber nem cadastro com a superintendência)" };
 }
 
 // ---------- planilhas ----------
@@ -256,6 +264,36 @@ async function leReceber(arq) {
       sitLig: v("sitLig"), tipo: v("tipo"), contato: v("contato"), cidade: v("cidade") });
   }
   return { mapa: C.montaReceber(regs), linhas: regs.length };
+}
+// Cadastro: ligação → superintendência (nome do painel: LAGOS = Interior). Planilha (.xlsx) ou CSV (; , ou tab).
+// Matrícula repetida com superintendências diferentes: vale a 1ª e conta como divergente. Em branco ou "-": não entra.
+async function leCadastro(arq, mapa) {
+  let n = 0, divergentes = 0;
+  const guarda = (lig, sup) => {
+    const l = C.ligacao(lig), x = R.supDoCadastro(sup);
+    if (!l || !x) return;
+    const ja = mapa.get(l);
+    if (ja === undefined) { mapa.set(l, x); n++; } else if (ja !== x) divergentes++;
+  };
+  if (arq.csv) {
+    let idx = null, sep = ";";
+    await linhasDoArquivo(arq.file, (linha) => {
+      if (!idx) {
+        sep = [";", "\t", ","].find((x) => linha.includes(x)) || ";";
+        const ch = linha.split(sep).map(C.chave);
+        if (!COLS_CAD_SUP.every((c) => ch.includes(c))) return;    // título antes do cabeçalho
+        idx = { lig: ch.indexOf("NUMLIGACAO"), sup: ch.indexOf("SUPERINTENDENCIA") };
+        return;
+      }
+      const p = linha.split(sep);
+      guarda(String(p[idx.lig] || "").replace(/"/g, "").trim(), String(p[idx.sup] || "").replace(/"/g, ""));
+    }, () => {});
+  } else {
+    const linhas = linhasDaAba(leLivro(await arq.file.arrayBuffer()), arq.aba);
+    const cab = achaCabecalho(linhas, COLS_CAD_SUP), { NUMLIGACAO: a, SUPERINTENDENCIA: b } = cab.idx;
+    for (let i = cab.i + 1; i < linhas.length; i++) { const l = linhas[i]; if (l && l[a] != null) guarda(l[a], l[b]); }
+  }
+  return { n, divergentes };
 }
 async function leDesconto(arq, mapa) {
   const linhas = linhasDaAba(arq.livro || leLivro(await arq.file.arrayBuffer()), arq.aba);
@@ -369,7 +407,7 @@ async function leFaturamento(file, aoLer) {
 }
 
 // ---------- cache: o que cada CSV exportou fica no navegador (IndexedDB); arquivo igual não é lido de novo ----------
-const CACHE_VERSAO = 5;
+const CACHE_VERSAO = 6;                                 // 6: a combinação traz a superintendência do cadastro
 const CACHE_FATURAMENTO = 4;                           // cache do faturamento é separado: muda sem reler a arrecadação
 const banco = () => new Promise((ok, erro) => {
   const r = indexedDB.open("arrecadacao_cache", 1);
@@ -408,9 +446,15 @@ async function processa(itens) {
     arquivos.push({ rel: item.rel, file: item.file, tamanho: item.file.size, ...info });
   }
 
-  const perfis = new Map(), descontos = new Map(), orcados = [];
+  const perfis = new Map(), descontos = new Map(), orcados = [], cadastro = new Map();
   for (const a of arquivos) {
     try {
+      if (a.tipo === "cadastro") {
+        avisa("progresso", { pct: 13, texto: `Lendo cadastro (superintendência): ${a.rel}` });
+        const r = await leCadastro(a, cadastro);
+        a.registros = r.n;
+        if (r.divergentes) a.motivo = `${r.divergentes} matrícula(s) repetida(s) com outra superintendência: vale a 1ª`;
+      }
       if (a.tipo === "perfil") { avisa("progresso", { pct: 12, texto: `Lendo perfis de pagamento: ${a.rel}` }); a.registros = await lePerfil(a, perfis); a.livro = null; }
       if (a.tipo === "desconto") { avisa("progresso", { pct: 14, texto: `Lendo descontos: ${a.rel}` }); a.registros = await leDesconto(a, descontos); a.livro = null; }
       if (a.tipo === "orcado") {
@@ -449,7 +493,7 @@ async function processa(itens) {
   const agregador = new C.Agregador();
   const diarias = arquivos.filter((a) => a.tipo === "diaria"), acumuladas = arquivos.filter((a) => a.tipo === "acumulada");
   // o perfil entra na leitura de cada linha: trocar a planilha de perfil invalida o cache
-  const assinaturaPerfil = arquivos.filter((a) => a.tipo === "perfil").map((a) => `${a.rel}|${a.tamanho}|${a.file.lastModified}`).join(";");
+  const assinaturaPerfil = arquivos.filter((a) => a.tipo === "perfil" || a.tipo === "cadastro").map((a) => `${a.tipo}|${a.rel}|${a.tamanho}|${a.file.lastModified}`).join(";");
   let db = null;
   try { db = await banco(); } catch (e) { /* navegador sem IndexedDB: lê tudo */ }
   const usados = new Set(), exportados = new Map();
@@ -466,7 +510,7 @@ async function processa(itens) {
         exp = await leCsv(a.file, (lidos) => avisa("progresso", {
           pct: 15 + Math.round(((base + lidos) / totalBytes) * 83),
           texto: `Lendo ${a.rel} (${(lidos / 1048576).toFixed(0)} de ${(a.tamanho / 1048576).toFixed(0)} MB)`,
-        }), new C.LeituraArquivo(perfis.size ? perfis : null));
+        }), new C.LeituraArquivo(perfis.size ? perfis : null, cadastro.size ? cadastro : null));
         if (db) await cacheGrava(db, id, exp);
       } catch (e) {
         Object.assign(a, { tipo: "ignorado", motivo: "não foi possível ler: " + ((e && e.message) || e), erro: true });
@@ -528,6 +572,8 @@ async function processa(itens) {
   return {
     dados, orcados, cruzamento, receberInfo, receberMapas,
     temPerfil: perfis.size > 0, temDesconto: descontos.size > 0,
+    cadastroInfo: cadastro.size ? { matriculas: cadastro.size, porSup: [...cadastro.values()].reduce((o, x) => ((o[x] = (o[x] || 0) + 1), o), {}) } : null,
+    cadastroMapa: cadastro.size ? cadastro : null,
     mesesDiaria: [...mesesDiaria].sort(),
     mesesDesconto: [...descontos.keys()].sort(),
     arquivos: arquivos.map(({ file, livro, ...a }) => a),

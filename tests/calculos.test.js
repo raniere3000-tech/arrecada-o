@@ -527,3 +527,23 @@ test("filtros de vários itens: listas de superintendências, cidades e subcateg
   perto(tot({ cidade: ["RIO BONITO"], grupo: ["RESIDENCIAL"] }), 10);
   perto(tot({ sup: "LESTE" }), 40);                                                                   // um valor só continua valendo
 });
+
+test("superintendência pelo cadastro: a da matrícula; fora do cadastro, sem SUP; sem cadastro, pela cidade", () => {
+  assert.equal(R.supDoCadastro("LAGOS"), "INTERIOR");
+  assert.equal(R.supDoCadastro(" Leste "), "LESTE");
+  assert.equal(R.supDoCadastro("BAIXADA 01"), "BAIXADA 01");
+  assert.equal(R.supDoCadastro("'-"), "");
+  assert.equal(R.supDoCadastro(""), "");
+  const cad = new Map([[C.ligacao("1"), "INTERIOR"], [C.ligacao("2"), "LESTE"], [C.ligacao("3"), "COMUNIDADES"]]);
+  const monta = (cadastro) => {
+    const l = new C.LeituraArquivo(null, cadastro);
+    for (const lig of [1, 2, 3, 4]) l.adiciona(linha(lig, "01/10/2026", `${lig}0,00`));             // todas em Rio Bonito (Interior pela cidade)
+    const a = new C.Agregador(); a.junta(l.exporta()); return a.resultado(new Map());
+  };
+  const tot = (d, sup) => C.totalDoMes(d, d.meses.indexOf("2026-10"), C.marcaCombos(d, { sup }), 1 << 1).valor;
+  const d = monta(cad);
+  perto(tot(d, "INTERIOR"), 10); perto(tot(d, "LESTE"), 20); perto(tot(d, "COMUNIDADES"), 30); perto(tot(d, R.SEM_SUP), 40);
+  assert.ok(d.combos.every((c) => c.cidade === "RIO BONITO"));
+  const semCad = monta(null);
+  perto(tot(semCad, "INTERIOR"), 100);                                                                  // sem cadastro: pela cidade
+});

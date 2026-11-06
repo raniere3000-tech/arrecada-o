@@ -11,6 +11,8 @@ para a internet: tudo é processado no navegador.
   completas por matrículas ou a base completa dos meses marcados, a base de oportunidades: pagaram num mês e não pagaram em outro;
   e o comparativo por mês: uma linha por matrícula e uma coluna de valor por mês; as duas podem trazer endereço,
   grupo e rota do faturamento mais recente e, no fim, o saldo vencido e a SIT_LIG da base de contas a receber).
+- **Cadastro (superintendência)**: planilha ou CSV com NUM_LIGACAO e SUPERINTENDENCIA; a superintendência de cada matrícula vem
+  dele (LAGOS = Interior; fora do cadastro = Sem SUP). Sem ela, a superintendência vem da cidade.
 - **Contas a receber**: até duas bases na pasta, a total e a só de notas fiscais (com “NFC” no nome); o seletor “Apenas NFC” /
   “Total (com parcelas e NFA)” escolhe qual usar em Clientes e oportunidades e nas bases da aba Base.
 - **Análises** (cruzamentos e oportunidades): Faturamento x Arrecadação; Fat. x Arrec. — mesmo vencimento; Conversão por

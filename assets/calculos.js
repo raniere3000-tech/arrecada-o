@@ -169,8 +169,10 @@
   }
 
   class LeituraArquivo {
-    constructor(perfis) {
+    constructor(perfis, cadastro) {
       this.perfis = perfis || null;                    // Map "ligação|contrato" → perfil (CLUSTER SALDO)
+      // Map ligação → superintendência do cadastro (já no nome do painel); null = sem planilha de cadastro: SUP pela cidade
+      this.cadastro = cadastro || null;
       this.idxCk = new Map();
       this.cks = [];
       this.meses = new Map();
@@ -191,7 +193,8 @@
       M.linhas++;
       if (credito > M.ultimoCredito) M.ultimoCredito = credito;
       const perfil = this.perfis ? (this.perfis.get(ligacao(r.lig) + "|" + ligacao(r.contrato)) || R.SEM_PERFIL) : R.SEM_PERFIL;
-      const ck = String(r.zona || "").trim() + SEP + String(r.util || "").trim() + SEP + perfil;
+      const supCad = this.cadastro ? this.cadastro.get(ligacao(r.lig)) || R.SEM_SUP : "";   // "" = pela cidade
+      const ck = String(r.zona || "").trim() + SEP + String(r.util || "").trim() + SEP + perfil + SEP + supCad;
       let c = this.idxCk.get(ck);
       if (c === undefined) {
         c = this.cks.length;
@@ -260,9 +263,9 @@
     combo(ck) {
       let i = this.idxCombo.get(ck);
       if (i !== undefined) return i;
-      const [zona, util, perfil] = ck.split(SEP);
-      const [cidade, sup] = zonaInfo(zona), [grupo, detalhe] = subInfo(util);
-      if (sup === R.SEM_SUP) this.zonasSemSup.set(zona, 1);
+      const [zona, util, perfil, supCad] = ck.split(SEP);
+      const [cidade, supZona] = zonaInfo(zona), [grupo, detalhe] = subInfo(util), sup = supCad || supZona;   // cadastro, senão a cidade
+      if (!supCad && supZona === R.SEM_SUP) this.zonasSemSup.set(zona, 1);
       if (grupo === R.SEM_CLASSIFICACAO) this.subSemClasse.set(util, 1);
       i = this.combos.length;
       if (i >= MAX_COMBOS) throw new Error("combinações de zona × subcategoria × perfil demais");

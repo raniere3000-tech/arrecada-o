@@ -227,12 +227,15 @@
     return `${fmt(a.semChave)} linhas descartadas (${motivos}). Ex.: ${r.exemplo}`;
   }
   function listaArquivos(res) {
-    const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (linha da arrecadação)", faturamento: "Faturamento (Fatura de ciclo)", receber: "Contas a receber", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
+    const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (linha da arrecadação)", faturamento: "Faturamento (Fatura de ciclo)", receber: "Contas a receber", cadastro: "Cadastro (superintendência)", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
     const linhas = res.arquivos.map((a) => `<tr>${td(esc(a.rel), "rot")}${td((USO[a.tipo] || a.tipo) + (a.recTipo ? (a.recTipo === "nfc" ? " (apenas NFC)" : " (total)") : ""), "rot")}${td(a.registros != null ? fmt(a.registros) : "")}`
       + `${td(esc((a.meses || []).map(C.rotuloMes).join(", ")), "rot")}${td(esc(a.motivo || [a.puladas ? `${fmt(a.puladas)} linhas de mês que está no arquivo diário não foram usadas` : "", rejeicao(a), a.doCache ? "já lido antes (guardado neste navegador)" : ""].filter(Boolean).join("; ")), "rot")}</tr>`).join("");
     const d = res.dados, avisos = [];
     if (!res.temDesconto) avisos.push("Planilha de desconto comercial não encontrada: a arrecadação aparece sem o desconto.");
     if (!res.temPerfil) avisos.push("Planilha de perfil do cliente (Cluster) não encontrada: todos aparecem como “Sem perfil”.");
+    if (res.cadastroInfo) avisos.push(`Superintendência pelo cadastro: ${fmt(res.cadastroInfo.matriculas)} matrículas (${Object.entries(res.cadastroInfo.porSup)
+      .sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(nomeSup(k))} ${fmt(v)}`).join(", ")}); matrícula fora do cadastro fica em “Sem SUP”.`);
+    else avisos.push("Sem planilha de cadastro com a SUPERINTENDENCIA: a superintendência vem da cidade.");
     if (!res.orcados.length) avisos.push("Nenhuma planilha de orçado (RF) com a linha da arrecadação: digite o orçado do mês no Resumo (Orçado do mês e curva).");
     if (d.zonasSemSup.length) avisos.push(`Zonas fora da relação de cidades (aparecem em “Sem SUP”): ${esc(d.zonasSemSup.join(", "))}.`);
     if (d.subSemClasse.length) avisos.push(`Subcategorias fora da relação (aparecem em “${R.SEM_CLASSIFICACAO}”): ${esc(d.subSemClasse.join(", "))}.`);
