@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v42-20261106">
+<link rel="stylesheet" href="assets/painel.css?v=v43-20261106">
 </head>
 <body>
 
@@ -27,6 +27,7 @@
     <div class="ferramentas">
       <button type="button" class="btn-top" id="btnPasta">📁 Conectar pasta</button>
       <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
+      <button type="button" class="btn-top" id="btnOrcado" aria-pressed="true" title="Mostrar ou esconder as colunas de orçado (Orçado dia, Dif e Δ) na tabela do Resumo">👁 Orçado</button>
       <button type="button" class="btn-top" id="btnPdf" disabled>📄 PDF</button>
       <div class="chave-visual" role="group" aria-label="Visual do painel">
         <button type="button" data-visual="painel" class="on">Painel</button>
@@ -94,7 +95,7 @@
     <section class="painel-aba" data-painel="resumo">
       <div class="kpis" id="kpis"></div>
       <div class="grade">
-        <div class="card"><h2>Orçado × Realizado <small id="notaOrc"></small></h2><div class="wrap"><table id="tOrc" class="compacta"></table></div></div>
+        <div class="card"><h2><span id="tituloOrc">Orçado × Realizado</span> <small id="notaOrc"></small></h2><div class="wrap"><table id="tOrc" class="compacta"></table></div></div>
         <div class="card"><h2>Clientes pagantes</h2><div class="wrap"><table id="tCli" class="compacta"></table></div></div>
         <div class="card"><h2>Contas pagas</h2><div class="wrap"><table id="tCon" class="compacta"></table></div></div>
         <div class="card"><h2>Ticket médio</h2><div class="wrap"><table id="tTic" class="compacta"></table></div></div>
@@ -536,9 +537,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v42-20261106"></script>
-<script src="assets/calculos.js?v=v42-20261106"></script>
-<script>const VERSAO_SITE = "v42-20261106"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v42-20261106"></script>
+<script src="assets/regras.js?v=v43-20261106"></script>
+<script src="assets/calculos.js?v=v43-20261106"></script>
+<script>const VERSAO_SITE = "v43-20261106"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v43-20261106"></script>
 </body>
 </html>

@@ -41,6 +41,7 @@ code { font-size: 12.5px; background: var(--tint); padding: 1px 5px; border-radi
 .ferramentas { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .btn-top { padding: 7px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.1); color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .btn-top:hover:not(:disabled) { background: rgba(255,255,255,.2); }
+.btn-top.desligado { background: transparent; border-style: dashed; opacity: .8; }
 .btn-top:disabled { opacity: .45; cursor: default; }
 .chave-visual { display: inline-flex; border: 1px solid rgba(255,255,255,.35); border-radius: 8px; overflow: hidden; }
 .chave-visual button { padding: 7px 10px; border: 0; background: transparent; color: #C8D4EA; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }

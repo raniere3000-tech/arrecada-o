@@ -525,7 +525,9 @@
       ["Δ (%)", `<i class="${delta < 0 ? "neg" : ""}" style="font-style:normal">${pct(delta)}</i>`, temOrc ? `${rs(tot.valor - orcAte)} vs orçado` : semOrc],
       ["Ticket médio", tot.contas ? fmt(tot.valor / tot.contas, 2) : "—", `${fmt(tot.contas)} contas pagas`],
     ].map(([t, v, sub]) => `<div class="kpi"><span>${t}</span><b>${v}</b><small>${sub}</small></div>`).join("");
-    $("notaOrc").textContent = temOrc ? "" : "(" + semOrc + ")";
+    const verOrc = E.verOrcado;
+    $("tituloOrc").textContent = verOrc ? "Orçado × Realizado" : "Realizado";
+    $("notaOrc").textContent = !verOrc || temOrc ? "" : "(" + semOrc + ")";
 
     const linhaOrc = (rot, du, o, a, fora, temDado) => {
       const dif = a - o, p = a / o - 1;
@@ -538,7 +540,12 @@
     if (tot.desconto) rows.push(`<tr class="desc">${td("Desconto comercial", "rot")}${td("")}${td("")}${td(fmt(tot.desconto))}${td("")}${td("")}</tr>`);
     rows.push(`<tr class="total">${td("Total", "rot")}${td("")}${td(temOrc ? fmt(orcAte) : "—")}${td(fmt(tot.valor))}`
       + `${temOrc ? tdNum(tot.valor - orcAte, fmt) + tdNum(delta, pct) : td("") + td("")}</tr>`);
-    tabela("tOrc", ["Data", "Dia útil", "Orçado dia", "Arrecadação dia", "Dif", "Δ (%)"], rows);
+    // botão "Orçado" do topo desligado: some Orçado dia, Dif e Δ (colunas 3, 5 e 6), fica só o realizado
+    const soReal = (tr) => (verOrc ? tr : tr.replace(/^(<tr[^>]*>)((?:<td[^>]*>.*?<\/td>){6})<\/tr>$/, (m, a, cels) => {
+      const c = cels.match(/<td[^>]*>.*?<\/td>/g);
+      return a + c[0] + c[1] + c[3] + "</tr>";
+    }));
+    tabela("tOrc", verOrc ? ["Data", "Dia útil", "Orçado dia", "Arrecadação dia", "Dif", "Δ (%)"] : ["Data", "Dia útil", "Arrecadação dia"], rows.map(soReal));
 
     // clientes, contas e ticket: mês escolhido e os dois anteriores, até o mesmo dia útil
     const meses = [C.mesAnterior(E.mes, 2), C.mesAnterior(E.mes, 1), E.mes];
@@ -2427,6 +2434,22 @@
 
   // ===== PDF: uma folha (ou mais, se a tabela for comprida) por aba, no visual escolhido =====
   const quadro = () => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+  // botão "Orçado" do topo: mostra ou esconde as colunas de orçado da tabela do Resumo (fica guardado neste navegador)
+  try { E.verOrcado = localStorage.getItem("arrecadacao_ver_orcado") !== "0"; } catch (x) { E.verOrcado = true; }
+  const marcaBtnOrcado = () => {
+    const b = $("btnOrcado");
+    b.setAttribute("aria-pressed", String(E.verOrcado));
+    b.textContent = E.verOrcado ? "👁 Orçado" : "🚫 Orçado";
+    b.classList.toggle("desligado", !E.verOrcado);
+  };
+  marcaBtnOrcado();
+  $("btnOrcado").addEventListener("click", () => {
+    E.verOrcado = !E.verOrcado;
+    try { localStorage.setItem("arrecadacao_ver_orcado", E.verOrcado ? "1" : "0"); } catch (x) { /* sem armazenamento */ }
+    marcaBtnOrcado();
+    if (E.res) desenha();
+  });
+
   $("btnPdf").addEventListener("click", async () => {
     if (!window.jspdf || !window.html2canvas) { toast("As bibliotecas do PDF ainda estão carregando; tente de novo.", true); return; }
     const btn = $("btnPdf"), abaAntes = E.aba;
