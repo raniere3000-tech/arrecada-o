@@ -25,6 +25,7 @@ self.onmessage = async (ev) => {
   if (ev.data.tipo === "clientes") { responde("clientes", ev.data.id, () => respondeClientes(ev.data)); return; }
   if (ev.data.tipo === "matricula") { responde("matricula", ev.data.id, () => respondeMatricula(ev.data)); return; }
   if (ev.data.tipo === "comparativo") { responde("comparativo", ev.data.id, () => respondeComparativo(ev.data)); return; }
+  if (ev.data.tipo === "negociacao") { responde("negociacao", ev.data.id, () => respondeNegociacao(ev.data)); return; }
   if (ev.data.tipo === "oportunidades") { responde("oportunidades", ev.data.id, () => respondeOportunidades(ev.data)); return; }
   if (ev.data.tipo === "extrair") { extraiBase(ev.data).catch((e) => avisa("extracao", { id: ev.data.id, erro: String((e && e.message) || e) })); return; }
   try {
@@ -675,6 +676,29 @@ async function respondeOportunidades({ miA, miB, marcas, comFat, comRec, recTipo
     x.nome = nomeDe(x.lig); x.lig = ligTxt(x.lig);
   }
   return { lista, cabFat: ex.cabFat, cabRec: ex.cabRec, ...ex.info() };
+}
+// Negociação (área Análises): pagaram em todos os meses misPagou e não pagaram no mês de referência miRef. Devolve o resumo por
+// cidade e subcategoria, as 100 maiores matrículas (para a tela) e o CSV completo, montado aqui em blocos.
+async function respondeNegociacao({ misPagou, miRef, rotulos, marcas, nomesSup, comFat, comRec, recTipo }) {
+  const lista = C.negociacao(analise, misPagou, miRef, marcas), n = misPagou.length, ex = await colunasExtras(comFat, comRec, recTipo);
+  const txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " ");
+  const porCidade = new Map(), porSub = new Map(), top = [], blobs = [], partes = [];
+  const soma = (mapa, k, x) => { let o = mapa.get(k); if (!o) { o = { rot: k, n: 0, vals: new Array(n).fill(0) }; mapa.set(k, o); } o.n++; x.vals.forEach((v, j) => { o.vals[j] += v; }); };
+  let tam = 0;
+  for (const x of lista) {
+    const c = combosArr[x.c] || {}, e = ex.de(x.lig);
+    soma(porCidade, c.cidade || "—", x); soma(porSub, c.grupo || "—", x);
+    if (top.length < 100) top.push({ lig: ligTxt(x.lig), nome: nomeDe(x.lig), sup: c.sup || "", cidade: c.cidade || "", grupo: c.grupo || "", vals: x.vals });
+    const linha = [ligTxt(x.lig), txt(nomeDe(x.lig)), nomesSup[c.sup] || c.sup || "", c.cidade || "", c.grupo || "", ...e.fat.map(txt),
+      ...x.vals.map(nBR), nBR(x.total), ...e.rec.map(txt)].join(";");
+    partes.push(linha); tam += linha.length + 2;
+    if (tam > 4e6) { blobs.push(new Blob([partes.join("\r\n") + "\r\n"])); partes.length = 0; tam = 0; }
+  }
+  if (partes.length) blobs.push(new Blob([partes.join("\r\n") + "\r\n"]));
+  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...ex.cabFat, ...rotulos.map((m) => `Arrecadado ${m}`), "Total pago nos meses", ...ex.cabRec].join(";");
+  const ordena = (m) => [...m.values()].sort((a, b) => b.vals.reduce((s, v) => s + v, 0) - a.vals.reduce((s, v) => s + v, 0));
+  return { n: lista.length, porCidade: ordena(porCidade), porSub: ordena(porSub), top, ...ex.info(),
+    blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
 }
 // Colunas extras das bases de oportunidades e comparativo, para cada matrícula:
 //  fat: Endereço da ligação, Grupo, Rota (e Situação da ligação, só quando a base de contas a receber não entra)

@@ -891,6 +891,18 @@
     });
     return { k, ligs, comb, vals: Float64Array.from(vals), pagou: Uint8Array.from(pagou) };
   }
+  // Negociação: matrículas que pagaram em TODOS os meses misPagou e não pagaram no mês de referência miRef (nas combinações
+  // marcadas). vals[j] = valor pago no mês misPagou[j]. Do maior total pago para o menor.
+  function negociacao(an, misPagou, miRef, marcas) {
+    const r = valoresPorMes(an, [...misPagou, miRef], marcas), k = r.k, n = misPagou.length, out = [];
+    for (let p = 0; p < r.ligs.length; p++) {
+      if (r.pagou[p * k + n]) continue;
+      let ok = n > 0, tot = 0;
+      for (let j = 0; j < n && ok; j++) { ok = r.pagou[p * k + j] === 1; tot += r.vals[p * k + j]; }
+      if (ok) out.push({ lig: r.ligs[p], c: r.comb[p], vals: Array.from({ length: n }, (_, j) => r.vals[p * k + j]), total: tot });
+    }
+    return out.sort((a, b) => b.total - a.total || a.lig - b.lig);
+  }
   // ---------- Contas a receber (base de contas vencidas e a vencer, por matrícula × faixa de atraso) ----------
   // Faixa "00 - A Vencer" = 0; "01 - 30 Dias" = 1; "366 Dias >>" = 366 (o 1º número do texto ordena as faixas)
   const faixaNum = (t) => { const m = /\d+/.exec(String(t || "")); return m ? +m[0] : 9999; };
@@ -1064,7 +1076,7 @@
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, estendeSel, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
-    clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes, faixaNum, montaReceber, analisaReceber, situacaoPadrao, colunasReceber,
+    clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes, negociacao, faixaNum, montaReceber, analisaReceber, situacaoPadrao, colunasReceber,
     MASCARA_MES, comparaGrupos, tabelaBI, mesesMesmosUteis, fracaoAteDias, pareto,
   };
 });

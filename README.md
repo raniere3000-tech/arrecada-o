@@ -21,7 +21,8 @@ para a internet: tudo é processado no navegador.
   os mesmos dias úteis ou pela curva do orçado); Ranking de clientes (top 100 maiores, aumentos e quedas por cliente) e Clientes
   e oportunidades (contas a receber: saldo vencido e a vencer por faixa, situação, contato e cidade, maiores devedores e quem pagou;
   faturado sem pagamento a investigar, deixaram e voltaram a pagar, histórico de uma matrícula; com a base de
-  contas a receber na pasta, o “a investigar” é conferido por matrícula). O PDF é só do Executivo.
+  contas a receber na pasta, o “a investigar” é conferido por matrícula) e Negociação (escolhe o mês de referência e os meses em que o
+  cliente pagou: lista quem pagou em todos os meses marcados e não pagou na referência, por cidade, subcategoria e matrícula, com CSV). O PDF é só do Executivo.
 - **Dados**: área à parte com as regras e a conferência dos números, e a **tabela para comparar com o BI** (Cidade × Subcategoria × Mês/ano × Classificação nos meses marcados no filtro Mês, com a arrecadação e os clientes pagantes nos dias marcados e no mês anterior), em quadro recolhível e com download em Excel.
 - **Pasta One Page** (na pasta principal): prints do BI para o One page — imagens (PNG/JPG) ou um Excel com as imagens coladas.
   Cada print vai para o seu lugar pelo nome da aba do Excel (ou do arquivo): “Economias” (cartão dos volumes acumulados) e

@@ -5,8 +5,8 @@
   const $ = (id) => document.getElementById(id);
   const ARQ_AJUSTES = "ajustes_arrecadacao.json";
   const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", onepage: "One page", analise: "Ranking de clientes", base: "Base", dados: "Dados",
-    fxa: "Faturamento x Arrecadação", fxv: "Fat. x Arrec. — mesmo vencimento", conversao: "Conversão por referência", localidade: "Diagnóstico por localidade", clientes: "Clientes e oportunidades" };
-  const AREA_DA_ABA = { fxa: "analises", fxv: "analises", conversao: "analises", localidade: "analises", analise: "analises", clientes: "analises", dados: "dados" };   // as outras: Executivo
+    fxa: "Faturamento x Arrecadação", fxv: "Fat. x Arrec. — mesmo vencimento", conversao: "Conversão por referência", localidade: "Diagnóstico por localidade", clientes: "Clientes e oportunidades", negociacao: "Negociação" };
+  const AREA_DA_ABA = { fxa: "analises", fxv: "analises", conversao: "analises", localidade: "analises", analise: "analises", clientes: "analises", negociacao: "analises", dados: "dados" };   // as outras: Executivo
   const ultimaDaArea = { executivo: "resumo", analises: "fxa", dados: "dados" };
   const ABAS_PDF = ["resumo", "subcategoria", "perfil", "cidades", "escada"];     // Ranking de clientes e Dados não entram no PDF
   const NOME_SUP = { INTERIOR: "Interior", LESTE: "Leste", [R.SEM_SUP]: "Sem SUP" };
@@ -275,6 +275,7 @@
       else if (m.tipo === "clientes") recebeClientes(m);
       else if (m.tipo === "matricula") recebeMatricula(m);
       else if (m.tipo === "oportunidades") recebeOportunidades(m);
+      else if (m.tipo === "negociacao") recebeNegociacao(m);
       else if (m.tipo === "comparativo") recebeComparativo(m);
       else if (m.tipo === "extracao-progresso") { if (m.id === idBase) $("baseStatus").textContent = `${m.texto}… ${m.pct}%`; }
       else if (m.tipo === "extracao") recebeBase(m);
@@ -567,7 +568,7 @@
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloDias()} de cada mês`; });
     $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && !["localidade", "analise", "clientes"].includes(E.aba));   // Diagnóstico, Ranking e Clientes usam os dias marcados
     ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, onepage: desenhaOnePage, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
-      conversao: desenhaConversao, clientes: desenhaClientes, localidade: desenhaLocalidade })[E.aba]();
+      conversao: desenhaConversao, clientes: desenhaClientes, negociacao: desenhaNegociacao, localidade: desenhaLocalidade })[E.aba]();
   }
 
   // "1 a 12", "1, 5 e 10", "0 (fins de semana e feriados) e 1 a 3"
@@ -1081,6 +1082,11 @@
     $("opA").innerHTML = opcoes(opA); $("opB").innerHTML = opcoes(opB);
     // comparativo por mês: padrão = os meses da base de oportunidades
     if (!mesesCmp || mesesCmp.some((m) => !meses.includes(m))) mesesCmp = [...new Set([opA, opB])];
+    atualizaOpcoesExtras();
+    $("cmpMeses").innerHTML = meses.map((m) => `<label><input type="checkbox" value="${m}"${mesesCmp.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("");
+  }
+  // rótulos das opções "Incluir dados do faturamento / das contas a receber" (aba Base e Negociação)
+  function atualizaOpcoesExtras() {
     const refs = E.res.cruzamento ? [...new Set(E.res.cruzamento.fat.map((f) => f.ref))].sort() : [];
     document.querySelectorAll(".opcao-fat").forEach((cx) => {
       cx.disabled = !refs.length;
@@ -1097,7 +1103,6 @@
         ? `Incluir dados das contas a receber (Saldo total vencido e SIT_LIG, no fim do arquivo), base ${recNome()} de ${dataBR(ri.data)}`
         : "Incluir dados das contas a receber: nenhuma base de contas a receber na pasta";
     });
-    $("cmpMeses").innerHTML = meses.map((m) => `<label><input type="checkbox" value="${m}"${mesesCmp.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("");
   }
   let mesesCmp = null, idCmp = 0;
   $("cmpMeses").addEventListener("change", () => { mesesCmp = [...$("cmpMeses").querySelectorAll("input:checked")].map((i) => i.value); });
@@ -1233,6 +1238,57 @@
       + `<div class="base-acoes">${l.length ? '<button type="button" class="btn" id="opBaixar">Baixar base de oportunidades (CSV)</button>' : ""}</div>`;
     if ($("opBaixar")) $("opBaixar").onclick = () => baixa(csv, nome);
     if (l.length) baixa(csv, nome);
+  }
+  // ===== Área Análises — Negociação: pagaram em todos os meses marcados e não pagaram no mês de referência (o worker cruza;
+  // os filtros do cabeçalho valem). Padrão: referência = mês do cabeçalho; pagou no mês anterior.
+  let ngRef = "", ngMeses = null, idNg = 0, ultimaNg = null;
+  function desenhaNegociacao() {
+    const meses = E.res.dados.meses;
+    if (!meses.includes(ngRef)) { ngRef = E.mes; ngMeses = null; }
+    const antes = meses.filter((m) => m < ngRef).reverse();
+    if (!ngMeses) ngMeses = antes.includes(C.mesAnterior(ngRef)) ? [C.mesAnterior(ngRef)] : antes.slice(0, 1);
+    ngMeses = ngMeses.filter((m) => antes.includes(m));
+    $("ngRef").innerHTML = [...meses].reverse().map((m) => `<option value="${m}"${m === ngRef ? " selected" : ""}>${C.rotuloMes(m)}</option>`).join("");
+    $("ngMeses").innerHTML = antes.length ? antes.map((m) => `<label><input type="checkbox" value="${m}"${ngMeses.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("")
+      : `<p class="nota">Sem meses anteriores a ${C.rotuloMes(ngRef)} na pasta.</p>`;
+    atualizaOpcoesExtras();
+  }
+  $("ngRef").addEventListener("change", (e) => { ngRef = e.target.value; ngMeses = null; desenhaNegociacao(); });
+  $("ngMeses").addEventListener("change", () => { ngMeses = [...$("ngMeses").querySelectorAll("input:checked")].map((i) => i.value); });
+  document.querySelectorAll("[data-ng-ult]").forEach((b) => b.addEventListener("click", () => {
+    ngMeses = Array.from({ length: +b.dataset.ngUlt }, (_, i) => C.mesAnterior(ngRef, i + 1));
+    desenhaNegociacao();
+  }));
+  $("ngGerar").addEventListener("click", () => {
+    const pagou = [...(ngMeses || [])].sort();
+    if (!pagou.length) { toast("Marque pelo menos um mês em que o cliente pagou.", true); return; }
+    $("ngGerar").disabled = true; $("ngStatus").textContent = "Cruzando os meses…"; $("ngResultado").innerHTML = "";
+    worker.postMessage({ tipo: "negociacao", id: ++idNg, misPagou: pagou.map(idxMes), miRef: idxMes(ngRef), rotulos: pagou.map(C.rotuloMes), marcas: marcas(),
+      nomesSup: NOME_SUP, comFat: $("ngFat").checked, comRec: $("ngRec").checked, recTipo: E.recTipo, pagou, ref: ngRef });
+    ultimaNg = { pagou, ref: ngRef };
+  });
+  function recebeNegociacao(m) {
+    if (m.id !== idNg) return;
+    $("ngGerar").disabled = false;
+    if (m.erro) { $("ngStatus").textContent = "Erro: " + m.erro; return; }
+    const { pagou, ref } = ultimaNg, d = E.res.dados, R_ = C.rotuloMes(ref), P = pagou.map(C.rotuloMes);
+    const ult = d.ultimoCredito[ref], emAndamento = ref === d.meses[d.meses.length - 1] && ult;
+    const tot = pagou.map((_, j) => m.porCidade.reduce((a, o) => a + o.vals[j], 0));
+    const nomeArq = `Negociacao_pagou_${pagou.join("_")}_nao_pagou_${ref}.csv`;
+    $("ngStatus").textContent = `${fmt(m.n)} matrículas pagaram em ${P.join(", ")} e não pagaram em ${R_}${emAndamento ? ` (até ${dataBR(ult)})` : ""} · ${filtroTexto()}.`
+      + `${textoCadastro(m.cadastro)}${textoReceber(m.comReceber)}`;
+    const cab = (t) => `<thead><tr><th>${t}</th><th>Matrículas</th>${P.map((p) => `<th>Pago em ${p} (R$)</th>`).join("")}</tr></thead>`;
+    const tab = (titulo, l) => `<div class="card"><h2>${titulo}</h2><div class="wrap"><table class="compacta base-tabela">${cab(titulo)}<tbody>`
+      + l.map((o) => `<tr>${td(esc(o.rot), "rot")}${td(fmt(o.n))}${o.vals.map((v) => td(fmt(v))).join("")}</tr>`).join("")
+      + `<tr class="total">${td("Total", "rot")}${td(fmt(m.n))}${tot.map((v) => td(fmt(v))).join("")}</tr></tbody></table></div></div>`;
+    $("ngResultado").innerHTML = !m.n ? '<div class="card"><p class="nota">Nenhuma matrícula nessa situação para os filtros escolhidos.</p></div>'
+      : `<div class="card"><div class="base-acoes" style="margin-top:0"><button type="button" class="btn" id="ngBaixar">Baixar lista completa (CSV, ${fmt(m.n)} matrículas)</button></div></div>`
+        + tab("Cidade", m.porCidade) + tab("Subcategoria", m.porSub)
+        + `<div class="card"><h2>Maiores matrículas <small>as 100 de maior valor pago nos meses marcados</small></h2><div class="wrap lista-rolavel"><table class="compacta base-tabela"><thead><tr>`
+        + `<th>Matrícula</th><th>Nome</th><th>Cidade</th><th>Subcategoria</th>${P.map((p) => `<th>Pago em ${p} (R$)</th>`).join("")}</tr></thead><tbody>`
+        + m.top.map((x) => `<tr>${td(esc(x.lig), "rot")}${td(esc(x.nome), "rot")}${td(esc(x.cidade), "rot")}${td(esc(x.grupo), "rot")}${x.vals.map((v) => td(fmt(v, 2))).join("")}</tr>`).join("")
+        + "</tbody></table></div></div>";
+    if ($("ngBaixar")) $("ngBaixar").onclick = () => baixa(m.blob, nomeArq);
   }
   function baixa(texto, nome) {
     const a = document.createElement("a");

@@ -471,6 +471,21 @@ test("comparativo por mês: uma coluna por mês, em branco onde não pagou", () 
   assert.deepEqual(C.valoresPorMes(d.analise, mis, C.marcaCombos(d, { sup: "LESTE" })).ligs, [4]);
 });
 
+test("negociação: pagaram em todos os meses marcados e não pagaram no mês de referência", () => {
+  const a = new C.Agregador();
+  a.adiciona(linha(1, "01/07/2026", "100,00")); a.adiciona(linha(1, "03/08/2026", "50,00"));                       // jul e ago, não set
+  a.adiciona(linha(2, "01/07/2026", "30,00"));                                                                    // só jul
+  a.adiciona(linha(3, "01/07/2026", "10,00")); a.adiciona(linha(3, "03/08/2026", "10,00")); a.adiciona(linha(3, "01/09/2026", "10,00"));   // pagou set
+  a.adiciona({ ...linha(4, "01/07/2026", "90,00"), zona: "16-SAO GONCALO" }); a.adiciona({ ...linha(4, "03/08/2026", "90,00"), zona: "16-SAO GONCALO" });
+  const d = a.resultado(new Map()), mi = (m) => d.meses.indexOf(m), tudo = C.marcaCombos(d, {});
+  const r = C.negociacao(d.analise, [mi("2026-07"), mi("2026-08")], mi("2026-09"), tudo);
+  assert.deepEqual(r.map((x) => x.lig), [4, 1]);
+  assert.deepEqual(r[1].vals, [100, 50]); perto(r[1].total, 150);
+  assert.deepEqual(C.negociacao(d.analise, [mi("2026-07")], mi("2026-08"), tudo).map((x) => x.lig), [2]);   // jul e não ago
+  assert.deepEqual(C.negociacao(d.analise, [mi("2026-07"), mi("2026-08")], mi("2026-09"), C.marcaCombos(d, { sup: "INTERIOR" })).map((x) => x.lig), [1]);
+  assert.equal(C.negociacao(d.analise, [], mi("2026-09"), tudo).length, 0);
+});
+
 test("contas a receber: saldo por matrícula e faixa, cruzado com a arrecadação", () => {
   const reg = (lig, faixa, contas, saldo, extra = {}) => ({ lig, nome: "FULANO", contas, saldo, faixa, sitLig: "Ativa", tipo: "Hidrometrado",
     contato: "CPF", cidade: "RIO BONITO", ...extra });
