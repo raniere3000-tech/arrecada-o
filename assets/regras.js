@@ -34,8 +34,9 @@
   // LAGOS é o Interior (orçado e faturamento do Interior); as outras ficam com o nome do cadastro (sem orçado).
   // Em branco ou "-": a matrícula fica sem SUP.
   const SUP_DO_CADASTRO = { LAGOS: "INTERIOR", INTERIOR: "INTERIOR", LESTE: "LESTE" };
-  // Matrícula fora do cadastro (ou com a superintendência em branco): nas cidades destas superintendências, vale a da cidade;
-  // nas outras (ex.: Leste, ainda em validação), fica em "Sem SUP"
+  // Superintendências que ignoram o cadastro e vão só pela cidade (zona da arrecadação), como no BI: toda matrícula de cidade
+  // do Interior é Interior, e o cadastro não põe no Interior matrícula de outra cidade. Nas outras cidades (Leste, em
+  // validação) vale o cadastro; fora dele, "Sem SUP".
   const SUPS_PELA_CIDADE = ["INTERIOR"];
   function supDoCadastro(t) {
     const s = String(t == null ? "" : t).trim().replace(/^'+/, "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");

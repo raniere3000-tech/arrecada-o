@@ -337,7 +337,7 @@
     if (!res.temDesconto) avisos.push("Planilha de desconto comercial não encontrada: a arrecadação aparece sem o desconto.");
     if (!res.temPerfil) avisos.push("Planilha de perfil do cliente (Cluster) não encontrada: todos aparecem como “Sem perfil”.");
     if (res.cadastroInfo) avisos.push(`Superintendência pelo cadastro: ${fmt(res.cadastroInfo.matriculas)} matrículas (${Object.entries(res.cadastroInfo.porSup)
-      .sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(nomeSup(k))} ${fmt(v)}`).join(", ")}); matrícula fora do cadastro (ou com a superintendência em branco) pega a da cidade quando a cidade é do Interior; nas outras cidades fica em “Sem SUP”.`);
+      .sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(nomeSup(k))} ${fmt(v)}`).join(", ")}); o Interior vai só pela cidade, como no BI (o cadastro não vale lá); nas outras cidades vale o cadastro e, fora dele, “Sem SUP”.`);
     else avisos.push("Sem planilha de cadastro com a SUPERINTENDENCIA: a superintendência vem da cidade.");
     if (!res.orcados.length) avisos.push("Nenhuma planilha de orçado (RF) com a linha da arrecadação: digite o orçado do mês no Resumo (Orçado do mês e curva).");
     if (d.zonasSemSup.length) avisos.push(`Zonas fora da relação de cidades (aparecem em “Sem SUP”): ${esc(d.zonasSemSup.join(", "))}.`);

@@ -193,11 +193,16 @@
       M.linhas++;
       if (credito > M.ultimoCredito) M.ultimoCredito = credito;
       const perfil = this.perfis ? (this.perfis.get(ligacao(r.lig) + "|" + ligacao(r.contrato)) || R.SEM_PERFIL) : R.SEM_PERFIL;
-      // "" = pela cidade: sem cadastro, ou fora dele numa cidade do Interior (R.SUPS_PELA_CIDADE); fora dele nas outras = Sem SUP
+      // "" = pela cidade: sem cadastro, ou cidade do Interior (R.SUPS_PELA_CIDADE: o cadastro não vale), ou o cadastro diz
+      // Interior numa cidade de fora; nas outras, a do cadastro, e fora dele "Sem SUP"
       const zona = String(r.zona || "").trim();
       let sup = this.supDaZona.get(zona);
       if (sup === undefined) { sup = zonaInfo(zona)[1]; this.supDaZona.set(zona, sup); }
-      const supCad = this.cadastro ? this.cadastro.get(ligacao(r.lig)) || (R.SUPS_PELA_CIDADE.includes(sup) ? "" : R.SEM_SUP) : "";
+      let supCad = "";
+      if (this.cadastro && !R.SUPS_PELA_CIDADE.includes(sup)) {
+        const s = this.cadastro.get(ligacao(r.lig));
+        supCad = !s ? R.SEM_SUP : R.SUPS_PELA_CIDADE.includes(s) ? "" : s;
+      }
       const ck = zona + SEP + String(r.util || "").trim() + SEP + perfil + SEP + supCad;
       let c = this.idxCk.get(ck);
       if (c === undefined) {

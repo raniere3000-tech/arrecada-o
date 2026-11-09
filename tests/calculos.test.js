@@ -543,7 +543,7 @@ test("filtros de vários itens: listas de superintendências, cidades e subcateg
   perto(tot({ sup: "LESTE" }), 40);                                                                   // um valor só continua valendo
 });
 
-test("superintendência pelo cadastro: a da matrícula; fora do cadastro, pela cidade só no Interior; sem cadastro, pela cidade", () => {
+test("superintendência pelo cadastro: Interior só pela cidade (como no BI); nas outras cidades, o cadastro e fora dele Sem SUP", () => {
   assert.equal(R.supDoCadastro("LAGOS"), "INTERIOR");
   assert.equal(R.supDoCadastro(" Leste "), "LESTE");
   assert.equal(R.supDoCadastro("BAIXADA 01"), "BAIXADA 01");
@@ -552,14 +552,15 @@ test("superintendência pelo cadastro: a da matrícula; fora do cadastro, pela c
   const cad = new Map([[C.ligacao("1"), "INTERIOR"], [C.ligacao("2"), "LESTE"], [C.ligacao("3"), "COMUNIDADES"]]);
   const monta = (cadastro) => {
     const l = new C.LeituraArquivo(null, cadastro);
-    for (const lig of [1, 2, 3, 4]) l.adiciona(linha(lig, "01/10/2026", `${lig}0,00`));             // todas em Rio Bonito (Interior pela cidade)
-    l.adiciona(linha(5, "01/10/2026", "50,00", { zona: "9-ITABORAI" }));                         // cidade da Leste
+    for (const lig of [1, 2, 3, 4]) l.adiciona(linha(lig, "01/10/2026", `${lig}0,00`));             // Rio Bonito (Interior): 100 no total
+    for (const lig of [1, 2, 3, 5]) l.adiciona(linha(lig, "01/10/2026", `${lig},00`, { zona: "9-ITABORAI" }));   // Itaboraí (Leste)
     const a = new C.Agregador(); a.junta(l.exporta()); return a.resultado(new Map());
   };
   const tot = (d, sup) => C.totalDoMes(d, d.meses.indexOf("2026-10"), C.marcaCombos(d, { sup }), 1 << 1).valor;
   const d = monta(cad);
-  perto(tot(d, "INTERIOR"), 50); perto(tot(d, "LESTE"), 20); perto(tot(d, "COMUNIDADES"), 30);   // a 4 (fora, Interior) vai pela cidade
-  perto(tot(d, R.SEM_SUP), 50);                                                                         // a 5 (fora, Leste) fica em Sem SUP
+  perto(tot(d, "INTERIOR"), 100);              // cidade do Interior: tudo Interior, o cadastro não vale (nem a 2, que é Leste nele)
+  perto(tot(d, "LESTE"), 1 + 2);               // Itaboraí: a 2 (Leste no cadastro) e a 1 (Interior no cadastro, mas cidade da Leste)
+  perto(tot(d, "COMUNIDADES"), 3); perto(tot(d, R.SEM_SUP), 5);   // a 5 fora do cadastro: Sem SUP
   const semCad = monta(null);
-  perto(tot(semCad, "INTERIOR"), 100); perto(tot(semCad, "LESTE"), 50);                                                                  // sem cadastro: pela cidade
+  perto(tot(semCad, "INTERIOR"), 100); perto(tot(semCad, "LESTE"), 11);    // sem cadastro: pela cidade
 });
