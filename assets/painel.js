@@ -29,7 +29,10 @@
   const milhoes = (v) => (isFinite(v) ? fmt(v / 1e6, 2) + " Mi" : "—");
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const td = (txt, cls = "") => `<td${cls ? ` class="${cls}"` : ""}>${txt}</td>`;
-  const tdNum = (v, f, extra = "") => td(f(v), [v < 0 ? "neg" : "", extra].filter(Boolean).join(" "));
+  const tdNum = (v, f, extra = "") => {
+    const cls = [v < 0 ? "neg" : "", extra].filter(Boolean).join(" ");
+    return `<td${cls ? ` class="${cls}"` : ""}${typeof v === "number" && isFinite(v) ? ` data-v="${v}"` : ""}>${f(v)}</td>`;
+  };
   const dataBR = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "");
   const nomeSup = (s) => (s ? NOME_SUP[s] || s : "Todas");
 
@@ -905,7 +908,7 @@
         const expansivel = dets.length > 1 || (dets.length === 1 && dets[0].split("\u0001")[1] !== r);
         const aberto = expansivel && E.abertos.has(r);
         linhas.push(`<tr class="${expansivel ? "grupo" + (aberto ? " aberto" : "") : ""}" data-g="${esc(r)}">${td(esc(r), "rot")}${idx.map((m) => cel(l, m, campo, f)).join("")}</tr>`);
-        if (aberto) for (const k of dets) linhas.push(`<tr class="det">${td(esc(k.split("\u0001")[1]), "rot")}${idx.map((m) => cel(det.get(k), m, campo, f)).join("")}</tr>`);
+        if (expansivel) for (const k of dets) linhas.push(`<tr class="det"${aberto ? "" : " hidden"}>${td(esc(k.split("\u0001")[1]), "rot")}${idx.map((m) => cel(det.get(k), m, campo, f)).join("")}</tr>`);
       }
       linhas.push(`<tr class="total">${td("Total", "rot")}${total(campo).map((v) => tdNum(v, f)).join("")}</tr>`);
       return linhas;
@@ -971,7 +974,7 @@
       const rot = v === POST ? `após ${C.rotuloMes(limite)}` : v ? C.rotuloMes(v) : "(sem vencimento)";
       return `<tr>${td(rot, "rot")}${idx.map((m, j) => {
         const x = l.get(m);
-        if (!aparece(x, v)) return td("");
+        if (!aparece(x, v)) return x != null ? `<td data-v="${x}"></td>` : td("");
         const a = x > 0 && max ? 0.06 + 0.55 * (x / max) : 0;
         const st = a ? ` style="background:rgba(23,107,156,${a.toFixed(3)})${a > 0.4 ? ";color:#fff" : ""}"` : "";
         return `<td class="${[x < 0 ? "neg" : "", v === meses[j] ? "diag" : "", grande(x) ? "" : "esc-menor"].filter(Boolean).join(" ")}"${st}>${fmt(x)}</td>`;
@@ -2844,6 +2847,82 @@
     toast("Gerando o print…");
     prints(b.dataset.print).catch((e) => toast("Não foi possível gerar o print: " + esc(e.message || e), true));
   }));
+
+  // ===== Excel de cada quadro: botão "⬇ Excel" em todo quadro com tabela (todas as abas), com a tabela completa: todas as
+  // linhas (também as escondidas, como os detalhes fechados da árvore e as células em branco da escada) e o valor exato
+  // de cada célula (data-v), sem o arredondamento da tela. Uma aba da planilha por tabela do quadro.
+  function valorCelula(c) {
+    // texto como na tela (innerText separa os blocos da célula), sem as setas de abrir/fechar
+    const txt = (c.innerText || c.textContent).replace(/[▸▾]/g, "").replace(/\s+/g, " ").trim(), pctTxt = /%$/.test(txt);
+    let v = c.dataset.v !== undefined ? Number(c.dataset.v) : null;
+    if (v == null) {
+      const m = /^(-?)(?:R\$\s?)?(-?[\d.]+(?:,\d+)?)\s*(%|mil|mi|Mi)?$/.exec(txt.replace(/^[▲▼■+]\s*/, "").replace(/^(RF\d+|Orç\.)\s+/, ""));
+      if (!m || !/\d/.test(m[2])) return txt ? { v: txt, t: "s" } : null;
+      v = Number(m[2].replace(/\./g, "").replace(",", ".")) * (m[1] ? -1 : 1);
+      if (m[3] === "%") v /= 100; else if (m[3] === "mil") v *= 1e3; else if (m[3]) v *= 1e6;
+      if (/^▼/.test(txt) && v > 0) v = -v;
+    }
+    if (!isFinite(v)) return txt ? { v: txt, t: "s" } : null;
+    const dec = (txt.split(",")[1] || "").replace(/\D/g, "").length;
+    return { v, t: "n", z: pctTxt ? "0.00%" : dec ? "#,##0." + "0".repeat(Math.min(dec, 4)) : Number.isInteger(v) ? "#,##0" : "#,##0.00" };
+  }
+  function folhaDaTabela(t) {
+    const X = window.XLSX, linhas = [];
+    for (const tr of t.rows) linhas.push([...tr.cells].flatMap((c) => {
+      const cel = c.tagName === "TH" ? { v: c.textContent.replace(/\s+/g, " ").trim(), t: "s" } : valorCelula(c);
+      return [cel, ...Array(Math.max(0, (c.colSpan || 1) - 1)).fill(null)];
+    }));
+    const ws = X.utils.aoa_to_sheet(linhas.map((l) => l.map((c) => (c ? c.v : null))));
+    linhas.forEach((l, i) => l.forEach((c, j) => { if (c && c.t === "n") { const a = X.utils.encode_cell({ r: i, c: j }); ws[a].t = "n"; ws[a].z = c.z; } }));
+    ws["!cols"] = (linhas[0] || []).map((_, j) => ({ wch: Math.min(45, Math.max(10, ...linhas.map((l) => String(l[j] ? l[j].v : "").length + 2))) }));
+    return ws;
+  }
+  const tituloQuadro = (q) => {
+    const h = q.querySelector("h2, h3, summary");
+    const t = h ? [...h.childNodes].filter((n) => n.nodeType === 3 || (n.tagName && !/^(SMALL|LABEL|BUTTON|SELECT)$/.test(n.tagName))).map((n) => n.textContent).join(" ") : "";
+    return t.replace(/\s+/g, " ").trim() || ABAS[E.aba] || "Tabela";
+  };
+  async function baixaExcelQuadro(q) {
+    try { await carregaXLSX(); } catch (e) { toast("Não foi possível carregar a biblioteca de planilhas.", true); return; }
+    const X = window.XLSX, wb = X.utils.book_new(), tabs = [...q.querySelectorAll("table")].filter((t) => t.rows.length), usados = new Set();
+    if (!tabs.length) { toast("Esse quadro ainda não tem tabela para baixar.", true); return; }
+    const titulo = tituloQuadro(q);
+    tabs.forEach((t, i) => {
+      // várias tabelas no quadro: cada aba com o título mais próximo acima da tabela (ou "título 1", "título 2"…)
+      const acima = [...q.querySelectorAll("h2, h3, h4, .op-top-tit, summary")].filter((h) => h.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING).pop();
+      let nome = (tabs.length > 1 ? (acima ? acima.textContent.replace(/⬇ Excel/, "").replace(/\s+/g, " ").trim() : "") || `${titulo} ${i + 1}` : titulo)
+        .replace(/[\\/?*[\]:]/g, " ").slice(0, 31).trim() || `Tabela ${i + 1}`;
+      while (usados.has(nome)) nome = nome.slice(0, 28) + " " + (i + 1);
+      usados.add(nome);
+      X.utils.book_append_sheet(wb, folhaDaTabela(t), nome);
+    });
+    const info = X.utils.aoa_to_sheet([["Painel de arrecadação"], ["Quadro", titulo], ["Aba", ABAS[E.aba] || E.aba], ["Filtros", filtroTexto()],
+      ["Mês", C.rotuloMes(E.mes)], ["Dias úteis", rotuloDias()], ["Gerado em", new Date().toLocaleString("pt-BR")]]);
+    info["!cols"] = [{ wch: 14 }, { wch: 80 }];
+    X.utils.book_append_sheet(wb, info, "Filtros");
+    X.writeFile(wb, `${ABAS[E.aba] || "Painel"}_${titulo}_${E.mes}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 120) + ".xlsx");
+  }
+  // põe o botão nos quadros com tabela (o conteúdo é redesenhado o tempo todo: um observador confere de tempos em tempos)
+  function poeBotoesExcel() {
+    for (const q of document.querySelectorAll("#area .card, #area .op-folha")) {
+      if (q.querySelector(":scope > .btn-excel, :scope > h2 .btn-excel, :scope > summary .btn-excel") || !q.querySelector("table")) continue;
+      if (q.parentElement.closest("#area .card")) continue;          // quadro dentro de quadro: o de fora baixa tudo
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn-excel sem-pdf"; b.textContent = "⬇ Excel"; b.title = "Baixar a tabela completa deste quadro em Excel (valores exatos, todas as linhas)";
+      const h = q.querySelector(":scope > h2, :scope > summary > h2");
+      if (q.classList.contains("op-folha")) { const a = q.parentElement.querySelector(".op-acoes"); if (a && !a.querySelector(".btn-excel")) { b.classList.add("btn"); a.appendChild(b); b.dataset.alvo = "opFolha"; } continue; }
+      if (h) h.appendChild(b); else q.prepend(b);
+    }
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest(".btn-excel");
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    baixaExcelQuadro(b.dataset.alvo ? $(b.dataset.alvo) : b.closest(".card, .op-folha"));
+  }, true);
+  let excelPendente = 0;
+  new MutationObserver(() => { if (!excelPendente) excelPendente = requestAnimationFrame(() => { excelPendente = 0; poeBotoesExcel(); }); })
+    .observe($("area"), { childList: true, subtree: true });
 
   // ===== ao abrir: reconecta a pasta da última visita =====
   (async function inicia() {

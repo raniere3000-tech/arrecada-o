@@ -556,3 +556,9 @@ table.op-tab tr.op-desc td { color:#64748b; font-style:italic; }
 .menu-print-lista button:hover { background: #EEF4F8; }
 .menu-print-lista button small { display: block; font-weight: 400; font-size: 11.5px; color: #64748b; }
 .menu-print-lista .menu-print-todas { border-top: 1px solid var(--linha); border-radius: 0 0 6px 6px; margin-top: 4px; padding-top: 10px; }
+
+/* botão "⬇ Excel" de cada quadro */
+.btn-excel { margin-left: 10px; padding: 3px 9px; font: inherit; font-size: 11.5px; font-weight: 600; color: #1f6f43; background: #eef8f1; border: 1px solid #b9dcc6; border-radius: 6px; cursor: pointer; white-space: nowrap; vertical-align: middle; }
+.btn-excel:hover { background: #dff1e6; }
+.card > .btn-excel { float: right; margin: 0 0 6px 10px; }
+body.bi .btn-excel { color: #1f6f43; }
