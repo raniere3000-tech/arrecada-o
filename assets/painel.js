@@ -959,21 +959,26 @@
     let max = 0;
     for (const l of esq.linhas.values()) for (const v of l.values()) if (v > max) max = v;
     // escada "limpa" (padrão): só as células a partir de R$ 50 mil, e as linhas sem nenhuma somem; o total continua com tudo
-    const limpa = escadaLimpa(), aparece = (x) => x != null && (!limpa || x >= ESCADA_MINIMO);
-    const linhas = vencs.filter((v) => !limpa || [...esq.linhas.get(v).values()].some(aparece)).map((v) => {
+    // opções (lembradas neste navegador): preencher = nas linhas que ficam, também as células abaixo de R$ 50 mil (em cinza);
+    // demais = linha "Demais vencimentos" com o que não aparece, para cada coluna fechar com o Total
+    const limpa = escadaLimpa(), preenche = limpa && escadaOpcao("preenche"), comDemais = limpa && escadaOpcao("demais");
+    const grande = (x) => x != null && (!limpa || x >= ESCADA_MINIMO);
+    const ficaLinha = (v) => !limpa || [...esq.linhas.get(v).values()].some(grande);
+    const aparece = (x, v) => x != null && (grande(x) || (preenche && ficaLinha(v)));
+    const linhas = vencs.filter(ficaLinha).map((v) => {
       const l = esq.linhas.get(v);
       const rot = v === POST ? `após ${C.rotuloMes(limite)}` : v ? C.rotuloMes(v) : "(sem vencimento)";
       return `<tr>${td(rot, "rot")}${idx.map((m, j) => {
         const x = l.get(m);
-        if (!aparece(x)) return td("");
+        if (!aparece(x, v)) return td("");
         const a = x > 0 && max ? 0.06 + 0.55 * (x / max) : 0;
         const st = a ? ` style="background:rgba(23,107,156,${a.toFixed(3)})${a > 0.4 ? ";color:#fff" : ""}"` : "";
-        return `<td class="${[x < 0 ? "neg" : "", v === meses[j] ? "diag" : ""].filter(Boolean).join(" ")}"${st}>${fmt(x)}</td>`;
+        return `<td class="${[x < 0 ? "neg" : "", v === meses[j] ? "diag" : "", grande(x) ? "" : "esc-menor"].filter(Boolean).join(" ")}"${st}>${fmt(x)}</td>`;
       }).join("")}</tr>`;
     });
     // escada limpa: o que ficou em branco (abaixo de R$ 50 mil) soma numa linha por mês de crédito, para a coluna fechar com o Total
-    if (limpa) {
-      const demais = idx.map((m) => { let s = 0; for (const l of esq.linhas.values()) { const x = l.get(m); if (x != null && !aparece(x)) s += x; } return s; });
+    if (comDemais) {
+      const demais = idx.map((m) => { let s = 0; for (const [v, l] of esq.linhas) { const x = l.get(m); if (x != null && !aparece(x, v)) s += x; } return s; });
       if (demais.some((x) => x)) linhas.push(`<tr class="desc">${td(`Demais vencimentos (abaixo de R$ ${fmt(ESCADA_MINIMO / 1000)} mil)`, "rot")}${demais.map((x) => (x ? tdNum(x, fmt) : td(""))).join("")}</tr>`);
     }
     if ([...esq.desconto.values()].some((v) => v)) linhas.push(`<tr class="desc">${td("Desconto comercial", "rot")}${idx.map((m) => (esq.desconto.get(m) ? tdNum(esq.desconto.get(m), fmt) : td(""))).join("")}</tr>`);
@@ -981,18 +986,27 @@
     linhas.push(`<tr class="total">${td("Total", "rot")}${tot.map((v) => tdNum(v, fmt)).join("")}</tr>`);
     tabela("tEscada", ["Vencimento (R$)", ...meses.map(C.rotuloMes)], linhas);
     $("escadaLimpa").checked = limpa;
-    $("escadaNota").textContent = limpa
-      ? `Mostrando só os valores a partir de R$ ${fmt(ESCADA_MINIMO)}; os menores somam na linha “Demais vencimentos” de cada mês, e o Total soma tudo (inclusive o desconto).`
-      : "Mostrando todos os valores.";
+    $("escadaPreenche").checked = escadaOpcao("preenche"); $("escadaDemais").checked = escadaOpcao("demais");
+    $("escadaPreenche").closest("label").hidden = $("escadaDemais").closest("label").hidden = !limpa;
+    const resto = comDemais ? "somam na linha “Demais vencimentos” de cada mês" : "ficam de fora das linhas";
+    $("escadaNota").textContent = !limpa ? "Mostrando todos os vencimentos e valores."
+      : preenche ? `Mostrando os vencimentos com algum valor a partir de R$ ${fmt(ESCADA_MINIMO)}, com todos os valores da linha (os menores em cinza); os vencimentos só com valores menores ${resto}. O Total soma tudo (inclusive o desconto).`
+      : `Mostrando só os valores a partir de R$ ${fmt(ESCADA_MINIMO)}; os menores ${comDemais ? resto : "ficam em branco"}. O Total soma tudo (inclusive o desconto).`;
     // aviso do executivo (só no PDF), quando a escada está resumida
     $("escadaAvisoPdf").textContent = limpa
-      ? `Para facilitar a leitura, a escada exibe apenas os valores a partir de R$ ${fmt(ESCADA_MINIMO / 1000)} mil; os menores somam na linha “Demais vencimentos”. Os totais consideram a arrecadação integral de cada mês.`
+      ? `Para facilitar a leitura, a escada exibe ${preenche ? `apenas os vencimentos com algum valor a partir de R$ ${fmt(ESCADA_MINIMO / 1000)} mil` : `apenas os valores a partir de R$ ${fmt(ESCADA_MINIMO / 1000)} mil`}${comDemais ? "; o restante soma na linha “Demais vencimentos”" : ""}. Os totais consideram a arrecadação integral de cada mês.`
       : "";
     $("escadaAvisoPdf").hidden = !limpa;
   }
   // Opção da escada: só valores a partir de R$ 50 mil (padrão) ou a escada completa. Lembrada neste navegador.
   const ESCADA_MINIMO = 50000;
   function escadaLimpa() { try { return localStorage.getItem("arrecadacao_escada") !== "completa"; } catch (e) { return true; } }
+  // preencher e demais: ligadas por padrão
+  function escadaOpcao(k) { try { return localStorage.getItem("arrecadacao_escada_" + k) !== "nao"; } catch (e) { return true; } }
+  for (const [id, k] of [["escadaPreenche", "preenche"], ["escadaDemais", "demais"]]) $(id).addEventListener("change", (e) => {
+    try { localStorage.setItem("arrecadacao_escada_" + k, e.target.checked ? "sim" : "nao"); } catch (x) { /* sem armazenamento */ }
+    desenha();
+  });
   $("escadaLimpa").addEventListener("change", (e) => {
     try { localStorage.setItem("arrecadacao_escada", e.target.checked ? "limpa" : "completa"); } catch (x) { /* sem armazenamento */ }
     desenha();

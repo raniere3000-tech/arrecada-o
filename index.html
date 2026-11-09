@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v54-20261109">
+<link rel="stylesheet" href="assets/painel.css?v=v55-20261109">
 </head>
 <body>
 
@@ -145,7 +145,9 @@
     </section>
     <section class="painel-aba" data-painel="escada" hidden>
       <div class="card"><h2>Arrecadação por mês de vencimento × mês de crédito <small class="ate-dia"></small>
-          <label class="opcao sem-pdf"><input type="checkbox" id="escadaLimpa" checked> Só valores a partir de R$ 50 mil</label></h2>
+          <label class="opcao sem-pdf"><input type="checkbox" id="escadaLimpa" checked> Só valores a partir de R$ 50 mil</label>
+          <label class="opcao sem-pdf"><input type="checkbox" id="escadaPreenche" checked> Preencher as células menores</label>
+          <label class="opcao sem-pdf"><input type="checkbox" id="escadaDemais" checked> Linha “Demais vencimentos”</label></h2>
         <p class="nota sem-pdf" id="escadaNota"></p>
         <p class="aviso-pdf so-pdf" id="escadaAvisoPdf"></p><div class="wrap"><table id="tEscada" class="escada compacta"></table></div>
         <p class="nota">Cada coluna é o mês do crédito; cada linha, o mês de vencimento da conta paga. A diagonal destacada é o pagamento das contas que venceram no próprio mês. O desconto comercial fica numa linha própria. No PDF, a escada vai até 2 meses depois do mês escolhido; os vencimentos posteriores somam numa linha.</p></div>
@@ -548,9 +550,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v54-20261109"></script>
-<script src="assets/calculos.js?v=v54-20261109"></script>
-<script>const VERSAO_SITE = "v54-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v54-20261109"></script>
+<script src="assets/regras.js?v=v55-20261109"></script>
+<script src="assets/calculos.js?v=v55-20261109"></script>
+<script>const VERSAO_SITE = "v55-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v55-20261109"></script>
 </body>
 </html>

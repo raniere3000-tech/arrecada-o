@@ -543,3 +543,7 @@ table.op-tab tr.op-desc td { color:#64748b; font-style:italic; }
   .op-folha .op-faixa { font-size:15px; }
   .op-folha .op-top-lin, .op-folha .op-top-lin:nth-child(odd) { grid-template-columns:minmax(0,1fr) auto; }
 }
+
+/* escada: células abaixo de R$ 50 mil preenchidas (opção) */
+#tEscada td.esc-menor { color:#64748b; }
+.card h2 .opcao + .opcao { margin-left: 14px; }
