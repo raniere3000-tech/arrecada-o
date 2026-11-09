@@ -344,8 +344,18 @@
     if (d.subSemClasse.length) avisos.push(`Subcategorias fora da relação (aparecem em “${R.SEM_CLASSIFICACAO}”): ${esc(d.subSemClasse.join(", "))}.`);
     const descMes = C.descontoPorMes(d);
     const ultimos = d.meses.map((m, i) => [m, descMes[i]]).filter(([, v]) => v).slice(-3);
-    if (ultimos.length) avisos.push("Desconto comercial abatido (ligações que pagaram no mês, como no BI): "
-      + ultimos.map(([m, v]) => `${C.rotuloMes(m)} ${rs(-v)}`).join("; ") + ".");
+    if (ultimos.length) {
+      // por superintendência (mês inteiro) e o que ficou de fora por a ligação não ter pagado no mês: confere a planilha
+      const todas = C.marcaCombos(d, {}), porSup = C.porGrupo(d, ultimos.map(([m]) => d.meses.indexOf(m)), todas, C.MASCARA_MES, (c) => nomeSup(c.sup) || "Sem SUP");
+      avisos.push("Desconto comercial abatido (ligações que pagaram no mês, como no BI): " + ultimos.map(([m, v]) => {
+        const mi = d.meses.indexOf(m), sp = d.descontoSemPagamento[m] || 0;
+        const partes = [...porSup.entries()].map(([k, l]) => [k, (l.get(mi) || {}).desconto || 0]).filter(([, x]) => x).sort((a, b) => a[1] - b[1]);
+        return `${C.rotuloMes(m)} ${rs(-v)} (${partes.map(([k, x]) => `${esc(k)} ${rs(x)}`).join(", ")})`
+          + (sp ? `; mais ${rs(-sp)} de ligações sem pagamento no mês, fora do total` : "");
+      }).join(" · ") + ".");
+    }
+    const arqDesc = res.arquivos.filter((a) => a.tipo === "desconto");
+    if (arqDesc.length) avisos.push(`Planilhas de desconto lidas: ${arqDesc.map((a) => `${esc(a.rel)} (${fmt(a.registros || 0)} linhas)`).join("; ")}.`);
     const fatArqs = res.arquivos.filter((a) => a.tipo === "faturamento");
     if (fatArqs.length && res.cruzamento) {
       const dg = res.cruzamento.diag;

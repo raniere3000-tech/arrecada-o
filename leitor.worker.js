@@ -197,7 +197,8 @@ async function classifica(item) {
   if (e === "csv" || e === "txt") {
     const linhas = await primeirasLinhas(file);
     if (ehArrecadacao(linhas[0] || "")) return { tipo: C.chave(rel).includes("DIARI") ? "diaria" : "acumulada" };
-    const iCad = linhas.findIndex((l) => COLS_CAD_SUP.every((c) => l.split(/[;,\t]/).map(C.chave).includes(c)));
+    const iCad = linhas.findIndex((l) => { const cs = l.split(/[;,\t]/).map(C.chave);   // cadastro, e não desconto/perfil/receber com a SUP
+      return COLS_CAD_SUP.every((c) => cs.includes(c)) && ![COLS_DESCONTO, COLS_PERFIL, COLS_RECEBER].some((t) => t.every((c) => cs.includes(c))); });
     if (iCad >= 0) return { tipo: "cadastro", csv: true };
     const iFat = linhas.findIndex(ehFaturamento);
     if (iFat >= 0) {
@@ -220,10 +221,12 @@ async function classifica(item) {
   for (const aba of livro.SheetNames) {
     const linhas = linhasDaAba(livro, aba);
     const guarda = inteira ? { livro } : {};
-    if (achaCabecalho(linhas, COLS_CAD_SUP)) return { tipo: "cadastro", aba };
-    if (achaCabecalho(linhas, COLS_RECEBER)) return { tipo: "receber", aba };
-    if (achaCabecalho(linhas, COLS_PERFIL)) return { tipo: "perfil", aba, ...guarda };
+    // desconto, perfil e contas a receber primeiro: essas planilhas podem ter também a coluna SUPERINTENDENCIA
+    // (ex.: base de desconto da Leste e do Interior) e não podem ser tomadas pelo cadastro
     if (achaCabecalho(linhas, COLS_DESCONTO)) return { tipo: "desconto", aba, ...guarda };
+    if (achaCabecalho(linhas, COLS_PERFIL)) return { tipo: "perfil", aba, ...guarda };
+    if (achaCabecalho(linhas, COLS_RECEBER)) return { tipo: "receber", aba };
+    if (achaCabecalho(linhas, COLS_CAD_SUP)) return { tipo: "cadastro", aba };
     if (achaCabecalho(linhas, COLS_ORCADO)) return { tipo: "orcado", aba };
   }
   return { tipo: "ignorado", motivo: "planilha não usada pelo painel (não é desconto, perfil do cliente, orçado, contas a receber nem cadastro com a superintendência)" };
