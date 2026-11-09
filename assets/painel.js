@@ -2238,13 +2238,13 @@
 
   // Tabela no formato do BI (aba Dados): Cidade, Subcategoria, Mes/ano, Classificação (perfil), IsGrandTotalRowTotal,
   // Arrecadacao_Acumulada, Qtd_clientes_pagantes_acumulado e Qtd_Clientes_pagas_mês_anterior, nos dias marcados e filtros do
-  // cabeçalho. A última linha é o total geral (IsGrandTotalRowTotal = VERDADEIRO), com a soma das linhas.
+  // cabeçalho (inclusive o Mês: só o mês escolhido). A última linha é o total geral (IsGrandTotalRowTotal = VERDADEIRO), com a soma das linhas.
   const BI_COLUNAS = ["Cidade", "Subcategoria", "Mes/ano", "Classificação", "IsGrandTotalRowTotal", "Arrecadacao_Acumulada",
     "Qtd_clientes_pagantes_acumulado", "Qtd_Clientes_pagas_mês_anterior"];
   function desenhaTabelaBI() {
     const t = C.tabelaBI(E.res.dados, marcas(), selCalc()), l = t.filter((x) => x.mes === E.mes);
     const soma = (k) => l.reduce((a, x) => a + (x[k] || 0), 0), td = (v, c = "") => `<td${c ? ` class="${c}"` : ""}>${v}</td>`;
-    $("biResumo").textContent = `${C.rotuloMes(E.mes)} · ${rotuloDias()} · ${fmt(l.length)} linhas no mês, ${fmt(t.length)} na planilha`;
+    $("biResumo").textContent = `${filtroTexto()} · ${C.rotuloMes(E.mes)} · ${rotuloDias()} · ${fmt(l.length)} linhas`;
     $("biTabela").innerHTML = l.length ? `<table class="compacta base-tabela"><thead><tr>${BI_COLUNAS.filter((c) => c !== "IsGrandTotalRowTotal").map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>`
       + l.map((x) => `<tr>${td(esc(x.cidade), "rot")}${td(esc(x.grupo), "rot")}${td(C.rotuloMes(x.mes), "rot")}${td(esc(x.perfil), "rot")}${td(fmt(x.valor, 2))}${td(fmt(x.clientes))}${td(x.clientesAnt == null ? "—" : fmt(x.clientesAnt))}</tr>`).join("")
       + `<tr class="total">${td("Total", "rot")}${td("", "rot")}${td("", "rot")}${td("", "rot")}${td(fmt(soma("valor"), 2))}${td(fmt(soma("clientes")))}${td(fmt(soma("clientesAnt")))}</tr></tbody></table>`
@@ -2252,7 +2252,7 @@
   }
   async function baixaTabelaBI() {
     try { await carregaXLSX(); } catch (e) { toast("Não foi possível carregar a biblioteca de planilhas.", true); return; }
-    const X = window.XLSX, t = C.tabelaBI(E.res.dados, marcas(), selCalc());
+    const X = window.XLSX, t = C.tabelaBI(E.res.dados, marcas(), selCalc()).filter((x) => x.mes === E.mes);
     const soma = (k) => t.reduce((a, x) => a + (x[k] || 0), 0);
     const linhas = [BI_COLUNAS, ...t.map((x) => [x.cidade, x.grupo, new Date(+x.mes.slice(0, 4), +x.mes.slice(5, 7) - 1, 1), x.perfil, false,
       x.valor, x.clientes, x.clientesAnt == null ? null : x.clientesAnt]), ["", "", null, "", true, soma("valor"), soma("clientes"), soma("clientesAnt")]];
@@ -2266,7 +2266,7 @@
     ws["!cols"] = [{ wch: 22 }, { wch: 18 }, { wch: 9 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
     ws["!autofilter"] = { ref: X.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: linhas.length - 1, c: BI_COLUNAS.length - 1 } }) };
     const info = X.utils.aoa_to_sheet([
-      ["Filtros", filtroTexto()], ["Dias úteis marcados", rotuloDias()], ["Meses", E.res.dados.meses.map(C.rotuloMes).join(", ")],
+      ["Filtros", filtroTexto()], ["Dias úteis marcados", rotuloDias()], ["Mês", C.rotuloMes(E.mes)],
       ["Classificação", "perfil de pagamento (Cluster Saldo)"],
       ["Arrecadacao_Acumulada", "Val. Autenticado com o desconto comercial, nos dias marcados do mês"],
       ["Qtd_clientes_pagantes_acumulado", "ligações distintas que pagaram nos dias marcados (como o DISTINCTCOUNT do BI)"],

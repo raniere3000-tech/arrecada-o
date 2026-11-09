@@ -347,14 +347,14 @@
     <section class="painel-aba dados" data-painel="dados" hidden>
       <div class="card"><h2>Parâmetros do que está na tela <small id="dadosFiltros"></small></h2><div id="dadosParametros"></div></div>
 
-      <div class="card"><h2>Tabela para comparar com o BI <small id="biResumo"></small></h2>
+      <details class="card curva" id="biCard"><summary><h2>Tabela para comparar com o BI <small id="biResumo"></small></h2></summary>
         <p>Uma linha por <b>Cidade × Subcategoria × Mês/ano × Classificação</b> (perfil de pagamento, do Cluster Saldo), com as colunas do BI:
           a arrecadação (Val. Autenticado com o desconto comercial) e os clientes pagantes distintos nos <b>dias úteis marcados</b> de cada mês,
-          e os clientes pagantes da mesma linha no <b>mês anterior</b>, nos mesmos dias. <b>Os filtros do cabeçalho valem aqui.</b>
-          A planilha traz todos os meses da pasta; a tela mostra o mês escolhido.</p>
+          e os clientes pagantes da mesma linha no <b>mês anterior</b>, nos mesmos dias. <b>Os filtros do cabeçalho valem aqui</b>
+          (Superintendência, Cidade, Subcategoria e Mês): a tela e a planilha trazem só o mês escolhido.</p>
         <div class="base-acoes"><button type="button" class="btn" id="biBaixar">Baixar planilha (Excel)</button><span class="salvo" id="biStatus"></span></div>
         <div class="wrap" id="biTabela"></div>
-      </div>
+      </details>
 
       <div class="card"><h2>De onde vêm os dados</h2>
         <p>O painel lê a pasta conectada no próprio navegador (nada é enviado para a internet). As subpastas também são lidas.</p>
