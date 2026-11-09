@@ -892,14 +892,16 @@
     return { k, ligs, comb, vals: Float64Array.from(vals), pagou: Uint8Array.from(pagou) };
   }
   // Negociação: matrículas que pagaram em TODOS os meses misPagou e não pagaram no mês de referência miRef (nas combinações
-  // marcadas). vals[j] = valor pago no mês misPagou[j]. Do maior total pago para o menor.
-  function negociacao(an, misPagou, miRef, marcas) {
+  // marcadas). vals[j] = valor pago no mês misPagou[j]. Do maior total pago para o menor. incluiPagantes: entram também os que
+  // pagaram na referência (pagouRef = true, valRef = valor pago nela), para a coluna de indicativo.
+  function negociacao(an, misPagou, miRef, marcas, incluiPagantes = false) {
     const r = valoresPorMes(an, [...misPagou, miRef], marcas), k = r.k, n = misPagou.length, out = [];
     for (let p = 0; p < r.ligs.length; p++) {
-      if (r.pagou[p * k + n]) continue;
+      const pagouRef = r.pagou[p * k + n] === 1;
+      if (pagouRef && !incluiPagantes) continue;
       let ok = n > 0, tot = 0;
       for (let j = 0; j < n && ok; j++) { ok = r.pagou[p * k + j] === 1; tot += r.vals[p * k + j]; }
-      if (ok) out.push({ lig: r.ligs[p], c: r.comb[p], vals: Array.from({ length: n }, (_, j) => r.vals[p * k + j]), total: tot });
+      if (ok) out.push({ lig: r.ligs[p], c: r.comb[p], vals: Array.from({ length: n }, (_, j) => r.vals[p * k + j]), total: tot, pagouRef, valRef: r.vals[p * k + n] });
     }
     return out.sort((a, b) => b.total - a.total || a.lig - b.lig);
   }

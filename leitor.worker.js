@@ -679,25 +679,25 @@ async function respondeOportunidades({ miA, miB, marcas, comFat, comRec, recTipo
 }
 // Negociação (área Análises): pagaram em todos os meses misPagou e não pagaram no mês de referência miRef. Devolve o resumo por
 // cidade e subcategoria, as 100 maiores matrículas (para a tela) e o CSV completo, montado aqui em blocos.
-async function respondeNegociacao({ misPagou, miRef, rotulos, marcas, nomesSup, comFat, comRec, recTipo }) {
-  const lista = C.negociacao(analise, misPagou, miRef, marcas), n = misPagou.length, ex = await colunasExtras(comFat, comRec, recTipo);
+async function respondeNegociacao({ misPagou, miRef, rotulos, rotRef, incluiPagantes, marcas, nomesSup, comFat, comRec, recTipo }) {
+  const lista = C.negociacao(analise, misPagou, miRef, marcas, incluiPagantes), n = misPagou.length, ex = await colunasExtras(comFat, comRec, recTipo);
   const txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " ");
   const porCidade = new Map(), porSub = new Map(), top = [], blobs = [], partes = [];
-  const soma = (mapa, k, x) => { let o = mapa.get(k); if (!o) { o = { rot: k, n: 0, vals: new Array(n).fill(0) }; mapa.set(k, o); } o.n++; x.vals.forEach((v, j) => { o.vals[j] += v; }); };
+  const soma = (mapa, k, x) => { let o = mapa.get(k); if (!o) { o = { rot: k, n: 0, nNao: 0, vals: new Array(n).fill(0) }; mapa.set(k, o); } o.n++; if (!x.pagouRef) o.nNao++; x.vals.forEach((v, j) => { o.vals[j] += v; }); };
   let tam = 0;
   for (const x of lista) {
     const c = combosArr[x.c] || {}, e = ex.de(x.lig);
     soma(porCidade, c.cidade || "—", x); soma(porSub, c.grupo || "—", x);
-    if (top.length < 100) top.push({ lig: ligTxt(x.lig), nome: nomeDe(x.lig), sup: c.sup || "", cidade: c.cidade || "", grupo: c.grupo || "", vals: x.vals });
+    if (top.length < 100) top.push({ lig: ligTxt(x.lig), nome: nomeDe(x.lig), sup: c.sup || "", cidade: c.cidade || "", grupo: c.grupo || "", vals: x.vals, pagouRef: x.pagouRef, valRef: x.valRef });
     const linha = [ligTxt(x.lig), txt(nomeDe(x.lig)), nomesSup[c.sup] || c.sup || "", c.cidade || "", c.grupo || "", ...e.fat.map(txt),
-      ...x.vals.map(nBR), nBR(x.total), ...e.rec.map(txt)].join(";");
+      ...x.vals.map(nBR), nBR(x.total), x.pagouRef ? "Pagou" : "Não pagou", x.pagouRef ? nBR(x.valRef) : "", ...e.rec.map(txt)].join(";");
     partes.push(linha); tam += linha.length + 2;
     if (tam > 4e6) { blobs.push(new Blob([partes.join("\r\n") + "\r\n"])); partes.length = 0; tam = 0; }
   }
   if (partes.length) blobs.push(new Blob([partes.join("\r\n") + "\r\n"]));
-  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...ex.cabFat, ...rotulos.map((m) => `Arrecadado ${m}`), "Total pago nos meses", ...ex.cabRec].join(";");
+  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...ex.cabFat, ...rotulos.map((m) => `Arrecadado ${m}`), "Total pago nos meses", `Indicativo ${rotRef}`, `Arrecadado ${rotRef}`, ...ex.cabRec].join(";");
   const ordena = (m) => [...m.values()].sort((a, b) => b.vals.reduce((s, v) => s + v, 0) - a.vals.reduce((s, v) => s + v, 0));
-  return { n: lista.length, porCidade: ordena(porCidade), porSub: ordena(porSub), top, ...ex.info(),
+  return { n: lista.length, nNao: lista.filter((x) => !x.pagouRef).length, porCidade: ordena(porCidade), porSub: ordena(porSub), top, ...ex.info(),
     blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
 }
 // Colunas extras das bases de oportunidades e comparativo, para cada matrícula:

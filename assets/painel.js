@@ -1263,30 +1263,32 @@
     const pagou = [...(ngMeses || [])].sort();
     if (!pagou.length) { toast("Marque pelo menos um mês em que o cliente pagou.", true); return; }
     $("ngGerar").disabled = true; $("ngStatus").textContent = "Cruzando os meses…"; $("ngResultado").innerHTML = "";
-    worker.postMessage({ tipo: "negociacao", id: ++idNg, misPagou: pagou.map(idxMes), miRef: idxMes(ngRef), rotulos: pagou.map(C.rotuloMes), marcas: marcas(),
+    worker.postMessage({ tipo: "negociacao", id: ++idNg, misPagou: pagou.map(idxMes), miRef: idxMes(ngRef), rotulos: pagou.map(C.rotuloMes), rotRef: C.rotuloMes(ngRef), incluiPagantes: $("ngPagantes").checked, marcas: marcas(),
       nomesSup: NOME_SUP, comFat: $("ngFat").checked, comRec: $("ngRec").checked, recTipo: E.recTipo, pagou, ref: ngRef });
-    ultimaNg = { pagou, ref: ngRef };
+    ultimaNg = { pagou, ref: ngRef, todos: $("ngPagantes").checked };
   });
   function recebeNegociacao(m) {
     if (m.id !== idNg) return;
     $("ngGerar").disabled = false;
     if (m.erro) { $("ngStatus").textContent = "Erro: " + m.erro; return; }
-    const { pagou, ref } = ultimaNg, d = E.res.dados, R_ = C.rotuloMes(ref), P = pagou.map(C.rotuloMes);
+    const { pagou, ref, todos } = ultimaNg, d = E.res.dados, R_ = C.rotuloMes(ref), P = pagou.map(C.rotuloMes);
     const ult = d.ultimoCredito[ref], emAndamento = ref === d.meses[d.meses.length - 1] && ult;
     const tot = pagou.map((_, j) => m.porCidade.reduce((a, o) => a + o.vals[j], 0));
-    const nomeArq = `Negociacao_pagou_${pagou.join("_")}_nao_pagou_${ref}.csv`;
-    $("ngStatus").textContent = `${fmt(m.n)} matrículas pagaram em ${P.join(", ")} e não pagaram em ${R_}${emAndamento ? ` (até ${dataBR(ult)})` : ""} · ${filtroTexto()}.`
+    const nomeArq = todos ? `Negociacao_pagou_${pagou.join("_")}_indicativo_${ref}.csv` : `Negociacao_pagou_${pagou.join("_")}_nao_pagou_${ref}.csv`;
+    const ate = emAndamento ? ` (até ${dataBR(ult)})` : "";
+    $("ngStatus").textContent = (todos ? `${fmt(m.n)} matrículas pagaram em ${P.join(", ")}: ${fmt(m.nNao)} não pagaram em ${R_}${ate} e ${fmt(m.n - m.nNao)} já pagaram`
+      : `${fmt(m.n)} matrículas pagaram em ${P.join(", ")} e não pagaram em ${R_}${ate}`) + ` · ${filtroTexto()}.`
       + `${textoCadastro(m.cadastro)}${textoReceber(m.comReceber)}`;
-    const cab = (t) => `<thead><tr><th>${t}</th><th>Matrículas</th>${P.map((p) => `<th>Pago em ${p} (R$)</th>`).join("")}</tr></thead>`;
+    const cab = (t) => `<thead><tr><th>${t}</th><th>Matrículas</th>${todos ? `<th>Não pagaram em ${R_}</th>` : ""}${P.map((p) => `<th>Pago em ${p} (R$)</th>`).join("")}</tr></thead>`;
     const tab = (titulo, l) => `<div class="card"><h2>${titulo}</h2><div class="wrap"><table class="compacta base-tabela">${cab(titulo)}<tbody>`
-      + l.map((o) => `<tr>${td(esc(o.rot), "rot")}${td(fmt(o.n))}${o.vals.map((v) => td(fmt(v))).join("")}</tr>`).join("")
-      + `<tr class="total">${td("Total", "rot")}${td(fmt(m.n))}${tot.map((v) => td(fmt(v))).join("")}</tr></tbody></table></div></div>`;
+      + l.map((o) => `<tr>${td(esc(o.rot), "rot")}${td(fmt(o.n))}${todos ? td(fmt(o.nNao)) : ""}${o.vals.map((v) => td(fmt(v))).join("")}</tr>`).join("")
+      + `<tr class="total">${td("Total", "rot")}${td(fmt(m.n))}${todos ? td(fmt(m.nNao)) : ""}${tot.map((v) => td(fmt(v))).join("")}</tr></tbody></table></div></div>`;
     $("ngResultado").innerHTML = !m.n ? '<div class="card"><p class="nota">Nenhuma matrícula nessa situação para os filtros escolhidos.</p></div>'
       : `<div class="card"><div class="base-acoes" style="margin-top:0"><button type="button" class="btn" id="ngBaixar">Baixar lista completa (CSV, ${fmt(m.n)} matrículas)</button></div></div>`
         + tab("Cidade", m.porCidade) + tab("Subcategoria", m.porSub)
         + `<div class="card"><h2>Maiores matrículas <small>as 100 de maior valor pago nos meses marcados</small></h2><div class="wrap lista-rolavel"><table class="compacta base-tabela"><thead><tr>`
-        + `<th>Matrícula</th><th>Nome</th><th>Cidade</th><th>Subcategoria</th>${P.map((p) => `<th>Pago em ${p} (R$)</th>`).join("")}</tr></thead><tbody>`
-        + m.top.map((x) => `<tr>${td(esc(x.lig), "rot")}${td(esc(x.nome), "rot")}${td(esc(x.cidade), "rot")}${td(esc(x.grupo), "rot")}${x.vals.map((v) => td(fmt(v, 2))).join("")}</tr>`).join("")
+        + `<th>Matrícula</th><th>Nome</th><th>Cidade</th><th>Subcategoria</th>${P.map((p) => `<th>Pago em ${p} (R$)</th>`).join("")}<th>Indicativo ${R_}</th></tr></thead><tbody>`
+        + m.top.map((x) => `<tr>${td(esc(x.lig), "rot")}${td(esc(x.nome), "rot")}${td(esc(x.cidade), "rot")}${td(esc(x.grupo), "rot")}${x.vals.map((v) => td(fmt(v, 2))).join("")}${td(x.pagouRef ? `Pagou (${fmt(x.valRef, 2)})` : "<b>Não pagou</b>", x.pagouRef ? "rot" : "rot neg")}</tr>`).join("")
         + "</tbody></table></div></div>";
     if ($("ngBaixar")) $("ngBaixar").onclick = () => baixa(m.blob, nomeArq);
   }

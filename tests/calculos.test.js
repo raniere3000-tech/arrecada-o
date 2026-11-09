@@ -484,6 +484,9 @@ test("negociação: pagaram em todos os meses marcados e não pagaram no mês de
   assert.deepEqual(C.negociacao(d.analise, [mi("2026-07")], mi("2026-08"), tudo).map((x) => x.lig), [2]);   // jul e não ago
   assert.deepEqual(C.negociacao(d.analise, [mi("2026-07"), mi("2026-08")], mi("2026-09"), C.marcaCombos(d, { sup: "INTERIOR" })).map((x) => x.lig), [1]);
   assert.equal(C.negociacao(d.analise, [], mi("2026-09"), tudo).length, 0);
+  const todos = C.negociacao(d.analise, [mi("2026-07"), mi("2026-08")], mi("2026-09"), tudo, true);   // com o indicativo
+  assert.deepEqual(todos.map((x) => [x.lig, x.pagouRef]), [[4, false], [1, false], [3, true]]);
+  perto(todos[2].valRef, 10);
 });
 
 test("contas a receber: saldo por matrícula e faixa, cruzado com a arrecadação", () => {

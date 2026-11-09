@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v57-20261109">
+<link rel="stylesheet" href="assets/painel.css?v=v58-20261109">
 </head>
 <body>
 
@@ -290,6 +290,7 @@
           <button type="button" class="btn sec" data-ng-ult="3">Pagou nos 3 meses anteriores</button></div>
         <p class="opcao-base" style="margin-top:10px">Pagaram em (todos os marcados):</p>
         <div class="base-meses" id="ngMeses"></div>
+        <label class="base-opcao"><input type="checkbox" id="ngPagantes"> Incluir também quem já pagou no mês de referência (a coluna <b>Indicativo</b> mostra quem pagou e quem não pagou)</label><br>
         <label class="base-opcao"><input type="checkbox" id="ngFat" class="opcao-fat" checked> <span class="rot-fat">Incluir dados do faturamento</span></label>
         <label class="base-opcao"><input type="checkbox" id="ngRec" class="opcao-rec" checked> <span class="rot-rec">Incluir dados das contas a receber</span></label>
         <div class="base-acoes"><label class="opcao-base opcao-rec-tipo">Contas a receber <select class="sel-rec"><option value="nfc">Apenas NFC</option><option value="total">Total (com parcelas e NFA)</option></select></label></div>
@@ -570,9 +571,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v57-20261109"></script>
-<script src="assets/calculos.js?v=v57-20261109"></script>
-<script>const VERSAO_SITE = "v57-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v57-20261109"></script>
+<script src="assets/regras.js?v=v58-20261109"></script>
+<script src="assets/calculos.js?v=v58-20261109"></script>
+<script>const VERSAO_SITE = "v58-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v58-20261109"></script>
 </body>
 </html>
