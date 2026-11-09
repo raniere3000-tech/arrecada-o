@@ -113,7 +113,7 @@ test("tabela no formato do BI: cidade × subcategoria × mês × perfil, com os 
     assert.equal(x.clientesAnt, a ? a.clientes : 0);
   });
   const rb = t.find((x) => x.mes === "2026-10" && x.cidade === "RIO BONITO" && x.grupo === "RESIDENCIAL" && x.perfil === "Adimplente");
-  assert.equal(rb.clientes, 1); assert.equal(rb.clientesAnt, 1); perto(rb.valor, 100 + 50 - 15);   // ligação 1 pagou em set e out
+  assert.equal(rb.clientes, 1); assert.equal(rb.clientesAnt, 1); assert.equal(rb.contas, 1); perto(rb.valor, 100 + 50 - 15);   // ligação 1 pagou em set e out
   assert.ok(t.every((x, i) => !i || t[i - 1].mes <= x.mes));
 });
 

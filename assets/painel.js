@@ -2270,7 +2270,7 @@
   // Arrecadacao_Acumulada, Qtd_clientes_pagantes_acumulado e Qtd_Clientes_pagas_mês_anterior, nos dias marcados e filtros do
   // cabeçalho, nos meses marcados no filtro Mês. A última linha é o total geral (IsGrandTotalRowTotal = VERDADEIRO), com a soma das linhas.
   const BI_COLUNAS = ["Cidade", "Subcategoria", "Mes/ano", "Classificação", "IsGrandTotalRowTotal", "Arrecadacao_Acumulada",
-    "Qtd_clientes_pagantes_acumulado", "Qtd_Clientes_pagas_mês_anterior"];
+    "Qtd_clientes_pagantes_acumulado", "Qtd_Clientes_pagas_mês_anterior", "Qtd_contas_pagas_acumulado"];
   const mesesDoBI = () => E.meses.filter((m) => E.res.dados.meses.includes(m));   // os meses marcados no filtro Mês
   function linhasBI() {
     const ms = mesesDoBI();
@@ -2282,8 +2282,8 @@
     const rotMeses = ms.length <= 3 ? ms.map(C.rotuloMes).join(", ") : `${ms.length} meses`;
     $("biResumo").textContent = `${filtroTexto()} · ${rotMeses || "nenhum mês"} · ${rotuloDias()} · ${fmt(l.length)} linhas`;
     $("biTabela").innerHTML = l.length ? `<table class="compacta base-tabela"><thead><tr>${BI_COLUNAS.filter((c) => c !== "IsGrandTotalRowTotal").map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>`
-      + l.map((x) => `<tr>${td(esc(x.cidade), "rot")}${td(esc(x.grupo), "rot")}${td(C.rotuloMes(x.mes), "rot")}${td(esc(x.perfil), "rot")}${td(fmt(x.valor, 2))}${td(fmt(x.clientes))}${td(x.clientesAnt == null ? "—" : fmt(x.clientesAnt))}</tr>`).join("")
-      + `<tr class="total">${td("Total", "rot")}${td("", "rot")}${td("", "rot")}${td("", "rot")}${td(fmt(soma("valor"), 2))}${td(fmt(soma("clientes")))}${td(fmt(soma("clientesAnt")))}</tr></tbody></table>`
+      + l.map((x) => `<tr>${td(esc(x.cidade), "rot")}${td(esc(x.grupo), "rot")}${td(C.rotuloMes(x.mes), "rot")}${td(esc(x.perfil), "rot")}${td(fmt(x.valor, 2))}${td(fmt(x.clientes))}${td(x.clientesAnt == null ? "—" : fmt(x.clientesAnt))}${td(fmt(x.contas))}</tr>`).join("")
+      + `<tr class="total">${td("Total", "rot")}${td("", "rot")}${td("", "rot")}${td("", "rot")}${td(fmt(soma("valor"), 2))}${td(fmt(soma("clientes")))}${td(fmt(soma("clientesAnt")))}${td(fmt(soma("contas")))}</tr></tbody></table>`
       : `<p class="aviso-pdf">${ms.length ? "Sem arrecadação nos meses marcados para os filtros e dias marcados." : "Marque pelo menos um mês."}</p>`;
   }
   async function baixaTabelaBI() {
@@ -2292,15 +2292,15 @@
     if (!ms.length) { toast("Marque pelo menos um mês.", true); return; }
     const soma = (k) => t.reduce((a, x) => a + (x[k] || 0), 0);
     const linhas = [BI_COLUNAS, ...t.map((x) => [x.cidade, x.grupo, new Date(+x.mes.slice(0, 4), +x.mes.slice(5, 7) - 1, 1), x.perfil, false,
-      x.valor, x.clientes, x.clientesAnt == null ? null : x.clientesAnt]), ["", "", null, "", true, soma("valor"), soma("clientes"), soma("clientesAnt")]];
+      x.valor, x.clientes, x.clientesAnt == null ? null : x.clientesAnt, x.contas]), ["", "", null, "", true, soma("valor"), soma("clientes"), soma("clientesAnt"), soma("contas")]];
     const ws = X.utils.aoa_to_sheet(linhas, { cellDates: true });
     for (let r = 1; r < linhas.length; r++) {
       const m = ws[X.utils.encode_cell({ r, c: 2 })], v = ws[X.utils.encode_cell({ r, c: 5 })];
       if (m) m.z = "mm/yyyy";
       if (v) v.z = "#,##0.00";
-      for (const c of [6, 7]) { const q = ws[X.utils.encode_cell({ r, c })]; if (q) q.z = "#,##0"; }
+      for (const c of [6, 7, 8]) { const q = ws[X.utils.encode_cell({ r, c })]; if (q) q.z = "#,##0"; }
     }
-    ws["!cols"] = [{ wch: 22 }, { wch: 18 }, { wch: 9 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
+    ws["!cols"] = [{ wch: 22 }, { wch: 18 }, { wch: 9 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
     ws["!autofilter"] = { ref: X.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: linhas.length - 1, c: BI_COLUNAS.length - 1 } }) };
     const info = X.utils.aoa_to_sheet([
       ["Filtros", filtroTexto()], ["Dias úteis marcados", rotuloDias()], ["Meses", ms.map(C.rotuloMes).join(", ")],
@@ -2308,6 +2308,7 @@
       ["Arrecadacao_Acumulada", "Val. Autenticado com o desconto comercial, nos dias marcados do mês"],
       ["Qtd_clientes_pagantes_acumulado", "ligações distintas que pagaram nos dias marcados (como o DISTINCTCOUNT do BI)"],
       ["Qtd_Clientes_pagas_mês_anterior", "o mesmo, na mesma linha, no mês anterior; em branco quando o mês anterior não está na pasta"],
+      ["Qtd_contas_pagas_acumulado", "contas pagas (Tipo Fatura 1-NOTA FISCAL MENSAL e 2-NOTA FISCAL AVULSA) nos dias marcados do mês, como no Resumo"],
       ["Linha de total (IsGrandTotalRowTotal = VERDADEIRO)", "soma das linhas: um cliente que pagou em mais de uma linha conta em cada uma"],
       ["Gerado em", new Date().toLocaleString("pt-BR")], ["Versão do painel", VERSAO_SITE],
     ]);

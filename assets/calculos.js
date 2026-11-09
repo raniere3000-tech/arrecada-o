@@ -1052,7 +1052,7 @@
       for (const [mi, c] of l) {
         const ant = dados.meses.indexOf(mesAnterior(dados.meses[mi])), ca = ant >= 0 ? l.get(ant) : null;
         out.push({ cidade, grupo, mes: dados.meses[mi], perfil, valor: c.valor, clientes: c.clientes,
-          clientesAnt: ant < 0 ? null : ca ? ca.clientes : 0 });
+          clientesAnt: ant < 0 ? null : ca ? ca.clientes : 0, contas: c.contas });
       }
     }
     const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
