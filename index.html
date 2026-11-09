@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v48-20261109">
+<link rel="stylesheet" href="assets/painel.css?v=v49-20261109">
 </head>
 <body>
 
@@ -347,6 +347,15 @@
     <section class="painel-aba dados" data-painel="dados" hidden>
       <div class="card"><h2>Parâmetros do que está na tela <small id="dadosFiltros"></small></h2><div id="dadosParametros"></div></div>
 
+      <div class="card"><h2>Tabela para comparar com o BI <small id="biResumo"></small></h2>
+        <p>Uma linha por <b>Cidade × Subcategoria × Mês/ano × Classificação</b> (perfil de pagamento, do Cluster Saldo), com as colunas do BI:
+          a arrecadação (Val. Autenticado com o desconto comercial) e os clientes pagantes distintos nos <b>dias úteis marcados</b> de cada mês,
+          e os clientes pagantes da mesma linha no <b>mês anterior</b>, nos mesmos dias. <b>Os filtros do cabeçalho valem aqui.</b>
+          A planilha traz todos os meses da pasta; a tela mostra o mês escolhido.</p>
+        <div class="base-acoes"><button type="button" class="btn" id="biBaixar">Baixar planilha (Excel)</button><span class="salvo" id="biStatus"></span></div>
+        <div class="wrap" id="biTabela"></div>
+      </div>
+
       <div class="card"><h2>De onde vêm os dados</h2>
         <p>O painel lê a pasta conectada no próprio navegador (nada é enviado para a internet). As subpastas também são lidas.</p>
         <table class="explica"><thead><tr><th>Arquivo</th><th>Como é reconhecido</th><th>O que entra no painel</th></tr></thead><tbody>
@@ -539,9 +548,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v48-20261109"></script>
-<script src="assets/calculos.js?v=v48-20261109"></script>
-<script>const VERSAO_SITE = "v48-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v48-20261109"></script>
+<script src="assets/regras.js?v=v49-20261109"></script>
+<script src="assets/calculos.js?v=v49-20261109"></script>
+<script>const VERSAO_SITE = "v49-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v49-20261109"></script>
 </body>
 </html>

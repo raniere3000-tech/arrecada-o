@@ -102,6 +102,21 @@ test("tabelas por grupo: subcategoria, perfil e o desconto na linha da ligação
   assert.equal(p.get(R.SEM_PERFIL).get(1).clientes, 1);       // ligação 4 (sem perfil); a 3 pagou só no sábado
 });
 
+test("tabela no formato do BI: cidade × subcategoria × mês × perfil, com os clientes do mês anterior", () => {
+  const d = exemplo(), tudo = C.marcaCombos(d, {}), t = C.tabelaBI(d, tudo, C.mascaraAte(3));
+  const g = C.porGrupo(d, [0, 1], tudo, C.mascaraAte(3), () => "T").get("T");
+  perto(t.filter((x) => x.mes === d.meses[1]).reduce((a, x) => a + x.valor, 0), g.get(1).valor);
+  perto(t.filter((x) => x.mes === d.meses[0]).reduce((a, x) => a + x.valor, 0), g.get(0).valor);
+  t.filter((x) => x.mes === d.meses[0]).forEach((x) => assert.equal(x.clientesAnt, null));   // mês anterior fora da pasta
+  t.filter((x) => x.mes === d.meses[1]).forEach((x) => {
+    const a = t.find((y) => y.mes === d.meses[0] && y.cidade === x.cidade && y.grupo === x.grupo && y.perfil === x.perfil);
+    assert.equal(x.clientesAnt, a ? a.clientes : 0);
+  });
+  const rb = t.find((x) => x.mes === "2026-10" && x.cidade === "RIO BONITO" && x.grupo === "RESIDENCIAL" && x.perfil === "Adimplente");
+  assert.equal(rb.clientes, 1); assert.equal(rb.clientesAnt, 1); perto(rb.valor, 100 + 50 - 15);   // ligação 1 pagou em set e out
+  assert.ok(t.every((x, i) => !i || t[i - 1].mes <= x.mes));
+});
+
 test("escada: mês de vencimento × mês de crédito e desconto à parte", () => {
   const d = exemplo(), e = C.escada(d, [0, 1], C.marcaCombos(d, {}), C.mascaraAte(23, true));
   assert.equal(e.linhas.get("2026-10").get(1), 100 + 50 + 200 + 30 + 40);

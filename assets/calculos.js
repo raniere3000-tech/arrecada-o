@@ -1036,12 +1036,30 @@
     return { itens: out, total: tot, n80: out.length ? n80 : 0 };
   }
 
+  // Tabela no formato do BI (Cidade × Subcategoria × Mês/ano × Classificação = perfil): arrecadação e clientes pagantes
+  // distintos nos dias marcados de cada mês, e os clientes da mesma linha no mês anterior (mesmos dias). Ordem: mês, cidade,
+  // subcategoria, perfil. Mês anterior fora da pasta: null.
+  function tabelaBI(dados, marcas, sel) {
+    const S = "\u0001", idx = dados.meses.map((_, i) => i);
+    const g = porGrupo(dados, idx, marcas, sel, (c) => c.cidade + S + c.grupo + S + c.perfil), out = [];
+    for (const [k, l] of g) {
+      const [cidade, grupo, perfil] = k.split(S);
+      for (const [mi, c] of l) {
+        const ant = dados.meses.indexOf(mesAnterior(dados.meses[mi])), ca = ant >= 0 ? l.get(ant) : null;
+        out.push({ cidade, grupo, mes: dados.meses[mi], perfil, valor: c.valor, clientes: c.clientes,
+          clientesAnt: ant < 0 ? null : ca ? ca.clientes : 0 });
+      }
+    }
+    const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+    return out.sort((a, b) => cmp(a.mes, b.mes) || cmp(a.cidade, b.cidade) || cmp(a.grupo, b.grupo) || cmp(a.perfil, b.perfil));
+  }
+
   return {
     MAX_DIA, MESES_CURTOS, chave, separaCsv, refDeTexto, vencNum, consertaAcento, LeituraFaturamento, cruzaFaturamento, matrizConversao, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
     zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, estendeSel, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
     clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes, faixaNum, montaReceber, analisaReceber, situacaoPadrao, colunasReceber,
-    MASCARA_MES, comparaGrupos, mesesMesmosUteis, fracaoAteDias, pareto,
+    MASCARA_MES, comparaGrupos, tabelaBI, mesesMesmosUteis, fracaoAteDias, pareto,
   };
 });
