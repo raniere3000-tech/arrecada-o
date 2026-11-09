@@ -528,7 +528,7 @@ test("filtros de vários itens: listas de superintendências, cidades e subcateg
   perto(tot({ sup: "LESTE" }), 40);                                                                   // um valor só continua valendo
 });
 
-test("superintendência pelo cadastro: a da matrícula; fora do cadastro, sem SUP; sem cadastro, pela cidade", () => {
+test("superintendência pelo cadastro: a da matrícula; fora do cadastro ou sem cadastro, pela cidade", () => {
   assert.equal(R.supDoCadastro("LAGOS"), "INTERIOR");
   assert.equal(R.supDoCadastro(" Leste "), "LESTE");
   assert.equal(R.supDoCadastro("BAIXADA 01"), "BAIXADA 01");
@@ -542,7 +542,7 @@ test("superintendência pelo cadastro: a da matrícula; fora do cadastro, sem SU
   };
   const tot = (d, sup) => C.totalDoMes(d, d.meses.indexOf("2026-10"), C.marcaCombos(d, { sup }), 1 << 1).valor;
   const d = monta(cad);
-  perto(tot(d, "INTERIOR"), 10); perto(tot(d, "LESTE"), 20); perto(tot(d, "COMUNIDADES"), 30); perto(tot(d, R.SEM_SUP), 40);
+  perto(tot(d, "INTERIOR"), 50); perto(tot(d, "LESTE"), 20); perto(tot(d, "COMUNIDADES"), 30); perto(tot(d, R.SEM_SUP), 0);   // a 4 (fora) vai pela cidade
   assert.ok(d.combos.every((c) => c.cidade === "RIO BONITO"));
   const semCad = monta(null);
   perto(tot(semCad, "INTERIOR"), 100);                                                                  // sem cadastro: pela cidade

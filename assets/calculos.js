@@ -193,7 +193,7 @@
       M.linhas++;
       if (credito > M.ultimoCredito) M.ultimoCredito = credito;
       const perfil = this.perfis ? (this.perfis.get(ligacao(r.lig) + "|" + ligacao(r.contrato)) || R.SEM_PERFIL) : R.SEM_PERFIL;
-      const supCad = this.cadastro ? this.cadastro.get(ligacao(r.lig)) || R.SEM_SUP : "";   // "" = pela cidade
+      const supCad = this.cadastro ? this.cadastro.get(ligacao(r.lig)) || "" : "";   // "" = pela cidade (sem cadastro ou fora dele)
       const ck = String(r.zona || "").trim() + SEP + String(r.util || "").trim() + SEP + perfil + SEP + supCad;
       let c = this.idxCk.get(ck);
       if (c === undefined) {
