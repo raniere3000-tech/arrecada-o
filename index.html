@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v52-20261109">
+<link rel="stylesheet" href="assets/painel.css?v=v53-20261109">
 </head>
 <body>
 
@@ -21,7 +21,7 @@
       <div class="filtro filtro-multi"><span>Superintendência</span><div class="multi" id="selSup"><button type="button" class="multi-botao" disabled aria-haspopup="listbox" aria-expanded="false">—</button><div class="multi-lista" role="listbox" aria-multiselectable="true" hidden></div></div></div>
       <div class="filtro filtro-multi"><span>Cidade</span><div class="multi" id="selCidade"><button type="button" class="multi-botao" disabled aria-haspopup="listbox" aria-expanded="false">—</button><div class="multi-lista" role="listbox" aria-multiselectable="true" hidden></div></div></div>
       <div class="filtro filtro-multi"><span>Subcategoria</span><div class="multi" id="selGrupo"><button type="button" class="multi-botao" disabled aria-haspopup="listbox" aria-expanded="false">—</button><div class="multi-lista" role="listbox" aria-multiselectable="true" hidden></div></div></div>
-      <label class="filtro"><span>Mês</span><select id="selMes" disabled><option>—</option></select></label>
+      <div class="filtro filtro-multi" title="Marque um ou mais meses. As abas de um mês só (Resumo, One page, orçado…) usam o mais recente marcado; a tabela do BI na aba Dados usa todos."><span>Mês</span><div class="multi" id="selMes"><button type="button" class="multi-botao" disabled aria-haspopup="listbox" aria-expanded="false">—</button><div class="multi-lista" role="listbox" aria-multiselectable="true" hidden></div></div></div>
       <label class="filtro" title="Planilha de orçado usada no orçado mensal (como no painel de faturamento)"><span>Orçado</span><select id="selOrc" disabled><option>—</option></select></label>
     </div>
     <div class="ferramentas">
@@ -351,10 +351,7 @@
         <p>Uma linha por <b>Cidade × Subcategoria × Mês/ano × Classificação</b> (perfil de pagamento, do Cluster Saldo), com as colunas do BI:
           a arrecadação (Val. Autenticado com o desconto comercial) e os clientes pagantes distintos nos <b>dias úteis marcados</b> de cada mês,
           e os clientes pagantes da mesma linha no <b>mês anterior</b>, nos mesmos dias. <b>Os filtros do cabeçalho valem aqui</b>
-          (Superintendência, Cidade e Subcategoria). Marque abaixo os meses que entram na tela e na planilha (começa pelo mês do filtro).</p>
-        <div class="base-meses" id="biMeses"></div>
-        <div class="base-acoes"><button type="button" class="btn sec" id="biTodos">Todos os meses</button>
-          <button type="button" class="btn sec" id="biSoMes">Só o mês do filtro</button></div>
+          (Superintendência, Cidade, Subcategoria e <b>Mês</b>): entram todos os meses marcados no filtro Mês.</p>
         <div class="base-acoes"><button type="button" class="btn" id="biBaixar">Baixar planilha (Excel)</button><span class="salvo" id="biStatus"></span></div>
         <div class="wrap" id="biTabela"></div>
       </details>
@@ -551,9 +548,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v52-20261109"></script>
-<script src="assets/calculos.js?v=v52-20261109"></script>
-<script>const VERSAO_SITE = "v52-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v52-20261109"></script>
+<script src="assets/regras.js?v=v53-20261109"></script>
+<script src="assets/calculos.js?v=v53-20261109"></script>
+<script>const VERSAO_SITE = "v53-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v53-20261109"></script>
 </body>
 </html>

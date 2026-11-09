@@ -16,3 +16,5 @@
 - Filtros do cabeçalho (Superintendência, Cidade, Subcategoria) são de vários itens: `E.sups`, `E.cidades`, `E.grupos`
   (lista vazia = todas). Para filtrar use `marcas()`, `okCombo()` ou `okFat()`; `E.sup`/`E.cidade`/`E.grupo` só dão o
   item quando há um só escolhido (servem ao orçado e à curva, que são por superintendência).
+- Filtro Mês também é de vários itens (`E.meses`, nunca vazio). `E.mes` é o mais recente marcado e é o que as telas
+  de um mês usam (Resumo, One page, orçado, curva…); só a tabela do BI da aba Dados usa todos os de `E.meses`.

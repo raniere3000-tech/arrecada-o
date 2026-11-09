@@ -22,7 +22,7 @@ para a internet: tudo é processado no navegador.
   e oportunidades (contas a receber: saldo vencido e a vencer por faixa, situação, contato e cidade, maiores devedores e quem pagou;
   faturado sem pagamento a investigar, deixaram e voltaram a pagar, histórico de uma matrícula; com a base de
   contas a receber na pasta, o “a investigar” é conferido por matrícula). O PDF é só do Executivo.
-- **Dados**: área à parte com as regras e a conferência dos números, e a **tabela para comparar com o BI** (Cidade × Subcategoria × Mês/ano × Classificação nos meses marcados no quadro, com a arrecadação e os clientes pagantes nos dias marcados e no mês anterior), em quadro recolhível e com download em Excel.
+- **Dados**: área à parte com as regras e a conferência dos números, e a **tabela para comparar com o BI** (Cidade × Subcategoria × Mês/ano × Classificação nos meses marcados no filtro Mês, com a arrecadação e os clientes pagantes nos dias marcados e no mês anterior), em quadro recolhível e com download em Excel.
 - **Pasta One Page** (na pasta principal): prints do BI para o One page — imagens (PNG/JPG) ou um Excel com as imagens coladas.
   Cada print vai para o seu lugar pelo nome da aba do Excel (ou do arquivo): “Economias” (cartão dos volumes acumulados) e
   “Inadimplentes” (maiores inadimplentes). Os arquivos dessa pasta não entram na leitura da arrecadação.
@@ -32,7 +32,7 @@ para a internet: tudo é processado no navegador.
 1. Abra o site e clique em **📁 Conectar pasta**. Escolha a pasta da arrecadação; as subpastas também são lidas.
 2. No Chrome e no Edge a pasta fica lembrada: nas próximas visitas basta clicar em qualquer lugar da página.
    **↻ Atualizar** relê a pasta depois que o arquivo do dia for trocado.
-3. Use os filtros do cabeçalho (Superintendência, Cidade, Subcategoria, Mês) e os botões de **dias úteis**.
+3. Use os filtros do cabeçalho (Superintendência, Cidade, Subcategoria, Mês — de vários meses: as telas de um mês usam o mais recente marcado) e os botões de **dias úteis**.
 4. **Painel / Power BI** troca o visual. **📄 PDF** gera o executivo com as 5 abas no visual escolhido (sem a aba Dados).
 5. A aba **Análise** traz os top clientes (até 100): maiores arrecadações, aumentos e quedas em relação ao mês anterior,
    com download em CSV. A aba **Base** extrai as linhas completas dos CSVs para uma lista de matrículas e meses.

@@ -12,7 +12,7 @@
   const NOME_SUP = { INTERIOR: "Interior", LESTE: "Leste", [R.SEM_SUP]: "Sem SUP" };
   const DIGITADO = "__digitado";                      // opção do seletor de orçado: o valor digitado no painel
   const E = {
-    res: null, sups: ["INTERIOR"], cidades: [], grupos: [], mes: "", sel: 0, aba: "resumo",
+    res: null, sups: ["INTERIOR"], cidades: [], grupos: [], mes: "", meses: [], sel: 0, aba: "resumo",
     abertos: new Set(["PUBLICO"]), ajustes: { orcado: {}, curva: {} }, pasta: null, rodando: false,
   };
   // Filtros do cabeçalho com vários itens: E.sups, E.cidades e E.grupos (lista vazia = todas). E.sup, E.cidade e E.grupo
@@ -316,6 +316,9 @@
     if (!E.sups.length && !E.res.__filtrosIniciados) E.sups = sups.includes("INTERIOR") ? ["INTERIOR"] : [];
     E.res.__filtrosIniciados = true;
     if (!d.meses.includes(E.mes)) E.mes = d.meses[d.meses.length - 1];
+    E.meses = E.meses.filter((m) => d.meses.includes(m));
+    if (!E.meses.length) E.meses = [E.mes];
+    E.mes = E.meses[E.meses.length - 1];
     E.sel = selDoMes(E.mes);
     montaFiltros();
     desenha();
@@ -390,7 +393,7 @@
     const grupos = ordena([...new Set(d.combos.map((c) => c.grupo))], R.ORDEM_SUBCATEGORIAS);
     E.grupos = E.grupos.filter((g) => grupos.includes(g));
     filtroGrupo.define(grupos.map((g) => [g, g]), E.grupos);
-    opcoes($("selMes"), [...d.meses].reverse().map((m) => [m, C.rotuloMes(m)]), E.mes);
+    filtroMes.define([...d.meses].reverse().map((m) => [m, C.rotuloMes(m)]), E.meses);
     montaSeletorOrcado();
   }
   // Seletor de orçado: as planilhas RF da pasta (a mais nova primeiro) e o valor digitado no painel
@@ -416,7 +419,8 @@
   try { E.fonte = localStorage.getItem("arrecadacao_orcado") || ""; } catch (x) { E.fonte = ""; }
   // Filtro de vários itens: botão com o resumo da escolha e, ao clicar, a lista com caixas de marcar. "Todas" limpa a
   // escolha; com muitos itens, uma caixa de busca. Cada marcação já atualiza o painel.
-  function multiFiltro(id, nomePlural, aoMudar) {
+  // semTodas: sem o item "Todas" e sempre com pelo menos um marcado (filtro Mês)
+  function multiFiltro(id, nomePlural, aoMudar, semTodas = false) {
     const raiz = $(id), botao = raiz.querySelector(".multi-botao"), lista = raiz.querySelector(".multi-lista");
     let itens = [], sel = [], busca = "";
     const rot = (v) => (itens.find(([x]) => x === v) || [v, v])[1];
@@ -424,7 +428,7 @@
     function desenhaLista() {
       const vis = itens.filter(([, t]) => !busca || C.chave(t).includes(C.chave(busca)));
       lista.innerHTML = (itens.length > 8 ? `<input type="search" class="multi-busca" placeholder="Buscar…" value="${esc(busca)}">` : "")
-        + `<label class="multi-item multi-todas"><input type="checkbox" data-todas${sel.length ? "" : " checked"}> Todas</label>`
+        + (semTodas ? "" : `<label class="multi-item multi-todas"><input type="checkbox" data-todas${sel.length ? "" : " checked"}> Todas</label>`)
         + vis.map(([v, t]) => `<label class="multi-item"><input type="checkbox" value="${esc(v)}"${sel.includes(v) ? " checked" : ""}> ${esc(t)}</label>`).join("")
         + (vis.length ? "" : '<p class="multi-vazio">Nada encontrado.</p>');
     }
@@ -444,6 +448,7 @@
       if (cx.type !== "checkbox") return;
       if (cx.hasAttribute("data-todas")) sel = [];
       else sel = cx.checked ? [...sel, cx.value] : sel.filter((x) => x !== cx.value);
+      if (semTodas && !sel.length) { cx.checked = true; sel = [cx.value]; return; }   // ao menos um mês
       sel = itens.map(([v]) => v).filter((v) => sel.includes(v));                   // na ordem da lista
       botao.textContent = resumo(); botao.title = sel.length ? sel.map(rot).join(", ") : "Todas";
       desenhaLista();
@@ -462,7 +467,13 @@
   const filtroSup = multiFiltro("selSup", "superintendências", (l) => { E.sups = l; montaFiltros(); desenha(); });
   const filtroCidade = multiFiltro("selCidade", "cidades", (l) => { E.cidades = l; desenha(); });
   const filtroGrupo = multiFiltro("selGrupo", "subcategorias", (l) => { E.grupos = l; desenha(); });
-  $("selMes").addEventListener("change", (e) => { E.mes = e.target.value; E.sel = selDoMes(E.mes); montaSeletorOrcado(); desenha(); });
+  // Mês: vários meses marcados (lista da mais recente para a mais antiga). As telas de um mês usam o mais recente marcado.
+  const filtroMes = multiFiltro("selMes", "meses", (l) => {
+    E.meses = [...l].sort();
+    const novo = E.meses[E.meses.length - 1];
+    if (novo !== E.mes) { E.mes = novo; E.sel = selDoMes(E.mes); montaSeletorOrcado(); }
+    desenha();
+  }, true);
 
   function ordena(lista, ordem) {
     const pos = (x) => { const i = ordem.indexOf(x); return i < 0 ? 999 : i; };
@@ -2238,21 +2249,16 @@
 
   // Tabela no formato do BI (aba Dados): Cidade, Subcategoria, Mes/ano, Classificação (perfil), IsGrandTotalRowTotal,
   // Arrecadacao_Acumulada, Qtd_clientes_pagantes_acumulado e Qtd_Clientes_pagas_mês_anterior, nos dias marcados e filtros do
-  // cabeçalho, nos meses marcados no quadro (começa pelo mês do filtro). A última linha é o total geral (IsGrandTotalRowTotal = VERDADEIRO), com a soma das linhas.
+  // cabeçalho, nos meses marcados no filtro Mês. A última linha é o total geral (IsGrandTotalRowTotal = VERDADEIRO), com a soma das linhas.
   const BI_COLUNAS = ["Cidade", "Subcategoria", "Mes/ano", "Classificação", "IsGrandTotalRowTotal", "Arrecadacao_Acumulada",
     "Qtd_clientes_pagantes_acumulado", "Qtd_Clientes_pagas_mês_anterior"];
-  let mesesBI = null;                                   // meses marcados no quadro (null = o mês do filtro)
-  const mesesDoBI = () => {
-    const meses = E.res.dados.meses, l = (mesesBI || [E.mes]).filter((m) => meses.includes(m));
-    return l.length || mesesBI ? l.sort() : [E.mes];
-  };
+  const mesesDoBI = () => E.meses.filter((m) => E.res.dados.meses.includes(m));   // os meses marcados no filtro Mês
   function linhasBI() {
     const ms = mesesDoBI();
     return C.tabelaBI(E.res.dados, marcas(), selCalc()).filter((x) => ms.includes(x.mes));
   }
   function desenhaTabelaBI() {
     const ms = mesesDoBI(), l = linhasBI();
-    $("biMeses").innerHTML = [...E.res.dados.meses].reverse().map((m) => `<label><input type="checkbox" value="${m}"${ms.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("");
     const soma = (k) => l.reduce((a, x) => a + (x[k] || 0), 0), td = (v, c = "") => `<td${c ? ` class="${c}"` : ""}>${v}</td>`;
     const rotMeses = ms.length <= 3 ? ms.map(C.rotuloMes).join(", ") : `${ms.length} meses`;
     $("biResumo").textContent = `${filtroTexto()} · ${rotMeses || "nenhum mês"} · ${rotuloDias()} · ${fmt(l.length)} linhas`;
@@ -2261,9 +2267,6 @@
       + `<tr class="total">${td("Total", "rot")}${td("", "rot")}${td("", "rot")}${td("", "rot")}${td(fmt(soma("valor"), 2))}${td(fmt(soma("clientes")))}${td(fmt(soma("clientesAnt")))}</tr></tbody></table>`
       : `<p class="aviso-pdf">${ms.length ? "Sem arrecadação nos meses marcados para os filtros e dias marcados." : "Marque pelo menos um mês."}</p>`;
   }
-  $("biMeses").addEventListener("change", () => { mesesBI = [...$("biMeses").querySelectorAll("input:checked")].map((i) => i.value); desenhaTabelaBI(); });
-  $("biTodos").addEventListener("click", () => { mesesBI = [...E.res.dados.meses]; desenhaTabelaBI(); });
-  $("biSoMes").addEventListener("click", () => { mesesBI = null; desenhaTabelaBI(); });
   async function baixaTabelaBI() {
     try { await carregaXLSX(); } catch (e) { toast("Não foi possível carregar a biblioteca de planilhas.", true); return; }
     const X = window.XLSX, t = linhasBI(), ms = mesesDoBI();
