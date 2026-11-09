@@ -193,8 +193,12 @@
       M.linhas++;
       if (credito > M.ultimoCredito) M.ultimoCredito = credito;
       const perfil = this.perfis ? (this.perfis.get(ligacao(r.lig) + "|" + ligacao(r.contrato)) || R.SEM_PERFIL) : R.SEM_PERFIL;
-      const supCad = this.cadastro ? this.cadastro.get(ligacao(r.lig)) || "" : "";   // "" = pela cidade (sem cadastro ou fora dele)
-      const ck = String(r.zona || "").trim() + SEP + String(r.util || "").trim() + SEP + perfil + SEP + supCad;
+      // "" = pela cidade: sem cadastro, ou fora dele numa cidade do Interior (R.SUPS_PELA_CIDADE); fora dele nas outras = Sem SUP
+      const zona = String(r.zona || "").trim();
+      let sup = this.supDaZona.get(zona);
+      if (sup === undefined) { sup = zonaInfo(zona)[1]; this.supDaZona.set(zona, sup); }
+      const supCad = this.cadastro ? this.cadastro.get(ligacao(r.lig)) || (R.SUPS_PELA_CIDADE.includes(sup) ? "" : R.SEM_SUP) : "";
+      const ck = zona + SEP + String(r.util || "").trim() + SEP + perfil + SEP + supCad;
       let c = this.idxCk.get(ck);
       if (c === undefined) {
         c = this.cks.length;
@@ -212,9 +216,6 @@
       M.L.set(kl, (M.L.get(kl) || 0) + valor);
       if (valor >= VALOR_COM_NOME && r.cliente && !this.nomes.has(lig)) this.nomes.set(lig, String(r.cliente).trim().split("").join(""));   // split/join: cópia solta da linha
       // pagamentos do Interior (onde há faturamento) por ligação + vencimento + tipo: base do cruzamento com a fatura
-      const zona = String(r.zona || "").trim();
-      let sup = this.supDaZona.get(zona);
-      if (sup === undefined) { sup = zonaInfo(zona)[1]; this.supDaZona.set(zona, sup); }
       if (sup === "INTERIOR") {
         const t = String(r.tipo || "").trim(), tipo = t.startsWith("1-") ? 1 : t.startsWith("2-") ? 2 : t.startsWith("3-") ? 3 : 0;
         const kp = lig + "|" + vencNum(dataISO(r.vencimento)) + "|" + tipo;

@@ -528,7 +528,7 @@ test("filtros de vários itens: listas de superintendências, cidades e subcateg
   perto(tot({ sup: "LESTE" }), 40);                                                                   // um valor só continua valendo
 });
 
-test("superintendência pelo cadastro: a da matrícula; fora do cadastro ou sem cadastro, pela cidade", () => {
+test("superintendência pelo cadastro: a da matrícula; fora do cadastro, pela cidade só no Interior; sem cadastro, pela cidade", () => {
   assert.equal(R.supDoCadastro("LAGOS"), "INTERIOR");
   assert.equal(R.supDoCadastro(" Leste "), "LESTE");
   assert.equal(R.supDoCadastro("BAIXADA 01"), "BAIXADA 01");
@@ -538,12 +538,13 @@ test("superintendência pelo cadastro: a da matrícula; fora do cadastro ou sem 
   const monta = (cadastro) => {
     const l = new C.LeituraArquivo(null, cadastro);
     for (const lig of [1, 2, 3, 4]) l.adiciona(linha(lig, "01/10/2026", `${lig}0,00`));             // todas em Rio Bonito (Interior pela cidade)
+    l.adiciona(linha(5, "01/10/2026", "50,00", { zona: "9-ITABORAI" }));                         // cidade da Leste
     const a = new C.Agregador(); a.junta(l.exporta()); return a.resultado(new Map());
   };
   const tot = (d, sup) => C.totalDoMes(d, d.meses.indexOf("2026-10"), C.marcaCombos(d, { sup }), 1 << 1).valor;
   const d = monta(cad);
-  perto(tot(d, "INTERIOR"), 50); perto(tot(d, "LESTE"), 20); perto(tot(d, "COMUNIDADES"), 30); perto(tot(d, R.SEM_SUP), 0);   // a 4 (fora) vai pela cidade
-  assert.ok(d.combos.every((c) => c.cidade === "RIO BONITO"));
+  perto(tot(d, "INTERIOR"), 50); perto(tot(d, "LESTE"), 20); perto(tot(d, "COMUNIDADES"), 30);   // a 4 (fora, Interior) vai pela cidade
+  perto(tot(d, R.SEM_SUP), 50);                                                                         // a 5 (fora, Leste) fica em Sem SUP
   const semCad = monta(null);
-  perto(tot(semCad, "INTERIOR"), 100);                                                                  // sem cadastro: pela cidade
+  perto(tot(semCad, "INTERIOR"), 100); perto(tot(semCad, "LESTE"), 50);                                                                  // sem cadastro: pela cidade
 });

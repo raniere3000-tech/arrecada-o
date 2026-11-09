@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v47-20261109">
+<link rel="stylesheet" href="assets/painel.css?v=v48-20261109">
 </head>
 <body>
 
@@ -356,7 +356,7 @@
           <tr><td>Perfil do cliente</td><td>Planilha com NUM_LIGACAO, SEQ_RESPONSAVEL e CLUSTER SALDO</td><td>Adimplente, Inadimplente ou Nunca Pagou de cada ligação + contrato.</td></tr>
           <tr><td>Cadastro (superintendência)</td><td>Planilha (.xlsx) ou CSV com NUM_LIGACAO e SUPERINTENDENCIA no cabeçalho (o cadastro completo, em qualquer pasta)</td>
             <td>A superintendência de cada matrícula: LAGOS = Interior, LESTE = Leste, as outras com o nome do cadastro (sem orçado). Matrícula fora do cadastro
-            (ou com a superintendência em branco ou “-”) pega a superintendência da cidade, como sem o cadastro. Sem essa planilha, a superintendência vem da cidade. Trocar a planilha faz o painel reler a arrecadação.</td></tr>
+            (ou com a superintendência em branco ou “-”) pega a superintendência da cidade quando a cidade é do Interior (Lagos); nas outras (ex.: Leste, em validação) fica em “Sem SUP”. Sem essa planilha, a superintendência vem da cidade. Trocar a planilha faz o painel reler a arrecadação.</td></tr>
           <tr><td>Contas a receber</td><td>Planilha com NUM_LIGACAO, Saldo total e FAIXA_DESCRICAO (uma linha por matrícula e faixa de atraso), em qualquer pasta;
             sugestão: subpasta “Contas a Receber”, com a data no nome. Duas bases: a total (ex.: Contas a receber 27-10-2026.xlsx) e a só de notas fiscais, com
             <b>NFC</b> no nome (ex.: Contas a receber - NFC - 27-10-2026.xlsx)</td><td>Saldo vencido e a vencer de cada matrícula (aba Clientes e oportunidades e bases da aba Base);
@@ -369,7 +369,7 @@
 
       <div class="card"><h2>Filtros e dias úteis</h2>
         <ul>
-          <li><b>Superintendência</b>: com a planilha de cadastro na pasta, vem da matrícula (coluna SUPERINTENDENCIA; LAGOS = Interior; fora do cadastro = pela cidade);
+          <li><b>Superintendência</b>: com a planilha de cadastro na pasta, vem da matrícula (coluna SUPERINTENDENCIA; LAGOS = Interior; fora do cadastro = pela cidade no Interior, “Sem SUP” nas outras);
             sem ela, vem da cidade (coluna Zona do CSV). Cidades “Lagos” do BI = <b>Interior</b>; “R4” = <b>Leste</b>. Zona fora da relação aparece em “Sem SUP”.</li>
           <li><b>Superintendência</b>, <b>Cidade</b> e <b>Subcategoria</b> aceitam vários itens (clique no filtro e marque; “Todas” limpa a escolha) e filtram todas as abas.
             A lista de cidades segue as superintendências marcadas. O orçado só existe por superintendência: com uma marcada, é o dela; com as duas (ou Todas), a soma;
@@ -539,9 +539,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v47-20261109"></script>
-<script src="assets/calculos.js?v=v47-20261109"></script>
-<script>const VERSAO_SITE = "v47-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v47-20261109"></script>
+<script src="assets/regras.js?v=v48-20261109"></script>
+<script src="assets/calculos.js?v=v48-20261109"></script>
+<script>const VERSAO_SITE = "v48-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v48-20261109"></script>
 </body>
 </html>

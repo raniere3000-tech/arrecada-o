@@ -105,7 +105,11 @@ function respondeClientes(o) {
     for (const x of r.deixaram) { const rc = receber.get(x.lig); x.saldo = rc && rc.vencido > 0 ? rc.vencido : null; }
     const f = o.filtroRec || {}, sup = supDaCidade();
     const passa = (l, v) => !l || !l.length || l.includes(v);           // listas dos filtros de vários itens (vazia = todas)
-    const supDe = (x) => ((cadastroSup && cadastroSup.get(C.ligacao(String(x.lig)))) || sup.get(x.cidade));
+    const supDe = (x) => {                            // cadastro; fora dele, a da cidade só no Interior (R.SUPS_PELA_CIDADE)
+      if (!cadastroSup) return sup.get(x.cidade);
+      const s = cadastroSup.get(C.ligacao(String(x.lig))), sc = sup.get(x.cidade);
+      return s || (R.SUPS_PELA_CIDADE.includes(sc) ? sc : R.SEM_SUP);
+    };
     const aceita = (x) => passa(f.sups, supDe(x)) && passa(f.cidades, x.cidade) && passa(f.gruposFat, grupoFatDe(x.lig));
     r.receber = C.analisaReceber(receber, analise, o.mi, aceita, o.meses);
     for (const x of r.receber.lista) { x.nome = x.nome || nomeDe(x.lig); x.lig = ligTxt(x.lig); }
@@ -410,7 +414,7 @@ async function leFaturamento(file, aoLer) {
 }
 
 // ---------- cache: o que cada CSV exportou fica no navegador (IndexedDB); arquivo igual não é lido de novo ----------
-const CACHE_VERSAO = 7;                                 // 7: matrícula fora do cadastro pega a superintendência da cidade
+const CACHE_VERSAO = 8;                                 // 8: fora do cadastro, pela cidade só no Interior
 const CACHE_FATURAMENTO = 4;                           // cache do faturamento é separado: muda sem reler a arrecadação
 const banco = () => new Promise((ok, erro) => {
   const r = indexedDB.open("arrecadacao_cache", 1);
