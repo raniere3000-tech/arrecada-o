@@ -547,3 +547,12 @@ table.op-tab tr.op-desc td { color:#64748b; font-style:italic; }
 /* escada: células abaixo de R$ 50 mil preenchidas (opção) */
 #tEscada td.esc-menor { color:#64748b; }
 .card h2 .opcao + .opcao { margin-left: 14px; }
+
+/* menu de prints (apresentação) */
+.menu-print { position: relative; display: inline-block; }
+.menu-print-lista { position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; min-width: 270px; background: #fff; border: 1px solid var(--linha); border-radius: 10px; box-shadow: 0 10px 28px rgba(16,40,64,.22); padding: 6px; display: flex; flex-direction: column; }
+.menu-print-lista[hidden] { display: none; }
+.menu-print-lista button { text-align: left; background: none; border: 0; border-radius: 6px; padding: 8px 10px; font: inherit; font-size: 13px; font-weight: 600; color: #1A2740; cursor: pointer; }
+.menu-print-lista button:hover { background: #EEF4F8; }
+.menu-print-lista button small { display: block; font-weight: 400; font-size: 11.5px; color: #64748b; }
+.menu-print-lista .menu-print-todas { border-top: 1px solid var(--linha); border-radius: 0 0 6px 6px; margin-top: 4px; padding-top: 10px; }

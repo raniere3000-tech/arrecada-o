@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v58-20261109">
+<link rel="stylesheet" href="assets/painel.css?v=v59-20261109">
 </head>
 <body>
 
@@ -29,6 +29,16 @@
       <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
       <button type="button" class="btn-top" id="btnOrcado" aria-pressed="true" title="Mostrar ou esconder o orçado no painel (cartões, tabelas, curva, Diagnóstico e One page): sem ele, fica só o realizado">👁 Orçado</button>
       <button type="button" class="btn-top" id="btnPdf" disabled>📄 PDF</button>
+      <span class="menu-print" id="menuPrintWrap"><button type="button" class="btn-top" id="btnPrint" disabled aria-haspopup="true" aria-expanded="false" aria-controls="menuPrint" title="Imagens em alta resolução das abas do Executivo, do tamanho de um slide (16:9), para a apresentação">🖼 Prints ▾</button>
+        <span class="menu-print-lista" id="menuPrint" role="menu" hidden>
+          <button type="button" role="menuitem" data-print="resumo">Resumo<small>imagem do slide: copia e baixa em PNG</small></button>
+          <button type="button" role="menuitem" data-print="subcategoria">Subcategoria</button>
+          <button type="button" role="menuitem" data-print="perfil">Perfil de pagamento</button>
+          <button type="button" role="menuitem" data-print="cidades">Cidades</button>
+          <button type="button" role="menuitem" data-print="escada">Escada</button>
+          <button type="button" role="menuitem" data-print="pptx" class="menu-print-todas">Todas em PowerPoint (.pptx)<small>um slide por aba, do Resumo à Escada</small></button>
+          <button type="button" role="menuitem" data-print="pngs">Todas em PNG<small>uma imagem por aba</small></button>
+        </span></span>
       <div class="chave-visual" role="group" aria-label="Visual do painel">
         <button type="button" data-visual="painel" class="on">Painel</button>
         <button type="button" data-visual="bi">Power BI</button>
@@ -571,9 +581,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v58-20261109"></script>
-<script src="assets/calculos.js?v=v58-20261109"></script>
-<script>const VERSAO_SITE = "v58-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v58-20261109"></script>
+<script src="assets/regras.js?v=v59-20261109"></script>
+<script src="assets/calculos.js?v=v59-20261109"></script>
+<script>const VERSAO_SITE = "v59-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v59-20261109"></script>
 </body>
 </html>

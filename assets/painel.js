@@ -305,13 +305,13 @@
     listaArquivos(res);
     if (!d.meses.length) {
       setFonte(`Pasta <b>${esc(nomePasta)}</b>: nenhum arquivo de arrecadação encontrado (CSV com Nº Ligação, Data Crédito e Val. Autenticado). Veja a lista em “Arquivos lidos”.`);
-      $("vazio").hidden = false; $("area").hidden = true; $("abas").hidden = true; $("btnPdf").disabled = true;
+      $("vazio").hidden = false; $("area").hidden = true; $("abas").hidden = true; $("btnPdf").disabled = true; $("btnPrint").disabled = true;
       return;
     }
     const ultimo = d.ultimoCredito[d.meses[d.meses.length - 1]];
     setFonte(`Pasta <b>${esc(nomePasta)}</b> · ${nArr} arquivo(s) de arrecadação · crédito até <b>${dataBR(ultimo)}</b>`
       + (d.ultimaAtualizacao ? ` · atualizado em ${dataBR(d.ultimaAtualizacao.slice(0, 10))}${esc(d.ultimaAtualizacao.slice(10))}` : ""));
-    $("vazio").hidden = true; $("area").hidden = false; $("abas").hidden = false; $("btnPdf").disabled = false;
+    $("vazio").hidden = true; $("area").hidden = false; $("abas").hidden = false; $("btnPdf").disabled = false; $("btnPrint").disabled = false;
     const sups = supsDisponiveis();
     E.sups = E.sups.filter((x) => sups.includes(x));
     if (!E.sups.length && !E.res.__filtrosIniciados) E.sups = sups.includes("INTERIOR") ? ["INTERIOR"] : [];
@@ -2758,6 +2758,92 @@
       btn.textContent = "📄 PDF";
     }
   });
+
+  // ===== Prints para a apresentação (mesma ideia do painel de faturamento água e esgoto): cada aba do Executivo (Resumo a
+  // Escada) vira uma imagem do tamanho exato de um slide 16:9, em alta resolução. A largura da página é escolhida para a
+  // aba ocupar o máximo do slide (letra maior); o fundo completa o que sobra. Uma aba: copia (Ctrl+V no slide) e baixa o
+  // PNG; todas: um PowerPoint com um slide por aba (imagem no slide inteiro) ou os PNGs.
+  const SLIDE_W = 3840, SLIDE_H = 2160, SLIDE_MARGEM = 0.025;   // 4K, 16:9; margem de 2,5% em volta
+  const carregaPptx = () => (window.PptxGenJS ? Promise.resolve() : new Promise((ok, erro) => {
+    const sc = document.createElement("script"); sc.src = "lib/pptxgen.bundle.js"; sc.onload = ok; sc.onerror = () => erro(new Error("não carregou a biblioteca do PowerPoint")); document.head.append(sc);
+  }));
+  const nomePrint = (aba) => `Print_${ABAS[aba]}_${filtroTexto("_")}_${E.mes}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9_-]+/g, "_");
+  async function fotoDaAba(aba) {
+    mostraAba(aba);
+    const main = document.querySelector("main"), area = $("area"), fundo = document.body.classList.contains("bi") ? "#ffffff" : "#f3f6f9";
+    // testa larguras da página: fica a que, encaixada no slide, deixa o conteúdo maior
+    let melhor = null;
+    for (let L = 1100; L <= 2600; L += 100) {
+      main.style.width = L + "px"; await quadro();
+      const nota = Math.min(1 / area.scrollWidth, (SLIDE_H / SLIDE_W) / area.scrollHeight);
+      if (!melhor || nota > melhor.nota) melhor = { L, nota };
+    }
+    main.style.width = melhor.L + "px"; await quadro(); await quadro();
+    const w = area.scrollWidth, h = area.scrollHeight;
+    const util = 1 - 2 * SLIDE_MARGEM, k = Math.min((SLIDE_W * util) / w, (SLIDE_H * util) / h);
+    const cv = await window.html2canvas(area, { scale: Math.min(5, k * 1.05), backgroundColor: fundo, windowWidth: Math.max(1440, melhor.L + 40), width: w, height: h });
+    const sl = document.createElement("canvas"); sl.width = SLIDE_W; sl.height = SLIDE_H;
+    const g = sl.getContext("2d"), dw = w * k, dh = h * k;
+    g.fillStyle = fundo; g.fillRect(0, 0, SLIDE_W, SLIDE_H);
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+    g.drawImage(cv, (SLIDE_W - dw) / 2, (SLIDE_H - dh) / 2, dw, dh);
+    return sl;
+  }
+  async function comAbas(fn) {                         // monta a página no modo do PDF, chama fn e volta como estava
+    const abaAntes = E.aba, main = document.querySelector("main"), btn = $("btnPrint");
+    if (!window.html2canvas) throw new Error("as bibliotecas de imagem ainda estão carregando; tente de novo");
+    btn.disabled = true; btn.textContent = "Gerando…";
+    document.body.classList.add("gerando-pdf");
+    try { return await fn(); } finally {
+      document.body.classList.remove("gerando-pdf"); main.style.width = "";
+      mostraAba(abaAntes); btn.disabled = false; btn.textContent = "🖼 Prints ▾";
+    }
+  }
+  const pngDe = (cv) => new Promise((ok) => cv.toBlob(ok, "image/png"));
+  function baixa(blob, nome) {
+    const url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+  async function prints(tipo) {
+    if (ABAS_PDF.includes(tipo)) {
+      // a promessa vai para a área de transferência na hora do clique: a cópia vale depois do tempo de gerar a imagem
+      const imagem = comAbas(async () => pngDe(await fotoDaAba(tipo)));
+      let copia = null;
+      try { if (navigator.clipboard && window.ClipboardItem) copia = navigator.clipboard.write([new ClipboardItem({ "image/png": imagem })]); } catch (e) { copia = null; }
+      const blob = await imagem;
+      baixa(blob, nomePrint(tipo) + ".png");
+      const copiou = copia ? await copia.then(() => true, () => false) : false;
+      toast(copiou ? `Print de <b>${ABAS[tipo]}</b> copiado: cole no slide com Ctrl+V (também foi baixado em PNG).` : `Print de <b>${ABAS[tipo]}</b> baixado em PNG.`);
+      return;
+    }
+    if (tipo === "pptx") await carregaPptx();
+    const fotos = await comAbas(async () => { const l = []; for (const aba of ABAS_PDF) l.push([aba, await fotoDaAba(aba)]); return l; });
+    if (tipo === "pngs") {
+      for (const [aba, cv] of fotos) { baixa(await pngDe(cv), nomePrint(aba) + ".png"); await new Promise((r) => setTimeout(r, 400)); }
+      toast(`${fotos.length} prints baixados em PNG.`);
+      return;
+    }
+    const ppt = new window.PptxGenJS();
+    ppt.layout = "LAYOUT_WIDE";                         // 13,33 × 7,5 pol. (16:9)
+    ppt.title = `Arrecadação — ${filtroTexto()} — ${C.rotuloMes(E.mes)}`;
+    for (const [, cv] of fotos) ppt.addSlide().addImage({ data: cv.toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5 });
+    await ppt.writeFile({ fileName: `Apresentacao_Arrecadacao_${filtroTexto("_")}_${E.mes}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9_-]+/g, "_") + ".pptx" });
+    toast("PowerPoint baixado: um slide por aba, do Resumo à Escada.");
+  }
+  const menuPrint = $("menuPrint");
+  const fechaMenuPrint = () => { menuPrint.hidden = true; $("btnPrint").setAttribute("aria-expanded", "false"); };
+  $("btnPrint").addEventListener("click", (e) => {
+    e.stopPropagation();
+    menuPrint.hidden = !menuPrint.hidden; $("btnPrint").setAttribute("aria-expanded", String(!menuPrint.hidden));
+  });
+  document.addEventListener("click", (e) => { if (!menuPrint.hidden && !e.target.closest("#menuPrintWrap")) fechaMenuPrint(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menuPrint.hidden) fechaMenuPrint(); });
+  menuPrint.querySelectorAll("button[data-print]").forEach((b) => b.addEventListener("click", () => {
+    fechaMenuPrint();
+    toast("Gerando o print…");
+    prints(b.dataset.print).catch((e) => toast("Não foi possível gerar o print: " + esc(e.message || e), true));
+  }));
 
   // ===== ao abrir: reconecta a pasta da última visita =====
   (async function inicia() {
