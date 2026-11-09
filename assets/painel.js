@@ -971,17 +971,22 @@
         return `<td class="${[x < 0 ? "neg" : "", v === meses[j] ? "diag" : ""].filter(Boolean).join(" ")}"${st}>${fmt(x)}</td>`;
       }).join("")}</tr>`;
     });
+    // escada limpa: o que ficou em branco (abaixo de R$ 50 mil) soma numa linha por mês de crédito, para a coluna fechar com o Total
+    if (limpa) {
+      const demais = idx.map((m) => { let s = 0; for (const l of esq.linhas.values()) { const x = l.get(m); if (x != null && !aparece(x)) s += x; } return s; });
+      if (demais.some((x) => x)) linhas.push(`<tr class="desc">${td(`Demais vencimentos (abaixo de R$ ${fmt(ESCADA_MINIMO / 1000)} mil)`, "rot")}${demais.map((x) => (x ? tdNum(x, fmt) : td(""))).join("")}</tr>`);
+    }
     if ([...esq.desconto.values()].some((v) => v)) linhas.push(`<tr class="desc">${td("Desconto comercial", "rot")}${idx.map((m) => (esq.desconto.get(m) ? tdNum(esq.desconto.get(m), fmt) : td(""))).join("")}</tr>`);
     const tot = idx.map((m) => { let s = esq.desconto.get(m) || 0; for (const l of esq.linhas.values()) s += l.get(m) || 0; return s; });
     linhas.push(`<tr class="total">${td("Total", "rot")}${tot.map((v) => tdNum(v, fmt)).join("")}</tr>`);
     tabela("tEscada", ["Vencimento (R$)", ...meses.map(C.rotuloMes)], linhas);
     $("escadaLimpa").checked = limpa;
     $("escadaNota").textContent = limpa
-      ? `Mostrando só os valores a partir de R$ ${fmt(ESCADA_MINIMO)}; os menores ficam em branco, mas o Total soma todos (inclusive o desconto).`
+      ? `Mostrando só os valores a partir de R$ ${fmt(ESCADA_MINIMO)}; os menores somam na linha “Demais vencimentos” de cada mês, e o Total soma tudo (inclusive o desconto).`
       : "Mostrando todos os valores.";
     // aviso do executivo (só no PDF), quando a escada está resumida
     $("escadaAvisoPdf").textContent = limpa
-      ? `Para facilitar a leitura, a escada exibe apenas os valores a partir de R$ ${fmt(ESCADA_MINIMO / 1000)} mil. Os totais consideram a arrecadação integral de cada mês.`
+      ? `Para facilitar a leitura, a escada exibe apenas os valores a partir de R$ ${fmt(ESCADA_MINIMO / 1000)} mil; os menores somam na linha “Demais vencimentos”. Os totais consideram a arrecadação integral de cada mês.`
       : "";
     $("escadaAvisoPdf").hidden = !limpa;
   }
