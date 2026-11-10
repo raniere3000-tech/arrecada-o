@@ -2973,13 +2973,18 @@
     const vals = m.valores.slice().sort(ordem), qts = m.quantos.map((x) => [x[0], x[1], "", x[2], x[3]]).sort(ordem);
     const n = Math.max(vals.length, qts.length), aoa = [["Subcategoria", "Utilização (Sub. Categ.)", "Arrecadacao Acumulada", "Data", null,
       "Subcategoria", "Qtd clientes pagantes acumulado", "Data", null, "Subcategoria", "QTD Contas pagas Arrecadação acumulada", "Data"]];
-    for (let i = 0; i < n; i++) {
-      const v = vals[i], q = qts[i];
-      aoa.push([v ? v[1] : null, v ? v[2] : null, v ? v[3] : null, v ? rotDia(v[0]) : null, null,
-        q ? q[1] : null, q ? q[3] : null, q ? rotDia(q[0]) : null, null, q ? q[1] : null, q ? q[4] : null, q ? rotDia(q[0]) : null]);
-    }
+    for (let i = 0; i <= n; i++) aoa.push(Array(12).fill(null));
+    vals.forEach((v, i) => { aoa[i + 1][0] = v[1]; aoa[i + 1][1] = v[2]; aoa[i + 1][2] = v[3]; aoa[i + 1][3] = rotDia(v[0]); });
+    qts.forEach((q, i) => { const l = aoa[i + 1]; l[5] = q[1]; l[6] = q[3]; l[7] = rotDia(q[0]); l[9] = q[1]; l[10] = q[4]; l[11] = rotDia(q[0]); });
+    // total de cada bloco logo abaixo da sua última linha (soma da coluna)
+    const soma = (l, j) => l.reduce((t, x) => t + x[j], 0), linhaTot = [vals.length + 1, qts.length + 1, qts.length + 1];
+    aoa[linhaTot[0]][0] = "Total"; aoa[linhaTot[0]][2] = soma(vals, 3);
+    aoa[linhaTot[1]][5] = "Total"; aoa[linhaTot[1]][6] = soma(qts, 3);
+    aoa[linhaTot[2]][9] = "Total"; aoa[linhaTot[2]][10] = soma(qts, 4);
     const ws = X.utils.aoa_to_sheet(aoa);
-    for (let i = 1; i <= n; i++) {
+    const negrito = { font: { bold: true } };
+    [[linhaTot[0], [0, 2]], [linhaTot[1], [5, 6]], [linhaTot[2], [9, 10]]].forEach(([r, cs]) => cs.forEach((c) => { const x = ws[X.utils.encode_cell({ r, c })]; if (x) x.s = negrito; }));
+    for (let i = 1; i <= n + 1; i++) {
       const c = ws[X.utils.encode_cell({ r: i, c: 2 })]; if (c) c.z = '"R$" #,##0.00';
       for (const j of [6, 10]) { const x = ws[X.utils.encode_cell({ r: i, c: j })]; if (x) x.z = "#,##0"; }
     }
