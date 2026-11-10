@@ -485,6 +485,22 @@ test("base de cada arquivo (para o diário só substituir o acumulado da mesma b
   perto(C.totalDoMes(d, 0, C.marcaCombos(d, {}), C.mascaraAte(23, true)).valor, 500 + 20 + 900 + 300);
 });
 
+test("tabela do BI por matrícula: valor nos dias marcados com o desconto, dias e se pagou no mês anterior", () => {
+  const perfis = new Map([["1|1", "Adimplente"]]);
+  const a = new C.Agregador({ perfis });
+  a.adiciona(linha(1, "01/09/2026", "80,00"));
+  a.adiciona(linha(1, "01/10/2026", "100,00")); a.adiciona(linha(1, "02/10/2026", "50,00"));
+  a.adiciona(linha(2, "02/10/2026", "200,00", { util: "202-PUBLICO MUNICIPAL" }));
+  a.adiciona(linha(2, "05/10/2026", "999,00", { util: "202-PUBLICO MUNICIPAL" }));            // dia útil 3: fora dos dias 1 e 2
+  const d = a.resultado(new Map([["2026-10", new Map([["1", 15]])]])), tudo = C.marcaCombos(d, {});
+  const r = C.porMatricula(d.analise, d.combos, [1], [0], tudo, C.mascaraAte(2), null);
+  assert.deepEqual(r.map((x) => [x.lig, x.grupo, x.perfil, x.valor, x.dias, x.pagouAnt]),
+    [[1, "RESIDENCIAL", "Adimplente", 135, 2, true], [2, "PUBLICO", R.SEM_PERFIL, 200, 1, false]]);
+  // a soma bate com a tabela agregada nos mesmos dias
+  perto(r.reduce((s, x) => s + x.valor, 0), C.totalDoMes(d, 1, tudo, C.mascaraAte(2)).valor);
+  assert.deepEqual(C.porMatricula(d.analise, d.combos, [1], [0], tudo, C.mascaraAte(2), new Set([2])).map((x) => x.lig), [2]);
+});
+
 test("negociação: pagaram em todos os meses marcados e não pagaram no mês de referência", () => {
   const a = new C.Agregador();
   a.adiciona(linha(1, "01/07/2026", "100,00")); a.adiciona(linha(1, "03/08/2026", "50,00"));                       // jul e ago, não set

@@ -322,6 +322,7 @@
       else if (m.tipo === "matricula") recebeMatricula(m);
       else if (m.tipo === "oportunidades") recebeOportunidades(m);
       else if (m.tipo === "negociacao") recebeNegociacao(m);
+      else if (m.tipo === "bimatriculas") recebeBIMatriculas(m);
       else if (m.tipo === "comparativo") recebeComparativo(m);
       else if (m.tipo === "extracao-progresso") { if (m.id === idBase) $("baseStatus").textContent = `${m.texto}… ${m.pct}%`; }
       else if (m.tipo === "extracao") recebeBase(m);
@@ -476,7 +477,8 @@
     function desenhaLista() {
       const vis = itens.filter(([, t]) => !busca || C.chave(t).includes(C.chave(busca)));
       lista.innerHTML = (itens.length > 8 ? `<input type="search" class="multi-busca" placeholder="Buscar…" value="${esc(busca)}">` : "")
-        + (semTodas ? "" : `<label class="multi-item multi-todas"><input type="checkbox" data-todas${sel.length ? "" : " checked"}> Todas</label>`)
+        + (semTodas ? `<label class="multi-item multi-todas"><input type="checkbox" data-todos${itens.length && sel.length === itens.length ? " checked" : ""}> Todos os ${nomePlural}</label>`
+          : `<label class="multi-item multi-todas"><input type="checkbox" data-todas${sel.length ? "" : " checked"}> Todas</label>`)
         + vis.map(([v, t]) => `<label class="multi-item"><input type="checkbox" value="${esc(v)}"${sel.includes(v) ? " checked" : ""}> ${esc(t)}</label>`).join("")
         + (vis.length ? "" : '<p class="multi-vazio">Nada encontrado.</p>');
     }
@@ -495,6 +497,7 @@
       const cx = e.target;
       if (cx.type !== "checkbox") return;
       if (cx.hasAttribute("data-todas")) sel = [];
+      else if (cx.hasAttribute("data-todos")) sel = cx.checked ? itens.map(([v]) => v) : itens.slice(0, 1).map(([v]) => v);   // desmarcar: fica o 1º (o mais recente)
       else sel = cx.checked ? [...sel, cx.value] : sel.filter((x) => x !== cx.value);
       if (semTodas && !sel.length) { cx.checked = true; sel = [cx.value]; return; }   // ao menos um mês
       sel = itens.map(([v]) => v).filter((v) => sel.includes(v));                   // na ordem da lista
@@ -2451,7 +2454,38 @@
     X.writeFile(wb, `Tabela_BI_arrecadacao_${ms.length > 1 ? `${ms[0]}_a_${ms[ms.length - 1]}` : ms[0]}_${filtroTexto("_").replace(/[^\wÀ-ú+-]+/g, "_")}.xlsx`);
     $("biStatus").textContent = `${fmt(t.length)} linhas baixadas`;
   }
-  $("biBaixar").addEventListener("click", baixaTabelaBI);
+  // Por matrícula: o worker monta (precisa das listas por ligação); CSV porque pode passar do limite de linhas do Excel
+  let idBIMat = 0;
+  const biPorMat = () => $("biPorMat").checked;
+  $("biPorMat").addEventListener("change", () => {
+    $("biMatOpcoes").hidden = !biPorMat();
+    $("biBaixar").textContent = biPorMat() ? "Gerar e baixar por matrícula (CSV)" : "Baixar planilha (Excel)";
+    $("biMatResultado").innerHTML = "";
+  });
+  $("biLigs").addEventListener("input", () => { const n = ligsDoTexto($("biLigs").value).length; $("biQtdLigs").textContent = n ? `${fmt(n)} matrícula${n === 1 ? "" : "s"}` : ""; });
+  function baixaBIMatriculas() {
+    const ms = mesesDoBI();
+    if (!ms.length) { toast("Marque pelo menos um mês.", true); return; }
+    const ligs = ligsDoTexto($("biLigs").value);
+    $("biBaixar").disabled = true; $("biStatus").textContent = "Montando por matrícula…"; $("biMatResultado").innerHTML = "";
+    worker.postMessage({ tipo: "bimatriculas", id: ++idBIMat, mis: ms.map(idxMes), misAnt: ms.map((m) => idxMes(C.mesAnterior(m))), meses: ms,
+      marcas: marcas(), sel: selCalc(), ligs: ligs.length ? ligs : null, nomesSup: NOME_SUP });
+  }
+  function recebeBIMatriculas(m) {
+    if (m.id !== idBIMat) return;
+    $("biBaixar").disabled = false;
+    if (m.erro) { $("biStatus").textContent = "Erro: " + m.erro; return; }
+    const ms = mesesDoBI(), nome = `Tabela_BI_por_matricula_${ms.length > 1 ? `${ms[0]}_a_${ms[ms.length - 1]}` : ms[0]}_${filtroTexto("_").replace(/[^\wÀ-ú+-]+/g, "_")}.csv`;
+    $("biStatus").textContent = `${fmt(m.linhas)} linhas · ${fmt(m.matriculas)} matrículas · ${rs(m.valor)}`
+      + (m.naoEncontradas ? ` · ${fmt(m.naoEncontradas.length)} matrícula(s) da lista sem pagamento nos meses e dias marcados` : "");
+    $("biMatResultado").innerHTML = `<div class="base-acoes"><button type="button" class="btn sec" id="biMatDeNovo">Baixar de novo (CSV)</button>`
+      + (m.naoEncontradas && m.naoEncontradas.length ? '<button type="button" class="btn sec" id="biMatNao">Baixar matrículas sem pagamento</button>' : "") + "</div>"
+      + (m.linhas > 1048000 ? '<p class="nota">Passa de 1 milhão de linhas, o limite de uma planilha do Excel: marque menos meses ou cole uma lista de matrículas.</p>' : "");
+    $("biMatDeNovo").onclick = () => baixa(m.blob, nome);
+    if ($("biMatNao")) $("biMatNao").onclick = () => baixa("\ufeffMatrícula\r\n" + m.naoEncontradas.join("\r\n"), "Matriculas_sem_pagamento_tabela_BI.csv");
+    baixa(m.blob, nome);
+  }
+  $("biBaixar").addEventListener("click", () => (biPorMat() ? baixaBIMatriculas() : baixaTabelaBI()));
 
   // ===== One page: acompanhamento da arrecadação numa folha vertical (mesmo modelo do painel de faturamento água e esgoto;
   // lê bem no celular; PDF de uma página). Segue os filtros do cabeçalho e os dias úteis marcados (com o fechamento do mês).

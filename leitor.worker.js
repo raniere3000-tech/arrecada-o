@@ -25,6 +25,7 @@ self.onmessage = async (ev) => {
   if (ev.data.tipo === "clientes") { responde("clientes", ev.data.id, () => respondeClientes(ev.data)); return; }
   if (ev.data.tipo === "matricula") { responde("matricula", ev.data.id, () => respondeMatricula(ev.data)); return; }
   if (ev.data.tipo === "comparativo") { responde("comparativo", ev.data.id, () => respondeComparativo(ev.data)); return; }
+  if (ev.data.tipo === "bimatriculas") { responde("bimatriculas", ev.data.id, () => respondeBIMatriculas(ev.data)); return; }
   if (ev.data.tipo === "negociacao") { responde("negociacao", ev.data.id, () => respondeNegociacao(ev.data)); return; }
   if (ev.data.tipo === "oportunidades") { responde("oportunidades", ev.data.id, () => respondeOportunidades(ev.data)); return; }
   if (ev.data.tipo === "mensal") { responde("mensal", ev.data.id, () => extraiMensal(ev.data)); return; }
@@ -725,6 +726,25 @@ async function respondeOportunidades({ miA, miB, marcas, comFat, comRec, recTipo
     x.nome = nomeDe(x.lig); x.lig = ligTxt(x.lig);
   }
   return { lista, cabFat: ex.cabFat, cabRec: ex.cabRec, ...ex.info() };
+}
+// Tabela do BI por matrícula (aba Dados): CSV em blocos (pode ter centenas de milhares de linhas)
+function respondeBIMatriculas({ mis, misAnt, meses, marcas, sel, ligs, nomesSup }) {
+  const quer = ligs ? new Set(ligs.map((l) => C.chaveLig(l))) : null;
+  const linhas = C.porMatricula(analise, combosArr, mis, misAnt, marcas, sel, quer);
+  const txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " "), mesTxt = meses.map((m) => `${m.slice(5, 7)}/${m.slice(0, 4)}`);
+  const blobs = [], partes = [], vistas = new Set();
+  let tam = 0, valor = 0;
+  for (const x of linhas) {
+    vistas.add(x.lig); valor += x.valor;
+    const linha = [ligTxt(x.lig), txt(nomeDe(x.lig)), x.cidade, x.grupo, mesTxt[x.j], x.perfil, nBR(x.valor), x.pagouAnt == null ? "" : x.pagouAnt ? "Sim" : "Não", x.dias].join(";");
+    partes.push(linha); tam += linha.length + 2;
+    if (tam > 4e6) { blobs.push(new Blob([partes.join("\r\n") + "\r\n"])); partes.length = 0; tam = 0; }
+  }
+  if (partes.length) blobs.push(new Blob([partes.join("\r\n") + "\r\n"]));
+  const cab = ["Matrícula", "Nome", "Cidade", "Subcategoria", "Mes/ano", "Classificação", "Arrecadacao_Acumulada", "Pagou_mês_anterior", "Dias_com_pagamento"].join(";");
+  const naoEncontradas = ligs ? ligs.filter((l) => !vistas.has(C.chaveLig(l))) : null;
+  return { linhas: linhas.length, matriculas: vistas.size, valor, naoEncontradas,
+    blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
 }
 // Negociação (área Análises): pagaram em todos os meses misPagou e não pagaram no mês de referência miRef. Devolve o resumo por
 // cidade e subcategoria, as 100 maiores matrículas (para a tela) e o CSV completo, montado aqui em blocos.

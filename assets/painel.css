@@ -259,6 +259,7 @@ body.bi .card h2 .opcao { color: #fff; }
 .base-grade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; margin: 10px 0; }
 .base h3 { font-size: 13.5px; margin: 0 0 6px; color: var(--marinho); }
 .base textarea { width: 100%; font: inherit; font-size: 13px; padding: 8px; border: 1px solid var(--linha); border-radius: 8px; resize: vertical; }
+#biLigs { width: 100%; font: inherit; font-size: 13px; padding: 8px; border: 1px solid var(--linha); border-radius: 8px; resize: vertical; }
 .base-meses { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px 10px; font-size: 13px; }
 .base-meses label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
 .base-acoes { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }

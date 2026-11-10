@@ -1102,6 +1102,50 @@
   // Tabela no formato do BI (Cidade × Subcategoria × Mês/ano × Classificação = perfil): arrecadação e clientes pagantes
   // distintos nos dias marcados de cada mês, e os clientes da mesma linha no mês anterior (mesmos dias). Ordem: mês, cidade,
   // subcategoria, perfil. Mês anterior fora da pasta: null.
+  // Tabela do BI por matrícula: para cada mês mis[j], uma linha por ligação × (cidade, subcategoria, perfil) com o valor nos dias
+  // marcados (o desconto da ligação sai da 1ª linha dela no mês, como nas abas), os dias com pagamento e se a ligação pagou no
+  // mês anterior misAnt[j] (nos mesmos dias e filtros). ligs: Set de ligações (null = todas). Ordem: mês, ligação.
+  function porMatricula(an, combos, mis, misAnt, marcas, sel, ligs) {
+    const S = "\u0001", rot = combos.map((c) => c.cidade + S + c.grupo + S + c.perfil), out = [];
+    const pagaram = (mi) => {
+      const s = new Set();
+      for (const { L, mapa } of (mi >= 0 && an.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
+        if (!(sel & (1 << L.d[i]))) continue;
+        const cl = L.k[i] % COMBOS_ARQ;
+        if (marcas[mapa[cl]]) s.add((L.k[i] - cl) / COMBOS_ARQ);
+      }
+      return s;
+    };
+    mis.forEach((mi, j) => {
+      const porLig = new Map(), ant = misAnt[j] >= 0 ? pagaram(misAnt[j]) : null;
+      for (const { L, mapa } of (mi >= 0 && an.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
+        if (!(sel & (1 << L.d[i]))) continue;
+        const cl = L.k[i] % COMBOS_ARQ, c = mapa[cl];
+        if (!marcas[c]) continue;
+        const l = (L.k[i] - cl) / COMBOS_ARQ;
+        if (ligs && !ligs.has(l)) continue;
+        let m = porLig.get(l);
+        if (!m) { m = new Map(); porLig.set(l, m); }
+        const r = rot[c];
+        let x = m.get(r);
+        if (!x) { x = { valor: 0, mask: 0, ordem: m.size }; m.set(r, x); }
+        x.valor += L.v[i]; x.mask |= 1 << L.d[i];
+      }
+      const dm = an.descontos[mi];
+      for (const l of [...porLig.keys()].sort((a, b) => a - b)) {
+        let prim = true;
+        for (const [r, x] of porLig.get(l)) {
+          const [cidade, grupo, perfil] = r.split(S);
+          let dias = 0;
+          for (let d = 0; d <= MAX_DIA; d++) if (x.mask & (1 << d)) dias++;
+          const desc = prim && dm ? dm.get(l) || 0 : 0;
+          prim = false;
+          out.push({ lig: l, j, cidade, grupo, perfil, valor: x.valor - desc, dias, pagouAnt: ant ? ant.has(l) : null });
+        }
+      }
+    });
+    return out;
+  }
   function tabelaBI(dados, marcas, sel) {
     const S = "\u0001", idx = dados.meses.map((_, i) => i);
     const g = porGrupo(dados, idx, marcas, sel, (c) => c.cidade + S + c.grupo + S + c.perfil), out = [];
@@ -1123,6 +1167,6 @@
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
     clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes, negociacao, faixaNum, montaReceber, analisaReceber, situacaoPadrao, colunasReceber,
-    MASCARA_MES, comparaGrupos, tabelaBI, mesesMesmosUteis, fracaoAteDias, fracaoDiasRestantes, pareto,
+    MASCARA_MES, comparaGrupos, tabelaBI, porMatricula, mesesMesmosUteis, fracaoAteDias, fracaoDiasRestantes, pareto,
   };
 });

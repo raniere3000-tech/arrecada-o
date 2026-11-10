@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v70-20261110">
+<link rel="stylesheet" href="assets/painel.css?v=v71-20261110">
 </head>
 <body>
 
@@ -391,7 +391,14 @@
           a arrecadação (Val. Autenticado com o desconto comercial) e os clientes pagantes distintos nos <b>dias úteis marcados</b> de cada mês,
           os clientes pagantes da mesma linha no <b>mês anterior</b>, nos mesmos dias, e as <b>contas pagas</b> (última coluna). <b>Os filtros do cabeçalho valem aqui</b>
           (Superintendência, Cidade, Subcategoria e <b>Mês</b>): entram todos os meses marcados no filtro Mês.</p>
+        <label class="base-opcao"><input type="checkbox" id="biPorMat"> <span><b>Por matrícula:</b> uma linha por Matrícula × Cidade × Subcategoria × Mês/ano × Classificação
+          (com o nome, a arrecadação nos dias marcados, se pagou no mês anterior e os dias com pagamento), em CSV</span></label>
+        <div id="biMatOpcoes" hidden>
+          <p class="nota">Só algumas matrículas? Cole a lista abaixo (uma por linha, ou separadas por vírgula ou espaço). Em branco = todas as matrículas dos filtros.</p>
+          <textarea id="biLigs" rows="4" class="base-ligs" placeholder="Ex.: 100000001&#10;100000002"></textarea> <span class="salvo" id="biQtdLigs"></span>
+        </div>
         <div class="base-acoes"><button type="button" class="btn" id="biBaixar">Baixar planilha (Excel)</button><span class="salvo" id="biStatus"></span></div>
+        <div id="biMatResultado"></div>
         <div class="wrap" id="biTabela"></div>
       </details>
 
@@ -590,9 +597,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v70-20261110"></script>
-<script src="assets/calculos.js?v=v70-20261110"></script>
-<script>const VERSAO_SITE = "v70-20261110"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v70-20261110"></script>
+<script src="assets/regras.js?v=v71-20261110"></script>
+<script src="assets/calculos.js?v=v71-20261110"></script>
+<script>const VERSAO_SITE = "v71-20261110"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v71-20261110"></script>
 </body>
 </html>
