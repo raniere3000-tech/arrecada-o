@@ -65,6 +65,9 @@
   // a própria base no navegador e as próprias abas e filtros. Ele recebe os arquivos da pasta Duplicidades da pasta
   // principal (subpastas Descontos e Cadastro): na 1ª vez que a área é aberta e a cada ↻ Atualizar.
   let dupPronto = false, dupEnviados = null;
+  function enviaMarcas() {
+    if (dupPronto) $("dupFrame").contentWindow.postMessage({ tipo: "dup-marcas", marcas: (E.ajustes && E.ajustes.duplicidades) || {} }, location.origin);
+  }
   function enviaDuplicidades() {
     const fr = $("dupFrame");
     if (!dupPronto || !E.dupArquivos.length || dupEnviados === E.dupArquivos) return;
@@ -73,7 +76,11 @@
   }
   window.addEventListener("message", (ev) => {
     if (ev.origin !== location.origin || !ev.data) return;
-    if (ev.data.tipo === "dup-pronto") { dupPronto = true; enviaDuplicidades(); }
+    if (ev.data.tipo === "dup-pronto") { dupPronto = true; enviaMarcas(); enviaDuplicidades(); }
+    if (ev.data.tipo === "dup-marca") {                  // verificação manual (Duplicidade / Válido): vai para o ajustes_arrecadacao.json
+      gravaAjustes((a) => { a.duplicidades = a.duplicidades || {}; if (ev.data.valor) a.duplicidades[ev.data.chave] = ev.data.valor; else delete a.duplicidades[ev.data.chave]; })
+        .then((r) => { if (r && !r.ok) toast("A marcação não foi gravada na pasta: " + esc(r.motivo || "sem permissão de escrita"), true); enviaMarcas(); });
+    }
     if (ev.data.tipo === "dup-altura") $("dupFrame").style.height = Math.max(400, ev.data.altura) + "px";
   });
   function desenhaDuplicidades() {
@@ -148,7 +155,7 @@
   });
 
   // ===== ajustes (orçado digitado e curva editada): ajustes_arrecadacao.json na pasta, para todos =====
-  function normalizaAjustes(d) { d = d || {}; d.orcado = d.orcado || {}; d.curva = d.curva || {}; return d; }
+  function normalizaAjustes(d) { d = d || {}; d.orcado = d.orcado || {}; d.curva = d.curva || {}; d.duplicidades = d.duplicidades || {}; return d; }
   function ajustesLocais() { try { return normalizaAjustes(JSON.parse(localStorage.getItem("arrecadacao_ajustes") || "{}")); } catch (e) { return normalizaAjustes({}); } }
   async function lerAjustes() {
     if (!E.pasta) return ajustesLocais();
@@ -295,6 +302,7 @@
   function analisa(itens, nomePasta) {
     const doOnePage = itens.filter((i) => naPastaOnePage(i.rel));   // prints do BI: não entram na leitura da arrecadação
     E.dupArquivos = itens.filter((i) => naPastaDup(i.rel));          // painel de Duplicidades: também fora da arrecadação
+    enviaMarcas();
     itens = itens.filter((i) => !naPastaOnePage(i.rel) && !naPastaDup(i.rel));
     if (document.body.classList.contains("modo-dup")) desenhaDuplicidades();
     lePrintsOnePage(doOnePage);
