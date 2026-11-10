@@ -4,9 +4,9 @@
   const C = window.CALC, R = window.REGRAS;
   const $ = (id) => document.getElementById(id);
   const ARQ_AJUSTES = "ajustes_arrecadacao.json";
-  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", onepage: "One page", orcado: "Orçado", analise: "Ranking de clientes", base: "Base", dados: "Dados",
+  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", onepage: "One page", analise: "Ranking de clientes", base: "Base", dados: "Dados",
     fxa: "Faturamento x Arrecadação", fxv: "Fat. x Arrec. — mesmo vencimento", conversao: "Conversão por referência", localidade: "Diagnóstico por localidade", clientes: "Clientes e oportunidades", negociacao: "Negociação" };
-  const AREA_DA_ABA = { fxa: "analises", fxv: "analises", conversao: "analises", localidade: "analises", analise: "analises", clientes: "analises", negociacao: "analises", dados: "dados" };   // as outras: Executivo
+  const AREA_DA_ABA = { fxa: "analises", fxv: "analises", conversao: "analises", analise: "analises", clientes: "analises", negociacao: "analises", dados: "dados" };   // as outras: Executivo
   const ultimaDaArea = { executivo: "resumo", analises: "fxa", dados: "dados" };
   const ABAS_PDF = ["resumo", "subcategoria", "perfil", "cidades", "escada"];     // Ranking de clientes e Dados não entram no PDF
   const NOME_SUP = { INTERIOR: "Interior", LESTE: "Leste", [R.SEM_SUP]: "Sem SUP" };
@@ -571,7 +571,7 @@
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloDias()} de cada mês`; });
     $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && !["localidade", "analise", "clientes"].includes(E.aba));   // Diagnóstico, Ranking e Clientes usam os dias marcados
-    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, onepage: desenhaOnePage, orcado: desenhaCurva, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
+    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, onepage: desenhaOnePage, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
       conversao: desenhaConversao, clientes: desenhaClientes, negociacao: desenhaNegociacao, localidade: desenhaLocalidade })[E.aba]();
   }
 
@@ -688,6 +688,7 @@
     tresMeses("tCli", (sr, k) => sr.clientes[k], (t) => t.clientes, 0);
     tresMeses("tCon", (sr, k) => sr.contas[k], (t) => t.contas, 0);
     tresMeses("tTic", (sr, k) => (sr.contas[k] ? sr.valor[k] / sr.contas[k] : null), (t) => (t.contas ? t.valor / t.contas : null), 2);
+    desenhaCurva();
     desenhaResumoAnalise(s, cal);
   }
 
@@ -2741,8 +2742,6 @@
     // sem orçado: some também o filtro "Orçado" do topo e o quadro da curva do orçado no Resumo
     $("selOrc").closest(".filtro").hidden = !E.verOrcado;
     $("curvaCard").hidden = !E.verOrcado;
-    $("abaOrcado").hidden = !E.verOrcado;                // a aba Orçado some junto
-    if (!E.verOrcado && E.aba === "orcado") mostraAba("resumo");
   };
   marcaBtnOrcado();
   $("btnOrcado").addEventListener("click", () => {

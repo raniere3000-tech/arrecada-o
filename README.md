@@ -7,7 +7,8 @@ para a internet: tudo é processado no navegador.
 ## Navegação
 
 - **Executivo** (acompanhamento e resultado): Resumo, Subcategoria, Perfil de pagamento, Cidades, Escada, One page (folha de
-  acompanhamento diário no modelo do One page em PowerPoint, para Interior ou Leste pelo filtro, com PDF de uma página) e Base (extração das linhas
+  acompanhamento diário no modelo do One page em PowerPoint, para Interior ou Leste pelo filtro, com PDF de uma página), Diagnóstico por localidade (comparação
+  por cidade/subcategoria/superintendência nos mesmos dias úteis, quedas, altas, Pareto e três projeções de fechamento, cada uma explicada no seu cartão: meses com os mesmos dias úteis, curva do orçado e dias úteis restantes) (fora do PDF) e Base (extração das linhas
   completas por matrículas ou a base completa dos meses marcados, a base de oportunidades: pagaram num mês e não pagaram em outro;
   e o comparativo por mês: uma linha por matrícula e uma coluna de valor por mês; as duas podem trazer endereço,
   grupo e rota do faturamento mais recente e, no fim, o saldo vencido e a SIT_LIG da base de contas a receber).
@@ -16,12 +17,11 @@ para a internet: tudo é processado no navegador.
 - **Contas a receber**: até duas bases na pasta, a total e a só de notas fiscais (com “NFC” no nome); o seletor “Apenas NFC” /
   “Total (com parcelas e NFA)” escolhe qual usar em Clientes e oportunidades e nas bases da aba Base.
 - **Análises** (cruzamentos e oportunidades): Faturamento x Arrecadação; Fat. x Arrec. — mesmo vencimento; Conversão por
-  referência (matriz por coorte: quanto de cada referência foi recebido em M, M+1, ...); Diagnóstico por localidade (comparação
-  por cidade/subcategoria/superintendência nos mesmos dias úteis, quedas, altas, Pareto e três projeções de fechamento, cada uma explicada no seu cartão: meses com os mesmos dias úteis, curva do orçado e dias úteis restantes); Ranking de clientes (top 100 maiores, aumentos e quedas por cliente) e Clientes
+  referência (matriz por coorte: quanto de cada referência foi recebido em M, M+1, ...); Ranking de clientes (top 100 maiores, aumentos e quedas por cliente) e Clientes
   e oportunidades (contas a receber: saldo vencido e a vencer por faixa, situação, contato e cidade, maiores devedores e quem pagou;
   faturado sem pagamento a investigar, deixaram e voltaram a pagar, histórico de uma matrícula; com a base de
   contas a receber na pasta, o “a investigar” é conferido por matrícula) e Negociação (escolhe o mês de referência e os meses em que o
-  cliente pagou: lista quem pagou em todos os meses marcados e não pagou na referência, por cidade, subcategoria e matrícula, com CSV). O PDF é só do Executivo.
+  cliente pagou: lista quem pagou em todos os meses marcados e não pagou na referência, por cidade, subcategoria e matrícula, com CSV). O PDF executivo tem as abas do Resumo à Escada.
 - **Dados**: área à parte com as regras e a conferência dos números, e a **tabela para comparar com o BI** (Cidade × Subcategoria × Mês/ano × Classificação nos meses marcados no filtro Mês, com a arrecadação e os clientes pagantes nos dias marcados e no mês anterior), em quadro recolhível e com download em Excel.
 - **Pasta One Page** (na pasta principal): prints do BI para o One page — imagens (PNG/JPG) ou um Excel com as imagens coladas.
   Cada print vai para o seu lugar pelo nome da aba do Excel (ou do arquivo): “Economias” (cartão dos volumes acumulados) e
