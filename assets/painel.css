@@ -570,3 +570,9 @@ body.bi .btn-excel { color: #1f6f43; }
 .proj-usada { font-style: normal; font-size: 10.5px; font-weight: 700; color: #fff; background: #176b9c; border-radius: 10px; padding: 1px 7px; margin-left: 6px; text-transform: none; letter-spacing: 0; }
 .proj-conta { display: block; text-transform: none; letter-spacing: 0; margin-top: 4px; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: #1A2740; background: #EEF4F8; border-radius: 6px; padding: 3px 6px; }
 .op-folha .op-explica { display:block; margin-top:4px; font-size:10.5px; color:#64748b; line-height:1.35; text-transform:none; }
+
+/* painel de Duplicidades (botões Arrecadação / Duplicidades no lugar de Painel / Power BI) */
+body.modo-dup #filtros, body.modo-dup #abas, body.modo-dup #area, body.modo-dup #vazio, body.modo-dup #leitura,
+body.modo-dup #btnOrcado, body.modo-dup #btnPdf, body.modo-dup #btnMensal, body.modo-dup #menuPrintWrap { display: none !important; }
+#dupArea .dup-sub { margin: 16px 0 6px; font-size: 14px; color: var(--marinho); }
+#dupArea .dup-sub small { font-weight: 400; color: #64748b; margin-left: 6px; }

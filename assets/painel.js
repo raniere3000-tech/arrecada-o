@@ -45,14 +45,37 @@
     toast.timer = setTimeout(() => { t.hidden = true; }, erro ? 9000 : 4500);
   }
 
-  // ===== visual (painel de faturamento × Power BI) =====
-  function aplicaVisual(v) {
-    document.body.classList.toggle("bi", v === "bi");
-    document.querySelectorAll(".chave-visual button").forEach((b) => b.classList.toggle("on", b.dataset.visual === v));
-    try { localStorage.setItem("arrecadacao_visual", v); } catch (e) { /* navegador sem armazenamento */ }
+  // ===== qual painel: Arrecadação (este) ou Duplicidades (em migração). O visual "Power BI" saiu: fica sempre o do painel =====
+  try { localStorage.removeItem("arrecadacao_visual"); } catch (e) { /* sem armazenamento */ }
+  function aplicaModo(m) {
+    const dup = m === "duplicidades";
+    document.body.classList.toggle("modo-dup", dup);
+    document.querySelectorAll(".chave-visual button").forEach((b) => b.classList.toggle("on", b.dataset.modo === m));
+    $("dupArea").hidden = !dup;
+    document.querySelector(".top h1").textContent = dup ? "Duplicidades" : "Arrecadação Diária";
+    if (dup) desenhaDuplicidades();
+    try { localStorage.setItem("arrecadacao_modo", m); } catch (e) { /* sem armazenamento */ }
   }
-  document.querySelectorAll(".chave-visual button").forEach((b) => b.addEventListener("click", () => aplicaVisual(b.dataset.visual)));
-  try { aplicaVisual(localStorage.getItem("arrecadacao_visual") || "painel"); } catch (e) { aplicaVisual("painel"); }
+  document.querySelectorAll(".chave-visual button").forEach((b) => b.addEventListener("click", () => aplicaModo(b.dataset.modo)));
+  // arquivos da pasta Duplicidades (guardados na leitura da pasta; não vão para a arrecadação)
+  E.dupArquivos = [];
+  const naPastaDup = (rel) => rel.split("/").slice(0, -1).some((p) => semAcentoDup(p) === "duplicidades");
+  const semAcentoDup = (t) => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  function desenhaDuplicidades() {
+    const el = $("dupArquivos");
+    if (!E.pasta && !E.res && !E.dupArquivos.length) { el.innerHTML = '<p class="nota">Conecte a pasta principal (📁 Conectar pasta) para ver os arquivos de Duplicidades.</p>'; return; }
+    if (!E.dupArquivos.length) { el.innerHTML = '<p class="nota">Nenhum arquivo na pasta <b>Duplicidades</b> da pasta conectada.</p>'; return; }
+    const grupos = new Map();
+    for (const it of E.dupArquivos) {
+      const partes = it.rel.split("/"), i = partes.findIndex((p) => semAcentoDup(p) === "duplicidades"), sub = partes.slice(i + 1, -1).join(" / ") || "(na própria pasta)";
+      if (!grupos.has(sub)) grupos.set(sub, []);
+      grupos.get(sub).push(it);
+    }
+    el.innerHTML = [...grupos].sort(([a], [b]) => a.localeCompare(b, "pt-BR")).map(([sub, l]) => `<h3 class="dup-sub">${esc(sub)} <small>${fmt(l.length)} arquivo(s)</small></h3>`
+      + `<div class="wrap"><table class="compacta"><thead><tr><th>Arquivo</th><th>Tamanho</th><th>Modificado em</th></tr></thead><tbody>`
+      + l.sort((a, b) => a.rel.localeCompare(b.rel, "pt-BR")).map((it) => `<tr>${td(esc(it.rel.split("/").pop()), "rot")}${td(it.file.size >= 1048576 ? fmt(it.file.size / 1048576, 1) + " MB" : fmt(it.file.size / 1024, 0) + " KB")}`
+        + `${td(new Date(it.file.lastModified).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }))}</tr>`).join("") + "</tbody></table></div>").join("");
+  }
 
   // ===== pasta =====
   const idb = {
@@ -261,7 +284,9 @@
   }
   function analisa(itens, nomePasta) {
     const doOnePage = itens.filter((i) => naPastaOnePage(i.rel));   // prints do BI: não entram na leitura da arrecadação
-    itens = itens.filter((i) => !naPastaOnePage(i.rel));
+    E.dupArquivos = itens.filter((i) => naPastaDup(i.rel));          // painel de Duplicidades: também fora da arrecadação
+    itens = itens.filter((i) => !naPastaOnePage(i.rel) && !naPastaDup(i.rel));
+    if (document.body.classList.contains("modo-dup")) desenhaDuplicidades();
     lePrintsOnePage(doOnePage);
     E.rodando = true;
     $("btnPasta").disabled = true;
@@ -3002,6 +3027,8 @@
     X.writeFile(wb, `Mensal_Arrecadacao_${filtroTexto("_")}_${m.mes}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9_-]+/g, "_") + ".xlsx");
     toast(`Planilha mensal de ${C.rotuloMes(m.mes)} baixada (${fmt(n)} linhas).`);
   }
+
+  try { aplicaModo(localStorage.getItem("arrecadacao_modo") || "arrecadacao"); } catch (e) { aplicaModo("arrecadacao"); }
 
   // ===== ao abrir: reconecta a pasta da última visita =====
   (async function inicia() {

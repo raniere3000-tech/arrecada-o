@@ -33,7 +33,8 @@ para a internet: tudo é processado no navegador.
 2. No Chrome e no Edge a pasta fica lembrada: nas próximas visitas basta clicar em qualquer lugar da página.
    **↻ Atualizar** relê a pasta depois que o arquivo do dia for trocado.
 3. Use os filtros do cabeçalho (Superintendência, Cidade, Subcategoria, Mês — de vários meses: as telas de um mês usam o mais recente marcado) e os botões de **dias úteis**.
-4. **Painel / Power BI** troca o visual. **📄 PDF** gera o executivo com as 5 abas no visual escolhido (sem a aba Dados).
+4. **Arrecadação / Duplicidades** troca de painel (o de Duplicidades lê a pasta **Duplicidades** da pasta principal, com as subpastas
+   Cadastro e Descontos, que não entram na arrecadação; está em migração). **📄 PDF** gera o executivo com as 5 abas, do Resumo à Escada.
 5. A aba **Análise** traz os top clientes (até 100): maiores arrecadações, aumentos e quedas em relação ao mês anterior,
    com download em CSV. A aba **Base** extrai as linhas completas dos CSVs para uma lista de matrículas e meses.
    A aba **Dados** explica todos os cálculos. Essas abas não entram no PDF.
