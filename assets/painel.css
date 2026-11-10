@@ -562,3 +562,11 @@ table.op-tab tr.op-desc td { color:#64748b; font-style:italic; }
 .btn-excel:hover { background: #dff1e6; }
 .card > .btn-excel { float: right; margin: 0 0 6px 10px; }
 body.bi .btn-excel { color: #1f6f43; }
+
+/* Diagnóstico: cartões das três projeções, com a conta explicada */
+.kpi.kpi-proj small { line-height: 1.45; color: #475569; }
+.kpi.kpi-proj small strong { color: #1A2740; font-weight: 700; }
+.kpi-proj-sel { border: 2px solid #176b9c; }
+.proj-usada { font-style: normal; font-size: 10.5px; font-weight: 700; color: #fff; background: #176b9c; border-radius: 10px; padding: 1px 7px; margin-left: 6px; text-transform: none; letter-spacing: 0; }
+.proj-conta { display: block; text-transform: none; letter-spacing: 0; margin-top: 4px; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: #1A2740; background: #EEF4F8; border-radius: 6px; padding: 3px 6px; }
+.op-folha .op-explica { display:block; margin-top:4px; font-size:10.5px; color:#64748b; line-height:1.35; text-transform:none; }

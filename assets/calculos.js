@@ -1046,6 +1046,34 @@
     }
     return res;
   }
+  // Projeção pelos dias úteis restantes: o que falta entrar = dias úteis que faltam × média por dia útil até agora × k.
+  // k = quanto um dia útil do resto do mês costuma render em relação a um dia útil do começo, nos últimos 12 meses
+  // (cada mês: média por dia útil depois dos dias marcados ÷ média por dia útil nos dias marcados); a média dos meses dá
+  // peso `peso` aos meses com o mesmo nº de dias úteis do mês atual e peso 1 aos outros.
+  // Devolve a fração do mês já arrecadada (projeção = arrecadado ÷ fração), por localidade, e os números da explicação.
+  function fracaoDiasRestantes(dados, mes, marcas, sel, grupoDe, peso = 3) {
+    const U = calendario(mes).uteis, uteisSel = (u) => diasDaMascara(sel).filter((k) => k > 0 && k <= u).length;
+    const n = uteisSel(U), falta = U - n;
+    const hist = dados.meses.filter((m) => m < mes && m >= mesAnterior(mes, 12)).map((m) => ({ mes: m, mi: dados.meses.indexOf(m), uteis: calendario(m).uteis }))
+      .filter((h) => uteisSel(h.uteis) > 0 && h.uteis > uteisSel(h.uteis));
+    hist.forEach((h) => { h.peso = h.uteis === U ? peso : 1; });
+    const idx = hist.map((h) => h.mi), ate = porGrupo(dados, idx, marcas, sel, grupoDe), tudo = porGrupo(dados, idx, marcas, MASCARA_MES, grupoDe);
+    const fr = new Map(), kDe = new Map();
+    for (const [rot, lm] of tudo) {
+      const la = ate.get(rot);
+      let s = 0, w = 0;
+      for (const h of hist) {
+        const t = lm.get(h.mi), a = la && la.get(h.mi), na = uteisSel(h.uteis), nr = h.uteis - na;
+        if (!t || !a || a.valor <= 0 || t.valor <= a.valor) continue;
+        s += h.peso * (((t.valor - a.valor) / nr) / (a.valor / na)); w += h.peso;
+      }
+      if (!w) continue;
+      const k = s / w;
+      kDe.set(rot, k);
+      fr.set(rot, n > 0 ? 1 / (1 + (falta / n) * k) : null);
+    }
+    return { fr, k: kDe, n, falta, uteis: U, meses: hist.map(({ mes: m, uteis, peso: p }) => ({ mes: m, uteis, peso: p })) };
+  }
   // Pareto: itens {rot, v} (v > 0), do maior para o menor, com a participação acumulada; n80 = quantos somam 80%
   function pareto(itens) {
     const l = itens.filter((x) => x.v > 0).sort((a, b) => b.v - a.v), tot = l.reduce((a, x) => a + x.v, 0);
@@ -1079,6 +1107,6 @@
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
     clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes, negociacao, faixaNum, montaReceber, analisaReceber, situacaoPadrao, colunasReceber,
-    MASCARA_MES, comparaGrupos, tabelaBI, mesesMesmosUteis, fracaoAteDias, pareto,
+    MASCARA_MES, comparaGrupos, tabelaBI, mesesMesmosUteis, fracaoAteDias, fracaoDiasRestantes, pareto,
   };
 });

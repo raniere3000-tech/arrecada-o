@@ -17,8 +17,7 @@ para a internet: tudo é processado no navegador.
   “Total (com parcelas e NFA)” escolhe qual usar em Clientes e oportunidades e nas bases da aba Base.
 - **Análises** (cruzamentos e oportunidades): Faturamento x Arrecadação; Fat. x Arrec. — mesmo vencimento; Conversão por
   referência (matriz por coorte: quanto de cada referência foi recebido em M, M+1, ...); Diagnóstico por localidade (comparação
-  por cidade/subcategoria/superintendência nos mesmos dias úteis, quedas, altas, Pareto e projeção de fechamento pelos meses com
-  os mesmos dias úteis ou pela curva do orçado); Ranking de clientes (top 100 maiores, aumentos e quedas por cliente) e Clientes
+  por cidade/subcategoria/superintendência nos mesmos dias úteis, quedas, altas, Pareto e três projeções de fechamento, cada uma explicada no seu cartão: meses com os mesmos dias úteis, curva do orçado e dias úteis restantes); Ranking de clientes (top 100 maiores, aumentos e quedas por cliente) e Clientes
   e oportunidades (contas a receber: saldo vencido e a vencer por faixa, situação, contato e cidade, maiores devedores e quem pagou;
   faturado sem pagamento a investigar, deixaram e voltaram a pagar, histórico de uma matrícula; com a base de
   contas a receber na pasta, o “a investigar” é conferido por matrícula) e Negociação (escolhe o mês de referência e os meses em que o

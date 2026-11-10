@@ -1953,9 +1953,11 @@
     const mm = C.mesesMesmosUteis(d, E.mes);
     const frU = C.fracaoAteDias(d, mm.meses, mk, sel, grupoDe), frUT = C.fracaoAteDias(d, mm.meses, mk, sel, () => "T").get("T");
     const pesos = curvaDoMes(E.mes, E.sup).pesos, frC = C.diasDaMascara(sel).reduce((a, k) => a + (pesos[k] || 0), 0);
-    const fracao = (rot) => (metodo === "curva" ? frC : frU.get(rot) || frUT);
+    const dr = C.fracaoDiasRestantes(d, E.mes, mk, sel, grupoDe), drT = C.fracaoDiasRestantes(d, E.mes, mk, sel, () => "T"), frRT = drT.fr.get("T");
+    const fracao = (rot) => (metodo === "curva" ? frC : metodo === "restantes" ? dr.fr.get(rot) || frRT : frU.get(rot) || frUT);
     const proj = (v, f) => (f > 0 ? v / f : null);
-    const projU = proj(total.atual.valor, frUT), projC = proj(total.atual.valor, frC), projT = metodo === "curva" ? projC : projU;
+    const projU = proj(total.atual.valor, frUT), projC = proj(total.atual.valor, frC), projR = proj(total.atual.valor, frRT);
+    const projT = { curva: projC, restantes: projR }[metodo] ?? projU;
     const orc = filtroParcial() ? null : orcadoMensal(E.mes, E.sup);
     const N = ultimoDiaComDados(E.mes), cal = C.calendario(E.mes);
     const fechado = (d.ultimoCredito[E.mes] || "") >= cal.dias[cal.dias.length - 1].data, mesInteiro = fechado ? C.totalDoMes(d, mi, mk, C.MASCARA_MES).valor : null;
@@ -1989,7 +1991,7 @@
       ["contas", "Contas"], ["ticket", "Ticket (R$)"], ["proj", "Projeção do mês (R$)"],
       ...(comOrc ? [["orc", "Orçado (R$)"], ["po", "Projeção ÷ orçado"]] : []), ...(comFat ? [["fat", `Faturado ${C.rotuloMes(E.mes)} (R$)`], ["mat", "Matrículas faturadas"]] : [])];
     desenhaTabelaDg(total, projT, orc);
-    $("dgNotaTab").textContent = `Variação = arrecadado nos dias marcados − ${rotBase} nos mesmos dias. Projeção pelo método ${metodo === "curva" ? "da curva do orçado" : "dos meses com os mesmos dias úteis"}.`
+    $("dgNotaTab").textContent = `Variação = arrecadado nos dias marcados − ${rotBase} nos mesmos dias. Projeção do mês (cada localidade com os seus próprios números) pelo método ${NOMES_PROJ[metodo]}, explicado no cartão destacado acima.`
       + ((nivel === "cidade" || nivel === "sup") && !fatRef.length ? ` Faturamento da referência ${C.rotuloMes(E.mes)} não está na pasta.` : "");
     // cards
     const b = total.base, dv = b ? total.atual.valor - b.valor : null;
@@ -1998,11 +2000,7 @@
     const sinal = (x) => (x == null ? "—" : (x >= 0 ? "+" : "") + pct(x));
     $("dgKpis").innerHTML = [
       card("Arrecadado nos dias marcados", milhoes(total.atual.valor), b ? `${rotBase}: ${rs(b.valor)} · ${sinal(b.valor ? total.atual.valor / b.valor - 1 : null)}` : "sem período de comparação"),
-      card(`Projeção do mês — ${metodo === "curva" ? "curva do orçado" : "mesmos dias úteis"}`, projT == null ? "—" : milhoes(projT),
-        (metodo === "curva" ? `a curva prevê ${pct(frC)} do mês nos dias marcados` : `${frUT ? pct(frUT) : "—"} do mês costuma entrar até os dias marcados · ${criterio}: ${mm.meses.map(C.rotuloMes).join(", ") || "—"}`)
-        + (fechado ? ` · mês fechado: realizado no mês inteiro ${rs(mesInteiro)}` : "")),
-      card(`Pelo outro método — ${metodo === "curva" ? "mesmos dias úteis" : "curva do orçado"}`, (metodo === "curva" ? projU : projC) == null ? "—" : milhoes(metodo === "curva" ? projU : projC),
-        metodo === "curva" ? `${frUT ? pct(frUT) : "—"} do mês até os dias marcados (${mm.meses.map(C.rotuloMes).join(", ") || "—"})` : `a curva prevê ${pct(frC)} do mês nos dias marcados`),
+      ...cartoesProjecao({ A: total.atual.valor, metodo, frUT, mm, criterio, frC, drT, projU, projC, projR, N, cal, fechado, mesInteiro }),
       E.verOrcado && card("Projeção ÷ orçado", orc && orc.valor != null && projT != null ? pct(projT / orc.valor) : "—",
         orc ? (orc.valor != null ? `orçado ${rs(orc.valor)} · falta ${rs(Math.max(0, orc.valor - total.atual.valor))} para o orçado` : "sem orçado no mês para o orçado escolhido") : "o orçado é por superintendência (Cidade e Subcategoria = Todas)"),
       card("Clientes pagantes", fmt(total.atual.clientes), b ? `${rotBase}: ${fmt(b.clientes)} · ${sinal(b.clientes ? total.atual.clientes / b.clientes - 1 : null)}` : "—"),
@@ -2024,6 +2022,35 @@
     $("dgNotaP").textContent = pa.itens.length ? `${fmt(pa.n80)} de ${fmt(pa.itens.length)} localidades em queda somam 80% da queda total (${rs(pa.total)}).${resto.length ? ` As ${fmt(resto.length)} menores ficam em “demais”.` : ""}` : "";
     const itensP = resto.length ? [...top, { rot: "demais", v: resto.reduce((a, x) => a + x.v, 0), acum: 1 }] : top;
     grafico("dgPareto", itensP.length && ((W) => svgPareto(itensP, W, pa.total)), '<p class="nota">Nenhuma localidade em queda no período.</p>');
+  }
+  // As três projeções do mês, cada uma num cartão com a conta explicada em palavras simples; a escolhida em "Projeção"
+  // (a que vai para a tabela) fica destacada
+  const NOMES_PROJ = { uteis: "dos meses com os mesmos dias úteis", curva: "da curva do orçado", restantes: "dos dias úteis restantes" };
+  function cartoesProjecao(o) {
+    const { A, metodo, frUT, mm, criterio, frC, drT, projU, projC, projR, N, cal, fechado, mesInteiro } = o;
+    const listaMeses = (l) => (l.length ? l.map(C.rotuloMes).join(", ") : "—");
+    const k = drT.k.get("T"), media = drT.n ? A / drT.n : null;
+    const iguais = drT.meses.filter((m) => m.peso > 1).map((m) => m.mes), outros = drT.meses.filter((m) => m.peso === 1).map((m) => m.mes);
+    const conta = (txt) => `<code class="proj-conta">${txt}</code>`;
+    const itens = [
+      ["uteis", "Projeção pelos meses com os mesmos dias úteis", projU,
+        frUT ? `Olha os meses parecidos com este (${criterio}: ${listaMeses(mm.meses)}). Neles, até os dias úteis marcados já tinha entrado, em média, `
+          + `<strong>${pct(frUT)}</strong> do mês. Se este mês seguir o mesmo ritmo, fecha em:` + conta(`${rs(A)} ÷ ${pct(frUT)}`)
+          : "Sem meses parecidos na pasta para comparar."],
+      ["curva", "Projeção pela curva do orçado", projC,
+        frC ? `A curva do orçado diário diz quanto do mês costuma entrar em cada dia útil. Pela curva, os dias úteis marcados valem <strong>${pct(frC)}</strong> do mês. `
+          + "Se a arrecadação seguir a curva, fecha em:" + conta(`${rs(A)} ÷ ${pct(frC)}`) : "Sem curva do orçado para este mês."],
+      ["restantes", "Projeção pelos dias úteis restantes", projR,
+        k != null && drT.n ? (drT.falta > 0
+          ? `Até agora: <strong>${fmt(drT.n)}</strong> dias úteis, média de <strong>${rs(media)}</strong> por dia útil. Faltam <strong>${fmt(drT.falta)}</strong> dias úteis. `
+            + `Nos últimos 12 meses, cada dia útil do resto do mês rendeu <strong>${fmt(k, 2)}×</strong> um dia útil do começo `
+            + `(peso 3 para os meses com ${cal.uteis} dias úteis, como este${iguais.length ? `: ${listaMeses(iguais)}` : ": nenhum na pasta"}; peso 1 para ${outros.length ? listaMeses(outros) : "os outros"}). Fecha em:`
+            + conta(`${rs(A)} + ${fmt(drT.falta)} dias × ${rs(media)} × ${fmt(k, 2)}`)
+          : "Todos os dias úteis do mês já estão marcados: a projeção é o próprio arrecadado.")
+          : "Sem meses anteriores suficientes na pasta para medir o ritmo dos dias restantes."],
+    ];
+    return itens.map(([m, tit, v, txt]) => `<div class="kpi kpi-proj${m === metodo ? " kpi-proj-sel" : ""}"><span>${tit}${m === metodo ? ' <i class="proj-usada">usada na tabela</i>' : ""}</span>`
+      + `<b>${v == null ? "—" : milhoes(v)}</b><small>${txt}${m === metodo && fechado ? ` <br>Mês fechado: realizado no mês inteiro ${rs(mesInteiro)}.` : ""}</small></div>`);
   }
   function desenhaTabelaDg(total, projT, orc) {
     const [col, dir] = dgOrdem.length && dgCab.some(([k]) => k === dgOrdem[0]) ? dgOrdem : ["dv", 1];
@@ -2487,7 +2514,8 @@
       if (D.totA) quadros.push(`<div class="op-card"><span class="op-rot">${opMes(D.ant)} – mesmos dias úteis</span><b>${opRsMi(D.totA.valor)}</b>`
         + `${opDelta(opVar(A, D.totA.valor), "realizado vs " + opMes(D.ant))}</div>`);
       if (D.proj != null) quadros.push(`<div class="op-card"><span class="op-rot">Tendência – ${opMes(E.mes)}</span><b>${opRsMi(D.proj)}</b>`
-        + (D.miAnt >= 0 ? opDelta(opVar(D.proj, C.totalDoMes(D.d, D.miAnt, D.mk, C.MASCARA_MES).valor), `vs ${opMes(D.ant)} fechado`) : "") + "</div>");
+        + (D.miAnt >= 0 ? opDelta(opVar(D.proj, C.totalDoMes(D.d, D.miAnt, D.mk, C.MASCARA_MES).valor), `vs ${opMes(D.ant)} fechado`) : "")
+        + `<small class="op-explica">Projeção pelos meses com os mesmos dias úteis (${D.mm.meses.map(opMes).join(", ") || "—"}): neles, até este dia útil já tinha entrado ${opPct(D.frT)} do mês; ${opRsMi(A)} ÷ ${opPct(D.frT)}.</small></div>`);
     }
     return quadros.length ? `<div class="op-cards">${quadros.join("")}</div>` : "";
   }

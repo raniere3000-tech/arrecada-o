@@ -582,3 +582,24 @@ test("superintendência pelo cadastro: Interior só pela cidade (como no BI); na
   const semCad = monta(null);
   perto(tot(semCad, "INTERIOR"), 100); perto(tot(semCad, "LESTE"), 11);    // sem cadastro: pela cidade
 });
+
+test("projeção pelos dias úteis restantes: ritmo dos dias que faltam, com peso maior nos meses com os mesmos dias úteis", () => {
+  // out/2026 tem 21 dias úteis; set/2026 (22) e ago/2026 (21): em cada mês, R$ 10 por dia útil até o 5º e R$ 20 depois
+  const l = new C.LeituraArquivo(null);
+  for (const mes of ["2026-08", "2026-09"]) {
+    const cal = C.calendario(mes);
+    for (let k = 1; k <= cal.uteis; k++) {
+      const iso = cal.dataDoDia[k], br = iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4);
+      l.adiciona(linha(100 + k, br, k <= 5 ? "10,00" : "20,00"));
+    }
+  }
+  const calO = C.calendario("2026-10");
+  for (let k = 1; k <= 5; k++) { const iso = calO.dataDoDia[k]; l.adiciona(linha(100 + k, iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4), "12,00")); }
+  const a = new C.Agregador(); a.junta(l.exporta()); const d = a.resultado(new Map());
+  const sel = C.mascaraAte(5), r = C.fracaoDiasRestantes(d, "2026-10", C.marcaCombos(d, {}), sel, () => "T");
+  assert.equal(r.n, 5); assert.equal(r.falta, calO.uteis - 5);
+  perto(r.k.get("T"), 2);                                   // depois do 5º dia útil, cada dia rende 2× um dia do começo
+  const A = 60, proj = A / r.fr.get("T");
+  perto(proj, A + (calO.uteis - 5) * 12 * 2);               // 60 + dias que faltam × R$ 12 × 2
+  assert.deepEqual(r.meses.map((m) => [m.mes, m.peso]), [["2026-08", C.calendario("2026-08").uteis === calO.uteis ? 3 : 1], ["2026-09", C.calendario("2026-09").uteis === calO.uteis ? 3 : 1]]);
+});

@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v60-20261109">
+<link rel="stylesheet" href="assets/painel.css?v=v61-20261110">
 </head>
 <body>
 
@@ -315,7 +315,7 @@
               <option value="sup">Superintendência</option><option value="cidgrupo">Cidade × subcategoria</option></select></label>
             <label class="opcao">Comparar com <select id="dgBase"><option value="ant">Mês anterior</option><option value="ano">Mesmo mês do ano anterior</option>
               <option value="media3">Média dos 3 meses anteriores</option></select></label>
-            <label class="opcao">Projeção <select id="dgMetodo"><option value="uteis">Meses com os mesmos dias úteis</option><option value="curva">Curva do orçado</option></select></label>
+            <label class="opcao">Projeção da tabela <select id="dgMetodo"><option value="uteis">Meses com os mesmos dias úteis</option><option value="curva">Curva do orçado</option><option value="restantes">Dias úteis restantes</option></select></label>
           </span></h2>
         <p class="nota" id="dgNota"></p><div id="dgAviso"></div></div>
       <div class="kpis" id="dgKpis"></div>
@@ -524,6 +524,9 @@
             do mês inteiro entrou até os dias marcados (média simples dos meses). Projeção = arrecadado nos dias marcados ÷ essa parte. Calculada para cada localidade;
             localidade sem histórico usa a parte do total. Sem mês igual no ano: usa os últimos 12 meses com o mesmo número de dias úteis e, se não houver, os meses anteriores do ano.</li>
           <li><b>Projeção — curva do orçado</b>: parte do mês que a curva do orçado (aba Resumo) prevê para os dias marcados; a mesma para todas as localidades.</li>
+          <li><b>Projeção — dias úteis restantes</b>: arrecadado + dias úteis que faltam × média por dia útil até agora × k. O k mede quanto um dia útil
+            do resto do mês rendeu em relação a um dia útil do começo (até os mesmos dias) nos últimos 12 meses, com peso 3 para os meses com o mesmo
+            número de dias úteis do mês escolhido e peso 1 para os outros. Calculada para cada localidade. Os três cartões de projeção mostram a conta de cada uma.</li>
           <li><b>Orçado</b>: só existe por superintendência, então aparece no nível Superintendência e nos cards quando Cidade e Subcategoria = Todas.</li>
           <li><b>Faturado e matrículas faturadas</b>: só Interior, da referência igual ao mês escolhido, nos níveis Cidade e Superintendência.</li>
           <li><b>Pareto</b>: localidades com queda, da maior para a menor, e quantas somam 80% da queda total.</li>
@@ -581,9 +584,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v60-20261109"></script>
-<script src="assets/calculos.js?v=v60-20261109"></script>
-<script>const VERSAO_SITE = "v60-20261109"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v60-20261109"></script>
+<script src="assets/regras.js?v=v61-20261110"></script>
+<script src="assets/calculos.js?v=v61-20261110"></script>
+<script>const VERSAO_SITE = "v61-20261110"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v61-20261110"></script>
 </body>
 </html>
