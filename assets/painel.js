@@ -4,7 +4,7 @@
   const C = window.CALC, R = window.REGRAS;
   const $ = (id) => document.getElementById(id);
   const ARQ_AJUSTES = "ajustes_arrecadacao.json";
-  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", onepage: "One page", analise: "Ranking de clientes", base: "Base", dados: "Dados",
+  const ABAS = { resumo: "Resumo", subcategoria: "Subcategoria", perfil: "Perfil de pagamento", cidades: "Cidades", escada: "Escada", onepage: "One page", orcado: "Orçado", analise: "Ranking de clientes", base: "Base", dados: "Dados",
     fxa: "Faturamento x Arrecadação", fxv: "Fat. x Arrec. — mesmo vencimento", conversao: "Conversão por referência", localidade: "Diagnóstico por localidade", clientes: "Clientes e oportunidades", negociacao: "Negociação" };
   const AREA_DA_ABA = { fxa: "analises", fxv: "analises", conversao: "analises", localidade: "analises", analise: "analises", clientes: "analises", negociacao: "analises", dados: "dados" };   // as outras: Executivo
   const ultimaDaArea = { executivo: "resumo", analises: "fxa", dados: "dados" };
@@ -282,6 +282,7 @@
       else if (m.tipo === "comparativo") recebeComparativo(m);
       else if (m.tipo === "extracao-progresso") { if (m.id === idBase) $("baseStatus").textContent = `${m.texto}… ${m.pct}%`; }
       else if (m.tipo === "extracao") recebeBase(m);
+      else if (m.tipo === "mensal") recebeMensal(m);
       else if (m.tipo === "erro") { fim(); setFonte("Erro na leitura: " + esc(m.mensagem)); console.error(m.detalhe); }
     };
     worker.onerror = (e) => { fim(); setFonte("Erro na leitura: " + esc(e.message)); };
@@ -308,13 +309,13 @@
     listaArquivos(res);
     if (!d.meses.length) {
       setFonte(`Pasta <b>${esc(nomePasta)}</b>: nenhum arquivo de arrecadação encontrado (CSV com Nº Ligação, Data Crédito e Val. Autenticado). Veja a lista em “Arquivos lidos”.`);
-      $("vazio").hidden = false; $("area").hidden = true; $("abas").hidden = true; $("btnPdf").disabled = true; $("btnPrint").disabled = true;
+      $("vazio").hidden = false; $("area").hidden = true; $("abas").hidden = true; $("btnPdf").disabled = true; $("btnPrint").disabled = true; $("btnMensal").disabled = true;
       return;
     }
     const ultimo = d.ultimoCredito[d.meses[d.meses.length - 1]];
     setFonte(`Pasta <b>${esc(nomePasta)}</b> · ${nArr} arquivo(s) de arrecadação · crédito até <b>${dataBR(ultimo)}</b>`
       + (d.ultimaAtualizacao ? ` · atualizado em ${dataBR(d.ultimaAtualizacao.slice(0, 10))}${esc(d.ultimaAtualizacao.slice(10))}` : ""));
-    $("vazio").hidden = true; $("area").hidden = false; $("abas").hidden = false; $("btnPdf").disabled = false; $("btnPrint").disabled = false;
+    $("vazio").hidden = true; $("area").hidden = false; $("abas").hidden = false; $("btnPdf").disabled = false; $("btnPrint").disabled = false; $("btnMensal").disabled = false;
     const sups = supsDisponiveis();
     E.sups = E.sups.filter((x) => sups.includes(x));
     if (!E.sups.length && !E.res.__filtrosIniciados) E.sups = sups.includes("INTERIOR") ? ["INTERIOR"] : [];
@@ -570,7 +571,7 @@
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloDias()} de cada mês`; });
     $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && !["localidade", "analise", "clientes"].includes(E.aba));   // Diagnóstico, Ranking e Clientes usam os dias marcados
-    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, onepage: desenhaOnePage, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
+    ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, onepage: desenhaOnePage, orcado: desenhaCurva, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
       conversao: desenhaConversao, clientes: desenhaClientes, negociacao: desenhaNegociacao, localidade: desenhaLocalidade })[E.aba]();
   }
 
@@ -687,7 +688,6 @@
     tresMeses("tCli", (sr, k) => sr.clientes[k], (t) => t.clientes, 0);
     tresMeses("tCon", (sr, k) => sr.contas[k], (t) => t.contas, 0);
     tresMeses("tTic", (sr, k) => (sr.contas[k] ? sr.valor[k] / sr.contas[k] : null), (t) => (t.contas ? t.valor / t.contas : null), 2);
-    desenhaCurva();
     desenhaResumoAnalise(s, cal);
   }
 
@@ -2741,6 +2741,8 @@
     // sem orçado: some também o filtro "Orçado" do topo e o quadro da curva do orçado no Resumo
     $("selOrc").closest(".filtro").hidden = !E.verOrcado;
     $("curvaCard").hidden = !E.verOrcado;
+    $("abaOrcado").hidden = !E.verOrcado;                // a aba Orçado some junto
+    if (!E.verOrcado && E.aba === "orcado") mostraAba("resumo");
   };
   marcaBtnOrcado();
   $("btnOrcado").addEventListener("click", () => {
@@ -2951,6 +2953,51 @@
   let excelPendente = 0;
   new MutationObserver(() => { if (!excelPendente) excelPendente = requestAnimationFrame(() => { excelPendente = 0; poeBotoesExcel(); }); })
     .observe($("area"), { childList: true, subtree: true });
+
+  // ===== Botão "Mensal": planilha do relatório diário (mesmo layout do Excel do relatório): três blocos lado a lado, um
+  // por dia do mês (1,dom; 2,seg…): arrecadação por subcategoria × utilização; clientes pagantes e contas pagas por subcategoria
+  let idMensal = 0;
+  $("btnMensal").addEventListener("click", () => {
+    if (!worker || !E.res) return;
+    $("btnMensal").disabled = true; $("btnMensal").textContent = "Lendo o mês…";
+    toast(`Montando a planilha de ${C.rotuloMes(E.mes)}: os arquivos do mês são lidos de novo (pode levar alguns segundos).`);
+    worker.postMessage({ tipo: "mensal", id: ++idMensal, mes: E.mes, sups: E.sups, cidades: E.cidades, grupos: E.grupos });
+  });
+  async function recebeMensal(m) {
+    if (m.id !== idMensal) return;
+    $("btnMensal").disabled = false; $("btnMensal").textContent = "📅 Mensal";
+    if (m.erro) { toast("Não foi possível montar a planilha: " + esc(m.erro), true); return; }
+    try { await carregaXLSX(); } catch (e) { toast("Não foi possível carregar a biblioteca de planilhas.", true); return; }
+    const X = window.XLSX, SEM = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+    const rotDia = (iso) => `${+iso.slice(8, 10)},${SEM[new Date(iso + "T12:00:00").getDay()]}`;
+    const ordem = (a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1], "pt-BR") || a[2].localeCompare(b[2], "pt-BR", { numeric: true });
+    const vals = m.valores.slice().sort(ordem), qts = m.quantos.map((x) => [x[0], x[1], "", x[2], x[3]]).sort(ordem);
+    const n = Math.max(vals.length, qts.length), aoa = [["Subcategoria", "Utilização (Sub. Categ.)", "Arrecadacao Acumulada", "Data", null,
+      "Subcategoria", "Qtd clientes pagantes acumulado", "Data", null, "Subcategoria", "QTD Contas pagas Arrecadação acumulada", "Data"]];
+    for (let i = 0; i < n; i++) {
+      const v = vals[i], q = qts[i];
+      aoa.push([v ? v[1] : null, v ? v[2] : null, v ? v[3] : null, v ? rotDia(v[0]) : null, null,
+        q ? q[1] : null, q ? q[3] : null, q ? rotDia(q[0]) : null, null, q ? q[1] : null, q ? q[4] : null, q ? rotDia(q[0]) : null]);
+    }
+    const ws = X.utils.aoa_to_sheet(aoa);
+    for (let i = 1; i <= n; i++) {
+      const c = ws[X.utils.encode_cell({ r: i, c: 2 })]; if (c) c.z = '"R$" #,##0.00';
+      for (const j of [6, 10]) { const x = ws[X.utils.encode_cell({ r: i, c: j })]; if (x) x.z = "#,##0"; }
+    }
+    ws["!cols"] = [18, 30, 20, 9, 3, 18, 28, 9, 3, 18, 36, 9].map((wch) => ({ wch }));
+    const wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, ws, "Mensal");
+    const tot = vals.reduce((s, v) => s + v[3], 0);
+    const info = X.utils.aoa_to_sheet([["Relatório mensal da arrecadação"], ["Mês", C.rotuloMes(m.mes)], ["Filtros", filtroTexto()],
+      ["Crédito até", m.ultimo ? dataBR(m.ultimo) : "—"], ["Arrecadação (Val. Autenticado, sem o desconto comercial)", tot], ["Linhas lidas", m.linhas],
+      ["Arquivos", m.arquivos.join(", ")],
+      ["Regras", "Um dia por linha (fins de semana e feriados também). Clientes pagantes = matrículas distintas no dia e na subcategoria; contas pagas = notas fiscais (mensal e avulsa), como no painel."],
+      ["Gerado em", new Date().toLocaleString("pt-BR")]]);
+    info["!cols"] = [{ wch: 50 }, { wch: 90 }];
+    X.utils.book_append_sheet(wb, info, "Informações");
+    X.writeFile(wb, `Mensal_Arrecadacao_${filtroTexto("_")}_${m.mes}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9_-]+/g, "_") + ".xlsx");
+    toast(`Planilha mensal de ${C.rotuloMes(m.mes)} baixada (${fmt(n)} linhas).`);
+  }
 
   // ===== ao abrir: reconecta a pasta da última visita =====
   (async function inicia() {

@@ -27,6 +27,7 @@ self.onmessage = async (ev) => {
   if (ev.data.tipo === "comparativo") { responde("comparativo", ev.data.id, () => respondeComparativo(ev.data)); return; }
   if (ev.data.tipo === "negociacao") { responde("negociacao", ev.data.id, () => respondeNegociacao(ev.data)); return; }
   if (ev.data.tipo === "oportunidades") { responde("oportunidades", ev.data.id, () => respondeOportunidades(ev.data)); return; }
+  if (ev.data.tipo === "mensal") { responde("mensal", ev.data.id, () => extraiMensal(ev.data)); return; }
   if (ev.data.tipo === "extrair") { extraiBase(ev.data).catch((e) => avisa("extracao", { id: ev.data.id, erro: String((e && e.message) || e) })); return; }
   try {
     const r = await processa(ev.data.arquivos || []);
@@ -643,6 +644,51 @@ async function extraiBase({ id, ligs, meses, porMesArquivo }) {
   });
   const naoEncontradas = quer ? [...quer].filter((l) => !achadas.has(l)) : [];
   avisa("extracao", { id, saida, linhas, porMes, naoEncontradas, arquivos: arquivos.length, completa: !quer });
+}
+// Relatório mensal (botão "Mensal"): o mês escolhido, dia a dia do calendário (fins de semana e feriados também), lido de
+// novo dos CSVs (o painel guarda os fins de semana juntos no dia útil 0). Por dia: Val. Autenticado (sem o desconto
+// comercial) por subcategoria × utilização; clientes pagantes (matrículas distintas) e contas pagas (notas fiscais, como
+// no painel) por subcategoria. Segue os filtros do cabeçalho, com a mesma regra de superintendência da leitura.
+async function extraiMensal({ mes, sups, cidades, grupos }) {
+  if (!fontes) throw new Error("dados ainda não lidos");
+  const arqs = fontes.mesesDiaria.has(mes) ? fontes.diarias.filter((a) => a.meses.includes(mes)) : fontes.acumuladas.filter((a) => a.meses.includes(mes));
+  const passa = (l, v) => !l || !l.length || l.includes(v), zonas = new Map();
+  const supDe = (zona, lig) => {
+    let z = zonas.get(zona);
+    if (!z) { z = C.zonaInfo(zona); zonas.set(zona, z); }
+    const [cidade, supZona] = z;
+    if (!cadastroSup || R.SUPS_PELA_CIDADE.includes(supZona)) return [cidade, supZona];
+    const s = cadastroSup.get(C.ligacao(lig));
+    return [cidade, !s ? R.SEM_SUP : R.SUPS_PELA_CIDADE.includes(s) ? supZona : s];
+  };
+  const valores = new Map(), quantos = new Map();
+  let linhas = 0, ultimo = "";
+  const leitura = {
+    adiciona(r) {
+      const cred = C.dataISO(r.credito);
+      if (!cred || cred.slice(0, 7) !== mes) return;
+      const v = C.numeroBR(r.valor);
+      if (!isFinite(v)) return;
+      const zona = String(r.zona || "").trim(), util = String(r.util || "").trim(), [cidade, sup] = supDe(zona, r.lig);
+      const grupo = util ? C.subInfo(util)[0] : "";
+      if (!passa(sups, sup) || !passa(cidades, cidade) || !passa(grupos, grupo || R.SEM_CLASSIFICACAO)) return;
+      linhas++; if (cred > ultimo) ultimo = cred;
+      const kv = cred + "\u0001" + grupo + "\u0001" + util;
+      valores.set(kv, (valores.get(kv) || 0) + v);
+      const kq = cred + "\u0001" + grupo;
+      let q = quantos.get(kq);
+      if (!q) { q = { ligs: new Set(), contas: 0 }; quantos.set(kq, q); }
+      q.ligs.add(C.chaveLig(r.lig));
+      if (R.TIPOS_CONTA.includes(String(r.tipo || "").trim())) q.contas++;
+    },
+    exporta() { return null; },
+  };
+  for (const a of arqs) await leCsv(a.file, () => {}, leitura);
+  return {
+    mes, linhas, ultimo, arquivos: arqs.map((a) => a.rel),
+    valores: [...valores].map(([k, v]) => [...k.split("\u0001"), v]),
+    quantos: [...quantos].map(([k, q]) => [...k.split("\u0001"), q.ligs.size, q.contas]),
+  };
 }
 // Comparativo por mês: uma linha por matrícula e uma coluna de valor por mês (em branco = sem pagamento no mês).
 // O CSV é montado aqui, em blocos, porque pode ter centenas de milhares de linhas.

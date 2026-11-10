@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v61-20261110">
+<link rel="stylesheet" href="assets/painel.css?v=v62-20261110">
 </head>
 <body>
 
@@ -29,6 +29,7 @@
       <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
       <button type="button" class="btn-top" id="btnOrcado" aria-pressed="true" title="Mostrar ou esconder o orçado no painel (cartões, tabelas, curva, Diagnóstico e One page): sem ele, fica só o realizado">👁 Orçado</button>
       <button type="button" class="btn-top" id="btnPdf" disabled>📄 PDF</button>
+      <button type="button" class="btn-top" id="btnMensal" disabled title="Planilha do relatório diário do mês escolhido: arrecadação por subcategoria e utilização, clientes pagantes e contas pagas, dia a dia">📅 Mensal</button>
       <span class="menu-print" id="menuPrintWrap"><button type="button" class="btn-top" id="btnPrint" disabled aria-haspopup="true" aria-expanded="false" aria-controls="menuPrint" title="Imagens em alta resolução das abas do Executivo, do tamanho de um slide (16:9), para a apresentação">🖼 Prints ▾</button>
         <span class="menu-print-lista" id="menuPrint" role="menu" hidden>
           <button type="button" role="menuitem" data-print="resumo">Resumo<small>imagem do slide: copia e baixa em PNG</small></button>
@@ -69,6 +70,7 @@
     <button type="button" data-aba="cidades">Cidades</button>
     <button type="button" data-aba="escada">Escada</button>
     <button type="button" data-aba="onepage">One page</button>
+    <button type="button" data-aba="orcado" id="abaOrcado">Orçado</button>
     <button type="button" data-aba="base">Base</button>
   </div>
   <div class="toggle" role="tablist" data-grupo="analises" hidden>
@@ -121,10 +123,6 @@
         <div class="card"><h2 id="destTitulo">Destaques do mês</h2><div class="destaques" id="destaques"></div></div>
         <div class="card"><h2>Resumo consolidado por dia útil <small id="consNota"></small></h2><div class="wrap"><table id="tConsolidado" class="compacta"></table></div></div>
       </div>
-      <details class="card curva sem-pdf" id="curvaCard">
-        <summary><h2>Orçado do mês e curva do orçado diário <small id="curvaResumo"></small></h2></summary>
-        <div id="curvaCorpo"></div>
-      </details>
     </section>
 
     <section class="painel-aba" data-painel="subcategoria" hidden>
@@ -153,6 +151,12 @@
           (imagens ou um Excel com as imagens, cada uma numa aba chamada “Economias” ou “Inadimplentes”).</span></div>
       <div class="op-acoes op-prints nota" id="opPrints"></div>
       <div class="op-folha" id="opFolha"></div>
+    </section>
+    <section class="painel-aba" data-painel="orcado" hidden>
+      <details class="card curva sem-pdf" id="curvaCard" open>
+        <summary><h2>Orçado do mês e curva do orçado diário <small id="curvaResumo"></small></h2></summary>
+        <div id="curvaCorpo"></div>
+      </details>
     </section>
     <section class="painel-aba" data-painel="escada" hidden>
       <div class="card"><h2>Arrecadação por mês de vencimento × mês de crédito <small class="ate-dia"></small>
@@ -584,9 +588,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v61-20261110"></script>
-<script src="assets/calculos.js?v=v61-20261110"></script>
-<script>const VERSAO_SITE = "v61-20261110"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v61-20261110"></script>
+<script src="assets/regras.js?v=v62-20261110"></script>
+<script src="assets/calculos.js?v=v62-20261110"></script>
+<script>const VERSAO_SITE = "v62-20261110"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v62-20261110"></script>
 </body>
 </html>
