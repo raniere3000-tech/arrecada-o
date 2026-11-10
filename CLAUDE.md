@@ -18,3 +18,6 @@
   item quando há um só escolhido (servem ao orçado e à curva, que são por superintendência).
 - Filtro Mês também é de vários itens (`E.meses`, nunca vazio). `E.mes` é o mais recente marcado e é o que as telas
   de um mês usam (Resumo, One page, orçado, curva…); só a tabela do BI da aba Dados usa todos os de `E.meses`.
+- **Duplicidade de descontos** (botão no topo, ao lado de Arrecadação): é o painel de `duplicidades/index.html`, num iframe,
+  com regras, filtros, aba Dados e base no navegador próprios. Antes de mexer nele, leia `duplicidades/CLAUDE.md`. A
+  arrecadação nunca lê a pasta **Duplicidades** (nem a **One Page**): `analisa()` em `painel.js` separa esses arquivos.

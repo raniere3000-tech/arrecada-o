@@ -33,7 +33,7 @@ para a internet: tudo é processado no navegador.
 2. No Chrome e no Edge a pasta fica lembrada: nas próximas visitas basta clicar em qualquer lugar da página.
    **↻ Atualizar** relê a pasta depois que o arquivo do dia for trocado.
 3. Use os filtros do cabeçalho (Superintendência, Cidade, Subcategoria, Mês — de vários meses: as telas de um mês usam o mais recente marcado) e os botões de **dias úteis**.
-4. **Arrecadação / Duplicidade de descontos** troca de painel (o de duplicidade de descontos é o painel de duplicidades de descontos v1.1, em `duplicidades/index.html`,
+4. **Arrecadação / Duplicidade de descontos** troca de painel (o de duplicidade de descontos é o painel de duplicidade de descontos (v1.2), em `duplicidades/index.html`,
    aberto dentro deste: lê a pasta **Duplicidades** da pasta principal, com as subpastas Descontos e Cadastro, que não entram na
    arrecadação; tem as próprias abas Resumo, Duplicidades e Dados, os próprios filtros e a própria base no navegador). **📄 PDF** gera o executivo com as 5 abas, do Resumo à Escada.
 5. A aba **Análise** traz os top clientes (até 100): maiores arrecadações, aumentos e quedas em relação ao mês anterior,

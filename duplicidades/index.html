@@ -89,7 +89,7 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .legenda i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
 
 /* ===== KPIs: faixa única ===== */
-.kpis-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:1px;margin:10px 0;background:var(--linha);border:1px solid var(--linha);border-radius:8px;overflow:hidden}
+.kpis-grid{display:grid;grid-template-columns:repeat(20,minmax(0,1fr));gap:1px;margin:10px 0;background:var(--linha);border:1px solid var(--linha);border-radius:8px;overflow:hidden}
 .kpi-card{background:#fff;padding:8px 12px;border-top:3px solid var(--marinho);min-width:0}
 .kpi-card.negativo{border-top-color:var(--laranja)}
 .kpi-card.destaque{background:var(--tint)}
@@ -98,7 +98,10 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .kpi-card.destaque .kpi-valor{font-size:24px;color:var(--marinho)}
 .kpi-card.negativo .kpi-valor{color:var(--laranja-texto)}
 .kpi-delta{font-size:11px;margin:1px 0 0;color:var(--azul-claro);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-@media (max-width:1100px){.kpis-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+/* 9 indicadores: 4 na primeira linha (visão geral) e 5 na segunda (níveis, alerta, a verificar) */
+#kpis .kpi-card{grid-column:span 4}
+#kpis .kpi-card:nth-child(-n+4){grid-column:span 5}
+@media (max-width:900px){.kpis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#kpis .kpi-card,#kpis .kpi-card:nth-child(-n+4){grid-column:span 1}}
 @media (max-width:560px){.kpis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 
@@ -226,6 +229,8 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 .tag{display:inline-block;border-radius:10px;padding:0 8px;font-size:11px;font-weight:600;font-family:var(--fonte);white-space:nowrap}
 .tag.n1{background:var(--marinho);color:#fff}
 .tag.n2{background:#dbeaf4;color:var(--azul)}
+.tag.n3{background:#e6f1f8;color:#102840;border:1px solid #9cc3dc}
+.cons .mudo{color:var(--azul-claro);font-size:11px}
 .tag.al{background:var(--laranja-tint);color:var(--laranja-texto)}
 .tag.ver{background:#ffedd5;color:#9a3412}
 .tag.ok{background:#dcfce7;color:#166534}
@@ -333,7 +338,7 @@ pre.pasta{background:var(--cinza);border:1px solid var(--linha);border-radius:8p
           <p class="nota-secao" id="grafNota"></p>
         </div>
         <div class="card-acoes">
-          <div class="legenda"><span><i style="background:var(--marinho)"></i>Nível 1 – idênticos</span><span><i style="background:var(--azul)"></i>Nível 2 – total diferente</span></div>
+          <div class="legenda"><span><i style="background:#102840"></i>Nível 1 – idênticos</span><span><i style="background:#176b9c"></i>Nível 2 – total diferente</span><span><i style="background:#9cc3dc"></i>Nível 3 – mesmo total, desconto diferente</span></div>
           <div class="toggle" role="group" aria-label="Medida do gráfico">
             <button type="button" class="active" data-med="rep" aria-pressed="true">Lançamentos</button>
             <button type="button" data-med="mat" aria-pressed="false">Matrículas</button>
@@ -373,7 +378,7 @@ pre.pasta{background:var(--cinza);border:1px solid var(--linha);border-radius:8p
       <div class="cons-bar">
         <label class="field">Buscar <input type="search" id="busca" placeholder="Matrícula ou cliente"></label>
         <label class="field" id="campoNivel">Nível
-          <select id="selNivel"><option value="">Níveis 1 e 2</option><option value="1">Nível 1 – idênticos</option><option value="2">Nível 2 – total diferente</option></select>
+          <select id="selNivel"><option value="">Todos os níveis</option><option value="1">Nível 1 – idênticos</option><option value="2">Nível 2 – total diferente</option><option value="3">Nível 3 – mesmo total, desconto diferente</option></select>
         </label>
         <label class="field">Ordenar
           <select id="selOrd">
@@ -713,7 +718,7 @@ self.onmessage = async ev => {
 </script>
 
 <script>
-const VERSAO_SITE = 'v1.1';
+const VERSAO_SITE = 'v1.2';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = VERSAO_SITE;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -724,6 +729,7 @@ const rs0 = v => 'R$ ' + Math.round(v).toLocaleString('pt-BR');
 const dec2 = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pc = (a, b) => b ? (a / b * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '–';
 const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const pl = (n, um, varios) => nf(n) + ' ' + (n === 1 ? um : varios);
 const mesTxt = k => k ? MES[+k.slice(5, 7) - 1] + '/' + k.slice(2, 4) : '(sem referência)';
 const p2 = n => String(n).padStart(2, '0');
 // datas do arquivo: guardadas como horário "de parede" (UTC), sem fuso
@@ -901,23 +907,44 @@ function derive(R){
   const ordem = (a, b) => d.dt[a] - d.dt[b] || d.log[a] - d.log[b];
   const cent = v => Math.round(v * 100);
   function agrupa(lista){
-    const mDup = new Map(), mAl = new Map(), mVer = new Map();
     const add = (m, k, i) => { const a = m.get(k); if (a) a.push(i); else m.set(k, [i]); };
+    const mDeb = new Map(), mAl = new Map(), mVer = new Map();
     for (const i of lista){
-      const cd = cent(d.desc[i]);
-      add(mDup, d.mat[i] + '|' + d.ref[i] + '|' + cd, i);
-      add(mAl, d.mat[i] + '|' + cd, i);
+      add(mDeb, d.mat[i] + '|' + d.ref[i] + '|' + cent(d.tot[i]), i);      // mesmo débito: matrícula + mês + total
+      add(mAl, d.mat[i] + '|' + cent(d.desc[i]), i);
       add(mVer, d.mat[i] + '|' + d.ref[i], i);
     }
-    const dups = [], al = [], ver = [];
-    for (const a of mDup.values()){
-      if (a.length < 2) continue;
+    const dups = [], al = [], ver = [], aMais = new Set(), reps = [];
+    // cria um desconto repetido: o mais recente é o válido, os demais são lançamentos a mais
+    const novo = (a, niv) => {
       a.sort(ordem);
-      const nTot = new Set(a.map(i => cent(d.tot[i]))).size;
-      const k = a.length;
-      dups.push({ i0: a[0], idx: a, n: k, niv: nTot === 1 ? 1 : 2, nTot, desc: d.desc[a[0]], ref: d.ref[a[0]], mat: d.mat[a[0]],
-        ini: d.dt[a[0]], fim: d.dt[a[k - 1]], rep: k - 1, val: (k - 1) * d.desc[a[0]] });
+      const k = a.length, ult = a[k - 1];
+      let val = 0;
+      for (let j = 0; j < k - 1; j++){ val += d.desc[a[j]]; aMais.add(a[j]); }
+      dups.push({ i0: a[0], idx: a, n: k, niv, nTot: new Set(a.map(i => cent(d.tot[i]))).size, nDesc: new Set(a.map(i => cent(d.desc[i]))).size,
+        desc: d.desc[ult], ref: d.ref[a[0]], mat: d.mat[a[0]], ini: d.dt[a[0]], fim: d.dt[ult], rep: k - 1, val });
+      return ult;
+    };
+    // 1) mesmo débito com 2+ lançamentos: um só valor de desconto = nível 1; valores diferentes = nível 3
+    for (const a of mDeb.values()){
+      if (a.length < 2){ reps.push(a[0]); continue; }
+      reps.push(novo(a, new Set(a.map(i => cent(d.desc[i]))).size === 1 ? 1 : 3));
     }
+    // 2) entre o que sobrou de cada débito (o válido ou o lançamento único): mesmo desconto com total diferente = nível 2
+    const mDesc = new Map();
+    for (const i of reps) add(mDesc, d.mat[i] + '|' + d.ref[i] + '|' + cent(d.desc[i]), i);
+    for (const a of mDesc.values()) if (a.length > 1) novo(a, 2);
+    // 3) a verificar: matrícula e mês que ainda têm 2+ valores de desconto depois de tirar os lançamentos a mais
+    for (const a of mVer.values()){
+      if (a.length < 2) continue;
+      const rest = a.filter(i => !aMais.has(i));
+      const nd = new Set(rest.map(i => cent(d.desc[i]))).size;
+      if (nd < 2) continue;
+      a.sort(ordem);
+      ver.push({ i0: a[0], idx: a, n: a.length, nRest: rest.length, nd, ref: d.ref[a[0]], mat: d.mat[a[0]], ini: d.dt[a[0]], fim: d.dt[a[a.length - 1]],
+        val: rest.reduce((t, i) => t + d.desc[i], 0) });
+    }
+    // alerta: mesmo desconto na mesma matrícula em meses diferentes (sem olhar o total)
     for (const a of mAl.values()){
       if (a.length < 2) continue;
       const refs = [...new Set(a.map(i => d.ref[i]))];
@@ -926,18 +953,12 @@ function derive(R){
       refs.sort((x, y) => d.refs[x].localeCompare(d.refs[y]));
       al.push({ i0: a[0], idx: a, n: a.length, refs, desc: d.desc[a[0]], mat: d.mat[a[0]], ini: d.dt[a[0]], fim: d.dt[a[a.length - 1]], val: a.length * d.desc[a[0]] });
     }
-    for (const a of mVer.values()){
-      if (a.length < 2) continue;
-      const nd = new Set(a.map(i => cent(d.desc[i]))).size;
-      if (nd < 2) continue;
-      a.sort(ordem);
-      ver.push({ i0: a[0], idx: a, n: a.length, nd, ref: d.ref[a[0]], mat: d.mat[a[0]], ini: d.dt[a[0]], fim: d.dt[a[a.length - 1]], val: a.reduce((s, i) => s + d.desc[i], 0) });
-    }
     return { dups, al, ver };
   }
   const g = agrupa(base), gf = agrupa(fora);
   const recRep = new Uint8Array(n), recG = new Int32Array(n).fill(-1);
-  g.dups.forEach((x, gi) => x.idx.forEach((i, k) => { recG[i] = gi; if (k < x.n - 1) recRep[i] = 1; }));
+  // um lançamento pode ser o válido de um débito (nível 1 ou 3) e lançamento a mais no nível 2: recG aponta para onde ele é a mais
+  g.dups.forEach((x, gi) => x.idx.forEach((i, k) => { if (k < x.n - 1){ recRep[i] = 1; recG[i] = gi; } else if (recG[i] < 0) recG[i] = gi; }));
   // cidades de cada superintendência e zonas presentes na base
   const cidSup = new Map(), zonas = new Set(), usrs = new Set(), refs = new Set();
   for (const i of base){ cidSup.set(rCid[i], rSup[i]); zonas.add(d.zona[i]); usrs.add(d.usr[i]); refs.add(d.ref[i]); }
@@ -1017,15 +1038,15 @@ const okVer = g => okLoc(g.i0) && okMes(g.ref) && okUsrAny(g.idx);
 /* ---------- Resumo ---------- */
 function calcula(){
   const d = B.d, nR = d.refs.length;
-  const o = { lanc: 0, lancV: 0, matsDesc: new Set(), mes: Array.from({ length: nR }, () => ({ l: 0, v: 0, m: new Set(), r1: 0, r2: 0, v1: 0, v2: 0, m1: new Set(), m2: new Set() })) };
+  const o = { lanc: 0, lancV: 0, matsDesc: new Set(), mes: Array.from({ length: nR }, () => ({ l: 0, v: 0, m: new Set(), r: [0, 0, 0, 0], vn: [0, 0, 0, 0], mn: [null, new Set(), new Set(), new Set()] })) };
   for (const i of B.base) if (okRec(i)){ const x = o.mes[d.ref[i]]; o.lanc++; o.lancV += d.desc[i]; o.matsDesc.add(d.mat[i]); x.l++; x.v += d.desc[i]; x.m.add(d.mat[i]); }
   o.G = B.dups.filter(okDup); o.A = B.al.filter(okAl); o.V = B.ver.filter(okVer);
-  o.mats = new Set(); o.rep = 0; o.val = 0; o.niv = { 1: { g: 0, r: 0, v: 0 }, 2: { g: 0, r: 0, v: 0 } };
+  o.mats = new Set(); o.rep = 0; o.val = 0; o.niv = { 1: { g: 0, r: 0, v: 0 }, 2: { g: 0, r: 0, v: 0 }, 3: { g: 0, r: 0, v: 0 } };
   for (const g of o.G){
     o.mats.add(g.mat); o.rep += g.rep; o.val += g.val;
     const z = o.niv[g.niv]; z.g++; z.r += g.rep; z.v += g.val;
     const x = o.mes[g.ref];
-    if (g.niv === 1){ x.r1 += g.rep; x.v1 += g.val; x.m1.add(g.mat); } else { x.r2 += g.rep; x.v2 += g.val; x.m2.add(g.mat); }
+    x.r[g.niv] += g.rep; x.vn[g.niv] += g.val; x.mn[g.niv].add(g.mat);
   }
   o.matsA = new Set(o.A.map(g => g.mat)).size; o.matsV = new Set(o.V.map(g => g.mat)).size;
   return o;
@@ -1042,6 +1063,7 @@ function renderResumo(){
     kpi('Valor registrado em duplicidade', rs0(o.val), pc(o.val, o.lancV) + ' do valor lançado', 'destaque'),
     kpi('Nível 1 – descontos repetidos idênticos', nf(o.niv[1].g), 'lançados ' + nf(o.niv[1].r) + ' vezes a mais, ' + rs0(o.niv[1].v)),
     kpi('Nível 2 – descontos repetidos com total diferente', nf(o.niv[2].g), 'lançados ' + nf(o.niv[2].r) + ' vezes a mais, ' + rs0(o.niv[2].v)),
+    kpi('Nível 3 – mesmo total, desconto diferente', nf(o.niv[3].g), nf(o.niv[3].r) + ' lançamentos a mais, ' + rs0(o.niv[3].v)),
     kpi('Alerta: mesmo desconto em meses diferentes', nf(o.A.length), 'em ' + nf(o.matsA) + ' matrículas', 'alerta'),
     kpi('Matrículas a verificar', nf(o.matsV), 'descontos diferentes no mesmo mês (' + nf(o.V.length) + ' casos)', 'atencao')
   ].join('');
@@ -1073,22 +1095,23 @@ function posDica(x, y){
 
 function renderGrafico(o){
   const d = B.d, med = st.med;
-  const meses = B.refs.filter(r => okMes(r) && (o.mes[r].l > 0 || o.mes[r].r1 + o.mes[r].r2 > 0));
+  const meses = B.refs.filter(r => okMes(r) && (o.mes[r].l > 0 || o.mes[r].r[1] + o.mes[r].r[2] + o.mes[r].r[3] > 0));
   const nomeMed = { rep: 'Lançamentos a mais', mat: 'Matrículas com desconto repetido', val: 'Valor registrado em duplicidade (R$)' }[med];
   $('#grafTit').textContent = nomeMed + ' por mês de referência';
   $('#grafNota').textContent = {
     rep: 'Lançamentos que repetem um desconto já registrado na mesma matrícula e mês, sem contar o válido (o mais recente). O valor exato fica em cima da coluna.',
-    mat: 'Matrículas com pelo menos um desconto repetido no mês. Quem tem os dois níveis no mesmo mês conta uma vez, no nível 1.',
-    val: 'Soma dos descontos dos lançamentos a mais: (vezes lançado − 1) × desconto, em cada desconto repetido.'
+    mat: 'Matrículas com pelo menos um desconto repetido no mês. Quem tem mais de um nível no mesmo mês conta uma vez, no menor nível.',
+    val: 'Soma dos descontos dos lançamentos a mais (todos menos o válido, que é o mais recente de cada desconto repetido).'
   }[med];
   if (!meses.length){ $('#grafBloco').innerHTML = '<p class="semdados">Nenhum lançamento com os filtros escolhidos.</p>'; return; }
+  const CORES = ['#102840', '#176b9c', '#9cc3dc'], TXT = ['#fff', '#fff', '#102840'];
   const serie = r => {
     const x = o.mes[r];
-    if (med === 'rep') return [x.r1, x.r2];
-    if (med === 'val') return [x.v1, x.v2];
-    let m2 = 0; x.m2.forEach(m => { if (!x.m1.has(m)) m2++; }); return [x.m1.size, m2];
+    if (med === 'rep') return [x.r[1], x.r[2], x.r[3]];
+    if (med === 'val') return [x.vn[1], x.vn[2], x.vn[3]];
+    const visto = new Set(); return [1, 2, 3].map(n => { let c = 0; x.mn[n].forEach(m => { if (!visto.has(m)){ visto.add(m); c++; } }); return c; });
   };
-  const S = meses.map(serie), tot = S.map(s => s[0] + s[1]);
+  const S = meses.map(serie), tot = S.map(s => s[0] + s[1] + s[2]);
   const COL = 76, ROT = 180, W = Math.max(1000, ROT + meses.length * COL), H = 230, top = 24, base = 206;
   const max = Math.max(1, ...tot), esc1 = v => v / max * (base - top);
   const cw = (W - ROT) / meses.length, bw = Math.min(40, cw * 0.62);
@@ -1096,13 +1119,15 @@ function renderGrafico(o){
   let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(nomeMed)} por mês de referência">`;
   svg += `<line x1="${ROT}" x2="${W}" y1="${base}" y2="${base}" stroke="#dbe4ec"/>`;
   meses.forEach((r, k) => {
-    const x = ROT + k * cw + (cw - bw) / 2, [a, b] = S[k];
-    const ha = esc1(a), hb = esc1(b);
-    if (a > 0) svg += `<rect x="${x}" y="${base - ha}" width="${bw}" height="${ha}" fill="#102840"/>`;
-    if (b > 0) svg += `<rect x="${x}" y="${base - ha - hb}" width="${bw}" height="${hb}" fill="#176b9c"/>`;
-    if (a > 0 && ha >= 17) svg += `<text x="${x + bw / 2}" y="${base - ha / 2 + 4}" text-anchor="middle" font-size="11" fill="#fff" font-family="IBM Plex Sans Condensed,Arial">${fmt(a)}</text>`;
-    if (b > 0 && hb >= 17) svg += `<text x="${x + bw / 2}" y="${base - ha - hb / 2 + 4}" text-anchor="middle" font-size="11" fill="#fff" font-family="IBM Plex Sans Condensed,Arial">${fmt(b)}</text>`;
-    svg += `<text x="${x + bw / 2}" y="${base - ha - hb - 6}" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2d3d" font-family="IBM Plex Sans Condensed,Arial">${fmt(tot[k])}</text>`;
+    const x = ROT + k * cw + (cw - bw) / 2;
+    let y = base;
+    S[k].forEach((v, n) => {
+      if (!(v > 0)) return;
+      const h = esc1(v); y -= h;
+      svg += `<rect x="${x}" y="${y}" width="${bw}" height="${h}" fill="${CORES[n]}"/>`;
+      if (h >= 17) svg += `<text x="${x + bw / 2}" y="${y + h / 2 + 4}" text-anchor="middle" font-size="11" fill="${TXT[n]}" font-family="IBM Plex Sans Condensed,Arial">${fmt(v)}</text>`;
+    });
+    svg += `<text x="${x + bw / 2}" y="${y - 6}" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2d3d" font-family="IBM Plex Sans Condensed,Arial">${fmt(tot[k])}</text>`;
     svg += `<rect class="col-hover" data-k="${k}" x="${ROT + k * cw}" y="0" width="${cw}" height="${H}"/>`;
   });
   svg += '</svg>';
@@ -1114,6 +1139,7 @@ function renderGrafico(o){
   const tab = `<table class="tab-alinhada">${cols}<thead><tr><th></th>${meses.map(r => `<th>${mesTxt(d.refs[r])}</th>`).join('')}</tr></thead><tbody>
     ${lin('', '<i class="cor" style="background:#102840"></i>Nível 1 – idênticos', S.map(s => fmt(s[0])))}
     ${lin('', '<i class="cor" style="background:#176b9c"></i>Nível 2 – total diferente', S.map(s => fmt(s[1])))}
+    ${lin('', '<i class="cor" style="background:#9cc3dc"></i>Nível 3 – mesmo total', S.map(s => fmt(s[2])))}
     ${lin('forte', linhaRef[2], tot.map(fmt))}
     ${lin('mudo', linhaRef[0], meses.map(r => fmt(linhaRef[1](r))))}
     ${lin('mudo', '% em duplicidade', meses.map((r, k) => pc(tot[k], linhaRef[1](r))))}
@@ -1124,10 +1150,11 @@ function renderGrafico(o){
   $('#grafBloco').querySelectorAll('.col-hover').forEach(el => {
     const k = +el.dataset.k, r = meses[k], x = o.mes[r];
     ligaDica(el, { titulo: mesTxt(d.refs[r]), linhas: [
-      { k: 'Nível 1 – lançamentos a mais', v: nf(x.r1), cor: '#102840' }, { k: 'Nível 1 – valor', v: rs(x.v1) },
-      { k: 'Nível 2 – lançamentos a mais', v: nf(x.r2), cor: '#176b9c' }, { k: 'Nível 2 – valor', v: rs(x.v2) }, '-',
-      { k: 'Total de lançamentos a mais', v: nf(x.r1 + x.r2), c: 'forte' }, { k: 'Valor em duplicidade', v: rs(x.v1 + x.v2), c: 'forte' },
-      { k: 'Matrículas com desconto repetido', v: nf(new Set([...x.m1, ...x.m2]).size) }, '-',
+      { k: 'Nível 1 – lançamentos a mais', v: nf(x.r[1]), cor: '#102840' }, { k: 'Nível 1 – valor', v: rs(x.vn[1]) },
+      { k: 'Nível 2 – lançamentos a mais', v: nf(x.r[2]), cor: '#176b9c' }, { k: 'Nível 2 – valor', v: rs(x.vn[2]) },
+      { k: 'Nível 3 – lançamentos a mais', v: nf(x.r[3]), cor: '#9cc3dc' }, { k: 'Nível 3 – valor', v: rs(x.vn[3]) }, '-',
+      { k: 'Total de lançamentos a mais', v: nf(x.r[1] + x.r[2] + x.r[3]), c: 'forte' }, { k: 'Valor em duplicidade', v: rs(x.vn[1] + x.vn[2] + x.vn[3]), c: 'forte' },
+      { k: 'Matrículas com desconto repetido', v: nf(new Set([...x.mn[1], ...x.mn[2], ...x.mn[3]]).size) }, '-',
       { k: 'Lançamentos com desconto', v: nf(x.l), c: 'mudo' }, { k: 'Descontos lançados', v: rs(x.v), c: 'mudo' }, { k: 'Matrículas com desconto', v: nf(x.m.size), c: 'mudo' }
     ] });
   });
@@ -1137,10 +1164,10 @@ function renderUsuarios(o){
   const d = B.d, U = new Map();
   const get = u => { let x = U.get(u); if (!x){ x = { u, lanc: 0, rep: 0, val: 0, g: new Set(), m: new Set() }; U.set(u, x); } return x; };
   for (const i of B.base) if (okRec(i)) get(d.usr[i]).lanc++;
-  o.G.forEach(g => g.idx.forEach(i => {
+  o.G.forEach(g => g.idx.forEach((i, k) => {
     if (st.usr && !st.usr.has(d.usr[i])) return;
     const x = get(d.usr[i]); x.g.add(g); x.m.add(g.mat);
-    if (B.recRep[i]){ x.rep++; x.val += d.desc[i]; }
+    if (k < g.n - 1){ x.rep++; x.val += d.desc[i]; }
   }));
   const rows = [...U.values()].filter(x => x.g.size).map(x => ({ ...x, nome: d.usrs[x.u] || '(sem usuário)', grupos: x.g.size, mats: x.m.size, pct: x.lanc ? x.rep / x.lanc : 0 }));
   const { k, dir } = st.usrOrd;
@@ -1172,7 +1199,7 @@ function listaAtual(){
   if (st.lista === 'dup') L = B.dups.filter(g => okDup(g) && (!st.nivel || g.niv === +st.nivel) && busca(g));
   else if (st.lista === 'al') L = B.al.filter(g => okAl(g) && busca(g));
   else L = B.ver.filter(g => okVer(g) && busca(g));
-  const ord = { valor: (a, b) => b.val - a.val, vezes: (a, b) => b.n - a.n || b.val - a.val, recente: (a, b) => b.fim - a.fim, mat: (a, b) => a.mat - b.mat || a.ini - b.ini }[st.ord];
+  const ord = { valor: (a, b) => b.val - a.val || b.n - a.n, vezes: (a, b) => b.n - a.n || b.val - a.val, recente: (a, b) => b.fim - a.fim, mat: (a, b) => a.mat - b.mat || a.ini - b.ini }[st.ord];
   return L.sort(ord);
 }
 const chaveG = g => g.mat + '|' + g.i0;
@@ -1182,29 +1209,29 @@ function renderLista(){
   const P = L.slice(st.pag * porPag, st.pag * porPag + porPag);
   $('#campoNivel').hidden = st.lista !== 'dup';
   $('#selOrd').options[0].text = st.lista === 'dup' ? 'Maior valor em duplicidade' : st.lista === 'al' ? 'Maior valor somado' : 'Maior soma de descontos';
-  const tit = { dup: 'Descontos repetidos (níveis 1 e 2)', al: 'Alerta: mesmo desconto em meses diferentes', ver: 'A verificar: descontos diferentes no mesmo mês' }[st.lista];
+  const tit = { dup: 'Descontos repetidos (níveis 1, 2 e 3)', al: 'Alerta: mesmo desconto em meses diferentes', ver: 'A verificar: descontos diferentes no mesmo mês' }[st.lista];
   $('#listaTit').textContent = tit;
   $('#listaNota').textContent = {
-    dup: 'Uma linha por desconto repetido: mesmo valor de desconto lançado mais de uma vez na mesma matrícula e no mesmo mês de referência. O lançamento mais recente é o válido; os anteriores são lançamentos a mais. Clique na linha para ver os lançamentos.',
+    dup: 'Uma linha por desconto repetido, na mesma matrícula e mês de referência. Nível 1: mesmo débito (total) e mesmo desconto. Nível 3: mesmo débito com descontos diferentes (renegociado). Nível 2: mesmo desconto com total diferente, entre o que sobrou de cada débito. O mais recente é o válido; os anteriores são lançamentos a mais. Clique na linha para ver os lançamentos.',
     al: 'Mesma matrícula com o mesmo valor de desconto em meses de referência diferentes. Fica separado dos níveis e não soma no valor em duplicidade.',
-    ver: 'Mesma matrícula e mês com valores de desconto diferentes, como um desconto por fatura. Não é duplicidade: confirme na matrícula.'
+    ver: 'Mesma matrícula e mês que, depois de tirar os lançamentos a mais, ainda têm valores de desconto diferentes (com totais diferentes), como um desconto por fatura. Não é duplicidade: confirme na matrícula.'
   }[st.lista];
   let soma;
-  if (st.lista === 'dup') soma = `${nf(L.length)} descontos repetidos, ${nf(new Set(L.map(g => g.mat)).size)} matrículas, ${nf(L.reduce((s, g) => s + g.rep, 0))} lançamentos a mais, ${rs(L.reduce((s, g) => s + g.val, 0))} em duplicidade`;
-  else soma = `${nf(L.length)} ${st.lista === 'al' ? 'descontos em meses diferentes' : 'casos de matrícula e mês'}, ${nf(new Set(L.map(g => g.mat)).size)} matrículas, ${nf(L.reduce((s, g) => s + g.n, 0))} lançamentos`;
+  if (st.lista === 'dup') soma = `${pl(L.length, 'desconto repetido', 'descontos repetidos')}, ${pl(new Set(L.map(g => g.mat)).size, 'matrícula', 'matrículas')}, ${pl(L.reduce((s, g) => s + g.rep, 0), 'lançamento a mais', 'lançamentos a mais')}, ${rs(L.reduce((s, g) => s + g.val, 0))} em duplicidade`;
+  else soma = `${st.lista === 'al' ? pl(L.length, 'desconto em meses diferentes', 'descontos em meses diferentes') : pl(L.length, 'caso de matrícula e mês', 'casos de matrícula e mês')}, ${pl(new Set(L.map(g => g.mat)).size, 'matrícula', 'matrículas')}, ${pl(L.reduce((s, g) => s + g.n, 0), 'lançamento', 'lançamentos')}`;
   $('#contagem').textContent = soma + (paginas > 1 ? ` · mostrando ${nf(st.pag * porPag + 1)} a ${nf(st.pag * porPag + P.length)}` : '');
   let cab, linha;
   const base = g => `<td class="txt num">${g.mat}</td><td class="txt">${esc(nomeDe(g.i0))}</td><td class="txt"><span class="tag sup">${esc(supDe(g.i0))}</span></td><td class="txt">${esc(cidDe(g.i0))}</td>`;
   const usrTd = g => { const u = usrsDe(g); return `<td class="txt" title="${esc(u.join(', '))}">${esc(u.slice(0, 2).join(', '))}${u.length > 2 ? ` +${u.length - 2}` : ''}</td>`; };
   if (st.lista === 'dup'){
     cab = ['', 'Nível', 'Matrícula', 'Cliente', 'Superint.', 'Cidade', 'Mês ref.', 'Desconto (R$)', 'Vezes lançado', 'Lançamentos a mais', 'Valor em duplicidade (R$)', 'Primeiro lançamento', 'Último lançamento', 'Intervalo', 'Usuários'];
-    linha = g => `<td class="txt"><span class="tag n${g.niv}">Nível ${g.niv}</span></td>${base(g)}<td class="txt">${mesTxt(d.refs[g.ref])}</td><td class="num">${dec2(g.desc)}</td>
+    linha = g => `<td class="txt"><span class="tag n${g.niv}">Nível ${g.niv}</span></td>${base(g)}<td class="txt">${mesTxt(d.refs[g.ref])}</td><td class="num">${dec2(g.desc)}${g.nDesc > 1 ? ` <span class="mudo">(${g.nDesc} valores)</span>` : ''}</td>
       <td class="num forte">${g.n}</td><td class="num">${g.rep}</td><td class="num neg">${dec2(g.val)}</td><td class="txt">${dtTxt(g.ini)}</td><td class="txt">${dtTxt(g.fim)}</td><td class="num">${intervaloTxt(g.fim - g.ini)}</td>${usrTd(g)}`;
   } else if (st.lista === 'al'){
     cab = ['', 'Matrícula', 'Cliente', 'Superint.', 'Cidade', 'Desconto (R$)', 'Meses de referência', 'Lançamentos', 'Primeiro lançamento', 'Último lançamento', 'Usuários'];
     linha = g => `${base(g)}<td class="num">${dec2(g.desc)}</td><td class="txt">${g.refs.map(r => mesTxt(d.refs[r])).join(', ')}</td><td class="num forte">${g.n}</td><td class="txt">${dtTxt(g.ini)}</td><td class="txt">${dtTxt(g.fim)}</td>${usrTd(g)}`;
   } else {
-    cab = ['', 'Matrícula', 'Cliente', 'Superint.', 'Cidade', 'Mês ref.', 'Lançamentos', 'Descontos diferentes', 'Soma dos descontos (R$)', 'Também em duplicidade', 'Usuários'];
+    cab = ['', 'Matrícula', 'Cliente', 'Superint.', 'Cidade', 'Mês ref.', 'Lançamentos', 'Descontos diferentes (sem os a mais)', 'Soma dos descontos válidos (R$)', 'Também em duplicidade', 'Usuários'];
     linha = g => `${base(g)}<td class="txt">${mesTxt(d.refs[g.ref])}</td><td class="num forte">${g.n}</td><td class="num">${g.nd}</td><td class="num">${dec2(g.val)}</td>
       <td class="txt">${g.idx.some(i => B.recG[i] >= 0) ? '<span class="tag rep">Sim</span>' : 'Não'}</td>${usrTd(g)}`;
   }
@@ -1241,9 +1268,9 @@ const COLS_LANC = ['SUPERINTENDENCIA', 'CIDADE', 'EMP_CODIGO', 'ZONA_LIGACAO', '
 const lancCols = i => { const d = B.d; const r = d.refs[d.ref[i]]; return [supDe(i), B.c.dict.cid[B.rCid[i]] || '', d.emp[i], d.zona[i], d.mat[i], nomeDe(i), r ? r.slice(5, 7) + '/' + r.slice(0, 4) : '',
   dataTxt(d.dt[i]), horaTxt(d.dt[i]), d.ano[i], String(d.log[i]), d.usrs[d.usr[i]], +d.vav[i].toFixed(2), +d.desc[i].toFixed(2), +d.tot[i].toFixed(2), +d.pct[i].toFixed(2)]; };
 function exportaLista(){
-  const L = listaAtual(), hoje = new Date(), dia = `${hoje.getFullYear()}${p2(hoje.getMonth() + 1)}${p2(hoje.getDate())}`, lin = [];
+  const d = B.d, L = listaAtual(), hoje = new Date(), dia = `${hoje.getFullYear()}${p2(hoje.getMonth() + 1)}${p2(hoje.getDate())}`, lin = [];
   if (st.lista === 'dup'){
-    L.forEach((g, gi) => g.idx.forEach((i, k) => { const rep = k < g.n - 1; lin.push([gi + 1, g.niv, rep ? 'LANCAMENTO_A_MAIS' : 'VALIDO', k + 1, g.n, rep ? +g.desc.toFixed(2) : 0, ...lancCols(i)]); }));
+    L.forEach((g, gi) => g.idx.forEach((i, k) => { const rep = k < g.n - 1; lin.push([gi + 1, g.niv, rep ? 'LANCAMENTO_A_MAIS' : 'VALIDO', k + 1, g.n, rep ? +d.desc[i].toFixed(2) : 0, ...lancCols(i)]); }));
     baixaCsv(`duplicidades_descontos_${dia}.csv`, ['ID_DESCONTO_REPETIDO', 'NIVEL', 'SITUACAO', 'ORDEM_DO_LANCAMENTO', 'VEZES_LANCADO', 'VALOR_EM_DUPLICIDADE', ...COLS_LANC], lin);
   } else if (st.lista === 'al'){
     L.forEach((g, gi) => { const ms = g.refs.map(r => mesTxt(B.d.refs[r])).join(', '); g.idx.forEach(i => lin.push([gi + 1, g.n, ms, B.recG[i] >= 0 ? (B.recRep[i] ? 'LANCAMENTO_A_MAIS' : 'VALIDO') : '', ...lancCols(i)])); });
@@ -1290,14 +1317,15 @@ function renderDados(){
       ${li('<b>Superintendência:</b> vem dos cadastros da subpasta Cadastro (todos os .xlsx são lidos), pela coluna SUPERINTENDENCIA e não pelo nome do arquivo. <b>LAGOS é a Superintendência Interior</b> e aparece sempre como Interior; LESTE aparece como Leste. A cidade e o nome do cliente também vêm do cadastro.')}
       ${li('<b>Cruzamento:</b> pela CHAVE_LIGACAO do cadastro, que é EMP_CODIGO-NUM_LIGACAO do arquivo de descontos (ex.: 56-100607450). Cadastro sem CHAVE_LIGACAO cruza só pelo NUM_LIGACAO.')}
       ${li('<b>Matrículas fora das superintendências:</b> continuam sendo lidas, mas ficam fora de indicadores, gráficos, tabelas e listas por enquanto. A quantidade e o que dariam pelas mesmas regras estão em “Lançamentos considerados”.')}
-      ${li('<b>Desconto repetido:</b> o mesmo valor de DESCONTO (comparado ao centavo) lançado duas ou mais vezes na mesma matrícula (NUM_LIGACAO) e no mesmo mês de referência (REFERENCIA). Cada desconto repetido é uma linha na aba Duplicidades.')}
-      ${li('<b>Nível 1 – descontos repetidos idênticos:</b> todos os lançamentos do desconto repetido têm também o mesmo VALOR_TOTAL. <b>Nível 2 – descontos repetidos com total diferente:</b> mesmo desconto, mas o VALOR_TOTAL mudou entre os lançamentos (provavelmente a mesma negociação refeita com o débito atualizado). Um desconto repetido com totais misturados (dois iguais e um diferente, por exemplo) fica inteiro no nível 2.')}
-      ${li('<b>Lançamento válido:</b> o mais recente de cada desconto repetido, por DAT_ACESSO + DAT_ACESSO_HORA; no empate, o de maior NUM_LOG. Os demais são <b>lançamentos a mais</b>. <b>Valor registrado em duplicidade</b> = soma dos descontos dos lançamentos a mais = (vezes lançado − 1) × desconto, em cada desconto repetido.')}
+      ${li('<b>Desconto repetido:</b> o mesmo desconto (ou a mesma negociação) lançado duas ou mais vezes na mesma matrícula (NUM_LIGACAO) e no mesmo mês de referência (REFERENCIA). Cada lançamento entra em no máximo um desconto repetido como lançamento a mais. Cada desconto repetido é uma linha na aba Duplicidades. Os valores são comparados ao centavo.')}
+      ${li('<b>Primeiro passo, o mesmo débito:</b> os lançamentos são agrupados por matrícula + mês + VALOR_TOTAL. Com dois ou mais lançamentos: se todos têm o mesmo DESCONTO, é <b>nível 1 – descontos repetidos idênticos</b>; se os descontos são diferentes, é <b>nível 3 – mesmo total, desconto diferente</b> (o mesmo débito renegociado com outro percentual).')}
+      ${li('<b>Segundo passo, nível 2 – total diferente:</b> do que sobrou de cada débito (o lançamento válido ou o lançamento único), os que têm o mesmo DESCONTO com VALOR_TOTAL diferente (provavelmente a mesma negociação com o débito atualizado). Um lançamento pode ser o válido do seu débito (nível 1 ou 3) e, ao mesmo tempo, lançamento a mais no nível 2; por isso ele pode aparecer em duas linhas da lista e do CSV, mas o seu valor entra uma vez só.')}
+      ${li('<b>Lançamento válido:</b> o mais recente de cada desconto repetido, por DAT_ACESSO + DAT_ACESSO_HORA; no empate, o de maior NUM_LOG. Os demais são <b>lançamentos a mais</b>. <b>Valor registrado em duplicidade</b> = soma dos descontos dos lançamentos a mais dos três níveis (no nível 3, cada um com o seu próprio valor de desconto).')}
       ${li('<b>Alerta entre meses:</b> mesma matrícula com o mesmo valor de desconto em dois ou mais meses de referência diferentes, independentemente do total. Fica separado dos níveis e não soma no valor em duplicidade.')}
-      ${li('<b>A verificar:</b> mesma matrícula e mês de referência com dois ou mais valores de desconto diferentes (por exemplo, um desconto aplicado em cada fatura em vez de um só). Não é duplicidade: só se confirma entrando na matrícula. Um caso a verificar pode ter, dentro dele, um desconto repetido (coluna “Também em duplicidade”).')}
+      ${li('<b>A verificar:</b> mesma matrícula e mês de referência que, depois de tirar os lançamentos a mais, ainda tem dois ou mais valores de desconto diferentes, com totais diferentes (por exemplo, um desconto aplicado em cada fatura em vez de um só). Não é duplicidade: só se confirma entrando na matrícula. A lista mostra todos os lançamentos do mês; a coluna “Também em duplicidade” indica se algum deles é desconto repetido.')}
       ${li('<b>Filtros:</b> Superintendência, Cidade e Zona valem pela matrícula; a lista de cidades mostra só as das superintendências marcadas. Mês de referência vale pela referência do desconto repetido (no alerta entre meses, o desconto entra se algum dos seus meses estiver marcado). Usuário: o desconto repetido entra se tiver pelo menos um lançamento de um usuário marcado, com todos os seus lançamentos; “Lançamentos com desconto analisados” conta só os lançamentos dos usuários marcados.')}
       ${li('<b>Por usuário:</b> lançamentos a mais e valor em duplicidade ficam com o usuário que fez o lançamento a mais; descontos repetidos e matrículas contam onde o usuário fez algum lançamento do desconto repetido (inclusive o válido). A soma da coluna de descontos repetidos pode passar do total porque um desconto pode ter lançamentos de mais de um usuário.')}
-      ${li('<b>Indicadores:</b> matrículas com desconto em duplicidade = matrículas com pelo menos um desconto repetido de nível 1 ou 2; o percentual é sobre as matrículas com desconto na base filtrada. Matrículas a verificar contam cada matrícula uma vez, mesmo com casos em mais de um mês.')}
+      ${li('<b>Indicadores:</b> matrículas com desconto em duplicidade = matrículas com pelo menos um desconto repetido de nível 1, 2 ou 3; o percentual é sobre as matrículas com desconto na base filtrada. Matrículas a verificar contam cada matrícula uma vez, mesmo com casos em mais de um mês.')}
       ${li('<b>Datas e horários:</b> exatamente como vêm no arquivo, sem conversão de fuso.')}
       ${li('<b>Downloads:</b> CSV com separador ponto e vírgula, vírgula decimal e acentos (abre direto no Excel), uma linha por lançamento da lista mostrada, respeitando filtros, busca e nível. No arquivo de descontos repetidos, cada desconto tem um ID_DESCONTO_REPETIDO, e a soma de VALOR_EM_DUPLICIDADE é o valor em duplicidade da lista.')}
       ${li('<b>Privacidade:</b> os arquivos são lidos só no seu computador; a base processada fica guardada neste navegador até você atualizar ou apagar. Nada vai para a internet nem para o repositório.')}
