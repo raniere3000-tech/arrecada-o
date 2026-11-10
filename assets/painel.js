@@ -52,7 +52,7 @@
     document.body.classList.toggle("modo-dup", dup);
     document.querySelectorAll(".chave-visual button").forEach((b) => b.classList.toggle("on", b.dataset.modo === m));
     $("dupArea").hidden = !dup;
-    document.querySelector(".top h1").textContent = dup ? "Duplicidades" : "Arrecadação Diária";
+    document.querySelector(".top h1").textContent = dup ? "Duplicidade de descontos" : "Arrecadação Diária";
     if (dup) desenhaDuplicidades();
     try { localStorage.setItem("arrecadacao_modo", m); } catch (e) { /* sem armazenamento */ }
   }

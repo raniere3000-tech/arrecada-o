@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v67-20261110">
+<link rel="stylesheet" href="assets/painel.css?v=v68-20261110">
 </head>
 <body>
 
@@ -42,7 +42,7 @@
         </span></span>
       <div class="chave-visual" role="group" aria-label="Painel">
         <button type="button" data-modo="arrecadacao" class="on">Arrecadação</button>
-        <button type="button" data-modo="duplicidades">Duplicidades</button>
+        <button type="button" data-modo="duplicidades">Duplicidade de descontos</button>
       </div>
       <input type="file" id="inputPasta" webkitdirectory directory multiple hidden>
     </div>
@@ -84,7 +84,7 @@
 </nav>
 
 <main id="inicio">
-  <!-- painel de Duplicidades (em migração): lê a pasta "Duplicidades" da pasta principal, que não entra na arrecadação -->
+  <!-- painel Duplicidade de descontos: lê a pasta "Duplicidades" da pasta principal, que não entra na arrecadação -->
   <section id="dupArea" hidden>
     <p class="nota dup-nota" id="dupArquivos"></p>
     <iframe id="dupFrame" title="Duplicidades de descontos" hidden></iframe>
@@ -590,9 +590,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v67-20261110"></script>
-<script src="assets/calculos.js?v=v67-20261110"></script>
-<script>const VERSAO_SITE = "v67-20261110"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v67-20261110"></script>
+<script src="assets/regras.js?v=v68-20261110"></script>
+<script src="assets/calculos.js?v=v68-20261110"></script>
+<script>const VERSAO_SITE = "v68-20261110"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v68-20261110"></script>
 </body>
 </html>
