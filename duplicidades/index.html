@@ -304,6 +304,12 @@ table.res-tab td.ganho{color:#166534;font-weight:700}
 .res-barra{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#eef2f6;margin:6px 0 2px}
 .res-barra i{display:block;height:100%}
 .res-nota{font-size:12px;color:var(--azul-claro);margin:6px 0 0}
+.res-kpis.unico{grid-template-columns:minmax(0,1fr)}
+table.res-tab tr.res-sup td:first-child{cursor:pointer;font-weight:600}
+table.res-tab tr.res-sup:hover td{background:#f5f8fb}
+.res-seta{display:inline-block;width:14px;color:var(--azul)}
+table.res-tab tr.res-cid td{color:#475569;font-size:12.5px}
+table.res-tab tr.res-cid td:first-child{padding-left:28px}
 @media (max-width:900px){.res-kpis,.res-grade{grid-template-columns:minmax(0,1fr)}}
 /* verificação manual (Alerta e A verificar): Duplicidade (nível 4) ou Válido */
 .marca{display:inline-flex;gap:4px}
@@ -383,7 +389,7 @@ pre.pasta{background:var(--cinza);border:1px solid var(--linha);border-radius:8p
     </div>
     <div class="res-grade">
       <div class="card"><h2>Por nível</h2><div class="tabela-wrap"><table class="res-tab" id="resNivel"></table></div></div>
-      <div class="card"><h2>Por superintendência</h2><div class="tabela-wrap"><table class="res-tab" id="resSup"></table></div></div>
+      <div class="card"><h2 id="resSupTit">Por superintendência</h2><div class="tabela-wrap"><table class="res-tab" id="resSup"></table></div></div>
     </div>
     <div class="card">
       <div class="card-topo"><div><h2>Por mês de referência</h2><p class="nota-secao">Valor recuperado (lançamentos a mais) de cada mês de referência, por nível.</p></div></div>
@@ -787,7 +793,7 @@ self.onmessage = async ev => {
 </script>
 
 <script>
-const VERSAO_SITE = 'v1.3';
+const VERSAO_SITE = 'v1.4';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = VERSAO_SITE;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -819,7 +825,7 @@ const supNome = s => { const n = norm(s); return n === 'LAGOS' || n === 'INTERIO
 const cidNome = s => s ? s.toLowerCase().replace(/(^|[\s.(-])([a-zà-ú])/g, (x, a, b) => a + b.toUpperCase()).replace(/\b(De|Do|Da|Dos|Das|E)\b/g, w => w.toLowerCase()) : '(sem cidade)';
 
 let R = null, B = null, rodando = false;
-const st = { tab: 'resultado', med: 'rep', sup: null, cid: null, zona: null, usr: null, mes: null, lista: 'dup', busca: '', nivel: '', ord: 'valor', pag: 0, abertos: new Set(), usrOrd: { k: 'rep', dir: -1 } };
+const st = { resAbertos: new Set(), tab: 'resultado', med: 'rep', sup: null, cid: null, zona: null, usr: null, mes: null, lista: 'dup', busca: '', nivel: '', ord: 'valor', pag: 0, abertos: new Set(), usrOrd: { k: 'rep', dir: -1 } };
 const F = {};   // componentes de filtro
 
 /* ---------- progresso no cabeçalho ---------- */
@@ -1309,21 +1315,43 @@ function renderResultado(){
   $('#resNota').textContent = `Valor recuperado = soma dos descontos dos lançamentos a mais (registrados em duplicidade) dos níveis 1 a 4: o lançamento válido (o mais recente) não entra. Base: ${R.desc.arquivo}, `
     + `${nf(o.lanc)} lançamentos com desconto (${rs0(o.lancV)}).` + (filtros.length ? ` Com filtros: ${filtros.join(', ')}.` : ` Superintendências ${B.supNomes.join(' e ')}.`);
   // por superintendência (cada desconto repetido pela matrícula)
-  const porSup = new Map(B.supNomes.map(s => [s, { v: 0, r: 0, m: new Set(), n: [0, 0, 0, 0, 0] }]));
-  for (const g of o.G){ const x = porSup.get(supDe(g.i0)); if (!x) continue; x.v += g.val; x.r += g.rep; x.m.add(g.mat); x.n[g.niv] += g.val; }
+  const novo = () => ({ v: 0, r: 0, m: new Set(), n: [0, 0, 0, 0, 0], cid: new Map() });
+  const soma = (x, g) => { x.v += g.val; x.r += g.rep; x.m.add(g.mat); x.n[g.niv] += g.val; };
+  const porSup = new Map(B.supNomes.map(s => [s, novo()]));
+  for (const g of o.G){
+    const x = porSup.get(supDe(g.i0)); if (!x) continue; soma(x, g);
+    const c = cidDe(g.i0); if (!x.cid.has(c)) x.cid.set(c, novo()); soma(x.cid.get(c), g);
+  }
   const sups = [...porSup].filter(([, x]) => x.v > 0 || !st.sup).sort((a, b) => b[1].v - a[1].v);
-  $('#resKpis').innerHTML = `<div class="res-kpi total"><span>Valor recuperado</span><b>${rs(o.val)}</b><small>${pl(o.rep, 'lançamento a mais', 'lançamentos a mais')} em ${pl(o.mats.size, 'matrícula', 'matrículas')} · ${pc(o.val, o.lancV)} do valor lançado em descontos</small></div>`
-    + sups.slice(0, 2).map(([s, x]) => `<div class="res-kpi"><span>${esc(s)}</span><b>${rs(x.v)}</b><small>${pl(x.r, 'lançamento a mais', 'lançamentos a mais')} · ${pl(x.m.size, 'matrícula', 'matrículas')} · ${pc(x.v, o.val)} do total</small></div>`).join('');
+  // uma superintendência só (pelo filtro, ou a base só tem uma): o cartão do total leva o nome dela e a tabela vira "Por cidade"
+  const supUnica = st.sup && st.sup.size === 1 ? B.supNomes[[...st.sup][0]] : B.supNomes.length === 1 ? B.supNomes[0] : null;
+  $('#resKpis').classList.toggle('unico', !!supUnica);
+  $('#resKpis').innerHTML = `<div class="res-kpi total"><span>Valor recuperado${supUnica ? ' — ' + esc(supUnica) : ''}</span><b>${rs(o.val)}</b><small>${pl(o.rep, 'lançamento a mais', 'lançamentos a mais')} em ${pl(o.mats.size, 'matrícula', 'matrículas')} · ${pc(o.val, o.lancV)} do valor lançado em descontos</small></div>`
+    + (supUnica ? '' : sups.slice(0, 2).map(([s, x]) => `<div class="res-kpi"><span>${esc(s)}</span><b>${rs(x.v)}</b><small>${pl(x.r, 'lançamento a mais', 'lançamentos a mais')} · ${pl(x.m.size, 'matrícula', 'matrículas')} · ${pc(x.v, o.val)} do total</small></div>`).join(''));
   $('#resBarra').innerHTML = NIVEIS.map(([n, , cor]) => o.niv[n].v > 0 ? `<i style="width:${o.niv[n].v / o.val * 100}%;background:${cor}" title="Nível ${n}: ${rs(o.niv[n].v)}"></i>` : '').join('');
   $('#resBarraNota').innerHTML = o.val ? NIVEIS.map(([n, , cor]) => `<span class="res-cor" style="background:${cor}"></span>Nível ${n}: ${pc(o.niv[n].v, o.val)}`).join(' &nbsp; ') : 'Nenhum valor em duplicidade com os filtros escolhidos.';
   // por nível
   $('#resNivel').innerHTML = `<thead><tr><th>Nível</th><th class="num">Descontos repetidos</th><th class="num">Matrículas</th><th class="num">Lançamentos a mais</th><th class="num">Valor recuperado</th></tr></thead><tbody>`
     + NIVEIS.map(([n, nome, cor]) => `<tr><td><span class="res-cor" style="background:${cor}"></span>${esc(nome)}</td><td class="num">${nf(o.niv[n].g)}</td><td class="num">${nf(o.niv[n].m.size)}</td><td class="num">${nf(o.niv[n].r)}</td><td class="num ganho">${rs(o.niv[n].v)}</td></tr>`).join('')
     + `<tr class="linha-total"><td>Total</td><td class="num">${nf(o.G.length)}</td><td class="num">${nf(o.mats.size)}</td><td class="num">${nf(o.rep)}</td><td class="num">${rs(o.val)}</td></tr></tbody>`;
-  // por superintendência
-  $('#resSup').innerHTML = `<thead><tr><th>Superintendência</th><th class="num">Matrículas</th><th class="num">Lançamentos a mais</th>${NIVEIS.map(([n]) => `<th class="num">Nível ${n}</th>`).join('')}<th class="num">Valor recuperado</th></tr></thead><tbody>`
-    + sups.map(([s, x]) => `<tr><td>${esc(s)}</td><td class="num">${nf(x.m.size)}</td><td class="num">${nf(x.r)}</td>${NIVEIS.map(([n]) => `<td class="num">${dec2(x.n[n])}</td>`).join('')}<td class="num ganho">${rs(x.v)}</td></tr>`).join('')
-    + `<tr class="linha-total"><td>Total</td><td class="num">${nf(o.mats.size)}</td><td class="num">${nf(o.rep)}</td>${NIVEIS.map(([n]) => `<td class="num">${dec2(o.niv[n].v)}</td>`).join('')}<td class="num">${rs(o.val)}</td></tr></tbody>`;
+  // por superintendência (a seta abre as cidades) ou, com uma superintendência só, direto por cidade
+  const cels = (x, ganho) => `<td class="num">${nf(x.m.size)}</td><td class="num">${nf(x.r)}</td>${NIVEIS.map(([n]) => `<td class="num">${dec2(x.n[n])}</td>`).join('')}<td class="num${ganho ? ' ganho' : ''}">${rs(x.v)}</td>`;
+  const cidades = x => [...x.cid].sort((a, b) => b[1].v - a[1].v);
+  $('#resSupTit').textContent = supUnica ? 'Por cidade' : 'Por superintendência';
+  let corpo;
+  if (supUnica){
+    const x = porSup.get(supUnica) || novo();
+    corpo = cidades(x).map(([c, y]) => `<tr><td>${esc(c)}</td>${cels(y, true)}</tr>`).join('');
+  } else corpo = sups.map(([s, x]) => {
+    const ab = st.resAbertos.has(s);
+    return `<tr class="res-sup" data-sup="${esc(s)}" title="Clique para ${ab ? 'fechar' : 'abrir'} as cidades"><td><span class="res-seta">${ab ? '▾' : '▸'}</span>${esc(s)}</td>${cels(x, true)}</tr>`
+      + (ab ? cidades(x).map(([c, y]) => `<tr class="res-cid"><td>${esc(c)}</td>${cels(y, false)}</tr>`).join('') : '');
+  }).join('');
+  $('#resSup').innerHTML = `<thead><tr><th>${supUnica ? 'Cidade' : 'Superintendência'}</th><th class="num">Matrículas</th><th class="num">Lançamentos a mais</th>${NIVEIS.map(([n]) => `<th class="num">Nível ${n}</th>`).join('')}<th class="num">Valor recuperado</th></tr></thead><tbody>`
+    + corpo + `<tr class="linha-total"><td>Total</td><td class="num">${nf(o.mats.size)}</td><td class="num">${nf(o.rep)}</td>${NIVEIS.map(([n]) => `<td class="num">${dec2(o.niv[n].v)}</td>`).join('')}<td class="num">${rs(o.val)}</td></tr></tbody>`;
+  $('#resSup').querySelectorAll('tr.res-sup').forEach(tr => tr.onclick = () => {
+    const k = tr.dataset.sup; if (st.resAbertos.has(k)) st.resAbertos.delete(k); else st.resAbertos.add(k); renderResultado();
+  });
   // por mês de referência (gráfico de colunas empilhadas + tabela)
   const meses = B.refs.filter(r => okMes(r) && o.mes[r].vn.some(v => v > 0));
   const tot = r => o.mes[r].vn[1] + o.mes[r].vn[2] + o.mes[r].vn[3] + o.mes[r].vn[4];
@@ -1491,7 +1519,7 @@ function renderDados(){
       ${li('<b>Alerta entre meses:</b> mesma matrícula com o mesmo valor de desconto em dois ou mais meses de referência diferentes, independentemente do total. Fica separado dos níveis e não soma no valor em duplicidade, a não ser que seja marcado como duplicidade (nível 4).')}
       ${li('<b>A verificar:</b> mesma matrícula e mês de referência que, depois de tirar os lançamentos a mais, ainda tem dois ou mais valores de desconto diferentes, com totais diferentes (por exemplo, um desconto aplicado em cada fatura em vez de um só). Não é duplicidade: só se confirma entrando na matrícula. A lista mostra todos os lançamentos do mês; a coluna “Também em duplicidade” indica se algum deles é desconto repetido.')}
       ${li('<b>Nível 4 – verificado manualmente:</b> na aba Duplicidades, cada caso de Alerta entre meses ou A verificar tem os botões <b>Duplicidade</b> e <b>Válido</b> (clicar de novo desfaz). Marcado como duplicidade, o caso vira um desconto repetido de nível 4: o lançamento mais recente do caso é o válido e os demais são lançamentos a mais, menos os que já são lançamento a mais nos níveis 1 a 3 (cada lançamento conta uma vez). O valor entra no valor registrado em duplicidade. Marcado como válido, o caso sai dos pendentes e não soma. As marcações ficam no arquivo ajustes_arrecadacao.json da pasta principal (valem para todos) e são guardadas pela matrícula + desconto (alerta) ou matrícula + mês (a verificar): continuam valendo quando o arquivo de descontos é atualizado.')}
-      ${li('<b>Resultado:</b> o valor recuperado é o valor registrado em duplicidade dos níveis 1 a 4 (os lançamentos a mais), por superintendência (pela matrícula), por nível e por mês de referência (no nível 4, cada lançamento a mais no seu mês). Segue os filtros do topo.')}
+      ${li('<b>Resultado:</b> o valor recuperado é o valor registrado em duplicidade dos níveis 1 a 4 (os lançamentos a mais), por superintendência (pela matrícula; a seta de cada uma abre as cidades), por nível e por mês de referência (no nível 4, cada lançamento a mais no seu mês). Com uma superintendência só no filtro, o cartão do valor recuperado leva o nome dela e a tabela passa a ser por cidade. Segue os filtros do topo.')}
       ${li('<b>Filtros:</b> Superintendência, Cidade e Zona valem pela matrícula; a lista de cidades mostra só as das superintendências marcadas. Mês de referência vale pela referência do desconto repetido (no alerta entre meses, o desconto entra se algum dos seus meses estiver marcado). Usuário: o desconto repetido entra se tiver pelo menos um lançamento de um usuário marcado, com todos os seus lançamentos; “Lançamentos com desconto analisados” conta só os lançamentos dos usuários marcados.')}
       ${li('<b>Por usuário:</b> lançamentos a mais e valor em duplicidade ficam com o usuário que fez o lançamento a mais; descontos repetidos e matrículas contam onde o usuário fez algum lançamento do desconto repetido (inclusive o válido). A soma da coluna de descontos repetidos pode passar do total porque um desconto pode ter lançamentos de mais de um usuário.')}
       ${li('<b>Indicadores:</b> matrículas com desconto em duplicidade = matrículas com pelo menos um desconto repetido de nível 1, 2, 3 ou 4; Alerta e Matrículas a verificar mostram os casos pendentes (sem marcação); o percentual é sobre as matrículas com desconto na base filtrada. Matrículas a verificar contam cada matrícula uma vez, mesmo com casos em mais de um mês.')}
