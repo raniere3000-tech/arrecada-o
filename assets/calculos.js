@@ -1105,8 +1105,9 @@
   // Tabela do BI por matrícula: para cada mês mis[j], uma linha por ligação × (cidade, subcategoria, perfil) com o valor nos dias
   // marcados (o desconto da ligação sai da 1ª linha dela no mês, como nas abas), os dias com pagamento e se a ligação pagou no
   // mês anterior misAnt[j] (nos mesmos dias e filtros). ligs: Set de ligações (null = todas). Ordem: mês, ligação.
-  function porMatricula(an, combos, mis, misAnt, marcas, sel, ligs) {
-    const S = "\u0001", rot = combos.map((c) => c.cidade + S + c.grupo + S + c.perfil), out = [];
+  // emite(x): recebe cada linha em vez de juntar numa lista (base completa: milhões de linhas sem guardar todas)
+  function porMatricula(an, combos, mis, misAnt, marcas, sel, ligs, emite) {
+    const S = "\u0001", rot = combos.map((c) => c.cidade + S + c.grupo + S + c.perfil + S + c.sup), out = [];
     const pagaram = (mi) => {
       const s = new Set();
       for (const { L, mapa } of (mi >= 0 && an.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
@@ -1135,12 +1136,13 @@
       for (const l of [...porLig.keys()].sort((a, b) => a - b)) {
         let prim = true;
         for (const [r, x] of porLig.get(l)) {
-          const [cidade, grupo, perfil] = r.split(S);
+          const [cidade, grupo, perfil, sup] = r.split(S);
           let dias = 0;
           for (let d = 0; d <= MAX_DIA; d++) if (x.mask & (1 << d)) dias++;
           const desc = prim && dm ? dm.get(l) || 0 : 0;
           prim = false;
-          out.push({ lig: l, j, cidade, grupo, perfil, valor: x.valor - desc, dias, pagouAnt: ant ? ant.has(l) : null });
+          const linha = { lig: l, j, sup, cidade, grupo, perfil, valor: x.valor - desc, dias, pagouAnt: ant ? ant.has(l) : null };
+          if (emite) emite(linha); else out.push(linha);
         }
       }
     });

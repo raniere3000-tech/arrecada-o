@@ -2463,19 +2463,24 @@
     $("biMatResultado").innerHTML = "";
   });
   $("biLigs").addEventListener("input", () => { const n = ligsDoTexto($("biLigs").value).length; $("biQtdLigs").textContent = n ? `${fmt(n)} matrícula${n === 1 ? "" : "s"}` : ""; });
-  function baixaBIMatriculas() {
-    const ms = mesesDoBI();
+  let biCompletaPedida = false;
+  function baixaBIMatriculas(completa) {
+    const ms = completa ? [...E.res.dados.meses] : mesesDoBI();
     if (!ms.length) { toast("Marque pelo menos um mês.", true); return; }
-    const ligs = ligsDoTexto($("biLigs").value);
-    $("biBaixar").disabled = true; $("biStatus").textContent = "Montando por matrícula…"; $("biMatResultado").innerHTML = "";
+    const ligs = completa ? [] : ligsDoTexto($("biLigs").value);
+    biCompletaPedida = !!completa;
+    $("biBaixar").disabled = true; $("biCompleta").disabled = true; $("biMatResultado").innerHTML = "";
+    $("biStatus").textContent = completa ? "Montando a base completa por matrícula (pode levar alguns minutos)…" : "Montando por matrícula…";
     worker.postMessage({ tipo: "bimatriculas", id: ++idBIMat, mis: ms.map(idxMes), misAnt: ms.map((m) => idxMes(C.mesAnterior(m))), meses: ms,
-      marcas: marcas(), sel: selCalc(), ligs: ligs.length ? ligs : null, nomesSup: NOME_SUP });
+      marcas: completa ? C.marcaCombos(E.res.dados, {}) : marcas(), sel: completa ? C.mascaraAte(C.MAX_DIA, true) : selCalc(), ligs: ligs.length ? ligs : null, nomesSup: NOME_SUP });
   }
+  $("biCompleta").addEventListener("click", () => baixaBIMatriculas(true));
   function recebeBIMatriculas(m) {
     if (m.id !== idBIMat) return;
-    $("biBaixar").disabled = false;
+    $("biBaixar").disabled = false; $("biCompleta").disabled = false;
     if (m.erro) { $("biStatus").textContent = "Erro: " + m.erro; return; }
-    const ms = mesesDoBI(), nome = `Tabela_BI_por_matricula_${ms.length > 1 ? `${ms[0]}_a_${ms[ms.length - 1]}` : ms[0]}_${filtroTexto("_").replace(/[^\wÀ-ú+-]+/g, "_")}.csv`;
+    const ms = biCompletaPedida ? [...E.res.dados.meses] : mesesDoBI();
+    const nome = biCompletaPedida ? `Base_completa_por_matricula_${ms[0]}_a_${ms[ms.length - 1]}.csv` : `Tabela_BI_por_matricula_${ms.length > 1 ? `${ms[0]}_a_${ms[ms.length - 1]}` : ms[0]}_${filtroTexto("_").replace(/[^\wÀ-ú+-]+/g, "_")}.csv`;
     $("biStatus").textContent = `${fmt(m.linhas)} linhas · ${fmt(m.matriculas)} matrículas · ${rs(m.valor)}`
       + (m.naoEncontradas ? ` · ${fmt(m.naoEncontradas.length)} matrícula(s) da lista sem pagamento nos meses e dias marcados` : "");
     $("biMatResultado").innerHTML = `<div class="base-acoes"><button type="button" class="btn sec" id="biMatDeNovo">Baixar de novo (CSV)</button>`

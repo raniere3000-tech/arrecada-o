@@ -494,6 +494,7 @@ test("tabela do BI por matrícula: valor nos dias marcados com o desconto, dias 
   a.adiciona(linha(2, "05/10/2026", "999,00", { util: "202-PUBLICO MUNICIPAL" }));            // dia útil 3: fora dos dias 1 e 2
   const d = a.resultado(new Map([["2026-10", new Map([["1", 15]])]])), tudo = C.marcaCombos(d, {});
   const r = C.porMatricula(d.analise, d.combos, [1], [0], tudo, C.mascaraAte(2), null);
+  assert.equal(r[0].sup, "INTERIOR");
   assert.deepEqual(r.map((x) => [x.lig, x.grupo, x.perfil, x.valor, x.dias, x.pagouAnt]),
     [[1, "RESIDENCIAL", "Adimplente", 135, 2, true], [2, "PUBLICO", R.SEM_PERFIL, 200, 1, false]]);
   // a soma bate com a tabela agregada nos mesmos dias

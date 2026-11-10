@@ -730,20 +730,19 @@ async function respondeOportunidades({ miA, miB, marcas, comFat, comRec, recTipo
 // Tabela do BI por matrícula (aba Dados): CSV em blocos (pode ter centenas de milhares de linhas)
 function respondeBIMatriculas({ mis, misAnt, meses, marcas, sel, ligs, nomesSup }) {
   const quer = ligs ? new Set(ligs.map((l) => C.chaveLig(l))) : null;
-  const linhas = C.porMatricula(analise, combosArr, mis, misAnt, marcas, sel, quer);
   const txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " "), mesTxt = meses.map((m) => `${m.slice(5, 7)}/${m.slice(0, 4)}`);
   const blobs = [], partes = [], vistas = new Set();
-  let tam = 0, valor = 0;
-  for (const x of linhas) {
-    vistas.add(x.lig); valor += x.valor;
-    const linha = [ligTxt(x.lig), txt(nomeDe(x.lig)), x.cidade, x.grupo, mesTxt[x.j], x.perfil, nBR(x.valor), x.pagouAnt == null ? "" : x.pagouAnt ? "Sim" : "Não", x.dias].join(";");
+  let tam = 0, valor = 0, n = 0;
+  C.porMatricula(analise, combosArr, mis, misAnt, marcas, sel, quer, (x) => {
+    vistas.add(x.lig); valor += x.valor; n++;
+    const linha = [ligTxt(x.lig), txt(nomeDe(x.lig)), nomesSup[x.sup] || x.sup || "", x.cidade, x.grupo, mesTxt[x.j], x.perfil, nBR(x.valor), x.pagouAnt == null ? "" : x.pagouAnt ? "Sim" : "Não", x.dias].join(";");
     partes.push(linha); tam += linha.length + 2;
     if (tam > 4e6) { blobs.push(new Blob([partes.join("\r\n") + "\r\n"])); partes.length = 0; tam = 0; }
-  }
+  });
   if (partes.length) blobs.push(new Blob([partes.join("\r\n") + "\r\n"]));
-  const cab = ["Matrícula", "Nome", "Cidade", "Subcategoria", "Mes/ano", "Classificação", "Arrecadacao_Acumulada", "Pagou_mês_anterior", "Dias_com_pagamento"].join(";");
+  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", "Mes/ano", "Classificação", "Arrecadacao_Acumulada", "Pagou_mês_anterior", "Dias_com_pagamento"].join(";");
   const naoEncontradas = ligs ? ligs.filter((l) => !vistas.has(C.chaveLig(l))) : null;
-  return { linhas: linhas.length, matriculas: vistas.size, valor, naoEncontradas,
+  return { linhas: n, matriculas: vistas.size, valor, naoEncontradas,
     blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
 }
 // Negociação (área Análises): pagaram em todos os meses misPagou e não pagaram no mês de referência miRef. Devolve o resumo por
