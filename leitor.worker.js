@@ -556,18 +556,21 @@ async function processa(itens) {
   }
   fontesFat = faturas.filter((a) => a.tipo === "faturamento" && a.meses && a.meses.length);
   if (db) await cacheLimpa(db, usados);
-  // O arquivo diário é o mais novo: os meses que ele traz não são lidos dos arquivos acumulados
-  const mesesDiaria = new Set();
+  // O arquivo diário é o mais novo: os meses que ele traz não são lidos dos arquivos acumulados DA MESMA BASE (a base de cada
+  // arquivo é a superintendência, pela cidade, com mais valor nele: Interior/Lagos ou Leste). Assim o diário do Interior não
+  // tira do painel o acumulado da Leste do mesmo mês, e vice-versa.
+  const mesesDiaria = new Set(), diariaDaBase = new Set();       // "SUP|mês"
   for (const a of diarias) {
     if (!exportados.has(a)) continue;
-    const r = agregador.junta(exportados.get(a));
-    r.meses.forEach((m) => mesesDiaria.add(m));
-    Object.assign(a, { registros: r.linhas, meses: r.meses });
+    const exp = exportados.get(a), base = C.supPrincipal(exp), r = agregador.junta(exp);
+    r.meses.forEach((m) => { mesesDiaria.add(m); diariaDaBase.add(base + "|" + m); });
+    Object.assign(a, { registros: r.linhas, meses: r.meses, base });
   }
   for (const a of acumuladas) {
     if (!exportados.has(a)) continue;
-    const r = agregador.junta(exportados.get(a), (m) => !mesesDiaria.has(m));
-    Object.assign(a, { registros: r.linhas, meses: r.meses, puladas: r.puladas });
+    const exp = exportados.get(a), base = C.supPrincipal(exp);
+    const r = agregador.junta(exp, (m) => !diariaDaBase.has(base + "|" + m));
+    Object.assign(a, { registros: r.linhas, meses: r.meses, puladas: r.puladas, base });
   }
   // arquivos de cada mês, para a extração da base (aba Base): o mês do arquivo diário sai só dele
   fontes = { diarias: diarias.filter((a) => a.meses), acumuladas: acumuladas.filter((a) => a.meses), mesesDiaria };
@@ -598,10 +601,10 @@ async function processa(itens) {
 async function extraiBase({ id, ligs, meses, porMesArquivo }) {
   if (!fontes) throw new Error("dados ainda não lidos");
   const quer = ligs ? new Set(ligs.map(C.ligacao)) : null, mesesQ = new Set(meses);
-  const usaDiaria = (m) => fontes.mesesDiaria.has(m);
+  // a.meses do acumulado = só os meses usados dele (os que o diário da mesma base não substituiu)
   const arquivos = [
     ...fontes.diarias.filter((a) => a.meses.some((m) => mesesQ.has(m))).map((a) => ({ a, aceita: (m) => mesesQ.has(m) })),
-    ...fontes.acumuladas.filter((a) => a.meses.some((m) => mesesQ.has(m) && !usaDiaria(m))).map((a) => ({ a, aceita: (m) => mesesQ.has(m) && !usaDiaria(m) })),
+    ...fontes.acumuladas.filter((a) => a.meses.some((m) => mesesQ.has(m))).map((a) => ({ a, aceita: (m) => mesesQ.has(m) && a.meses.includes(m) })),
   ];
   const total = arquivos.reduce((t, x) => t + x.a.tamanho, 0) || 1;
   let base = 0, cab = null, chavesCab = null, linhas = 0;
@@ -651,7 +654,7 @@ async function extraiBase({ id, ligs, meses, porMesArquivo }) {
 // no painel) por subcategoria. Segue os filtros do cabeçalho, com a mesma regra de superintendência da leitura.
 async function extraiMensal({ mes, sups, cidades, grupos }) {
   if (!fontes) throw new Error("dados ainda não lidos");
-  const arqs = fontes.mesesDiaria.has(mes) ? fontes.diarias.filter((a) => a.meses.includes(mes)) : fontes.acumuladas.filter((a) => a.meses.includes(mes));
+  const arqs = [...fontes.diarias, ...fontes.acumuladas].filter((a) => a.meses.includes(mes));   // por base: diário ou acumulado
   const passa = (l, v) => !l || !l.length || l.includes(v), zonas = new Map();
   const supDe = (zona, lig) => {
     let z = zonas.get(zona);

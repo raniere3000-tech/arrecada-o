@@ -45,7 +45,7 @@ Os CSVs já lidos ficam guardados no navegador: na atualização do dia, só o a
 | Arquivo | Como é reconhecido | Uso |
 |---|---|---|
 | Arrecadação diária (`Acomp. de Arrecadação R1.csv`, R4…) | CSV com Nº Ligação, Data Crédito e Val. Autenticado, numa pasta com "Diária" no caminho | Mês atual. Substitui o anterior a cada dia |
-| Arrecadação acumulada | o mesmo CSV em qualquer outra pasta (um por mês) | Meses anteriores. O mês que está no diário é lido só do diário |
+| Arrecadação acumulada | o mesmo CSV em qualquer outra pasta (um por mês) | Meses anteriores. O mês que está no diário é lido só do diário da mesma base (Interior/Lagos ou Leste, pela cidade com mais valor no arquivo) |
 | `Base_Desconto - 25.05.xlsx` | colunas NUM_LIGACAO, REFERENCIA e DESCONTO | Desconto comercial |
 | `Cluster_Cliente_Lagos - 08.08.xlsx` | colunas NUM_LIGACAO, SEQ_RESPONSAVEL e CLUSTER SALDO | Perfil de pagamento |
 | Orçados (RF01T26, RF02T26, RF3T25…) | colunas Sup, Rubrica e um mês por coluna (`jan/26` ou `Soma de 01/10/2025`), com a linha da arrecadação: `(+) Arrecadação`, `05.01. Arrecadação` ou `ARRECADAÇÃO CRÉDITO` | Orçado mensal; o seletor **Orçado** do cabeçalho escolhe a planilha |

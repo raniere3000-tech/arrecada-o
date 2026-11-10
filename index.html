@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v63-20261110">
+<link rel="stylesheet" href="assets/painel.css?v=v64-20261110">
 </head>
 <body>
 
@@ -89,7 +89,7 @@
     <p>Clique em <b>📁 Conectar pasta</b> e escolha a pasta com os arquivos. As subpastas também são lidas. Tudo é processado aqui no navegador: nenhum arquivo é enviado para a internet.</p>
     <ul class="esperados">
       <li><b>Arrecadação diária</b>: o CSV do dia (<code>Acomp. de Arrecadação R1.csv</code>, R4…) numa pasta com “Diária” no nome. Ele substitui o anterior a cada dia.</li>
-      <li><b>Arrecadação acumulada</b>: os CSVs dos meses fechados, um por mês (em qualquer outra subpasta). O mês que estiver no arquivo diário é lido só do diário.</li>
+      <li><b>Arrecadação acumulada</b>: os CSVs dos meses fechados, um por mês (em qualquer outra subpasta). O mês que estiver no arquivo diário é lido só do diário <b>da mesma base</b> (Interior/Lagos ou Leste): o diário de uma base não tira o acumulado da outra.</li>
       <li><b>Desconto comercial</b>: <code>Base_Desconto - 25.05.xlsx</code> (colunas NUM_LIGACAO, REFERENCIA e DESCONTO).</li>
       <li><b>Perfil do cliente</b>: <code>Cluster_Cliente_Lagos - 08.08.xlsx</code> (NUM_LIGACAO, SEQ_RESPONSAVEL e CLUSTER SALDO).</li>
       <li><b>Orçado</b>: as planilhas RF do faturamento (colunas Sup, Rubrica e um mês por coluna), com a linha da arrecadação (<b>(+) Arrecadação</b>, <b>05.01. Arrecadação</b> ou ARRECADAÇÃO CRÉDITO). Com várias (RF01T26, RF02T26…), escolha qual usar em <b>Orçado</b>; sem nenhuma, o orçado do mês pode ser digitado no painel.</li>
@@ -393,7 +393,7 @@
       <details class="card curva"><summary><h2>De onde vêm os dados</h2></summary>
         <p>O painel lê a pasta conectada no próprio navegador (nada é enviado para a internet). As subpastas também são lidas.</p>
         <table class="explica"><thead><tr><th>Arquivo</th><th>Como é reconhecido</th><th>O que entra no painel</th></tr></thead><tbody>
-          <tr><td>Arrecadação diária</td><td>CSV com as colunas Nº Ligação, Data Crédito e Val. Autenticado, numa pasta com “Diária” no caminho</td><td>O mês atual. O mês que estiver no arquivo diário é lido só dele, mesmo que exista também no acumulado.</td></tr>
+          <tr><td>Arrecadação diária</td><td>CSV com as colunas Nº Ligação, Data Crédito e Val. Autenticado, numa pasta com “Diária” no caminho</td><td>O mês atual. O mês que estiver no arquivo diário é lido só dele, mesmo que exista também no acumulado da mesma base (Interior/Lagos ou Leste, pela cidade com mais valor no arquivo). O acumulado da outra base continua entrando.</td></tr>
           <tr><td>Arrecadação acumulada</td><td>O mesmo CSV em qualquer outra pasta (um arquivo por mês, R1, R4…)</td><td>Os meses anteriores.</td></tr>
           <tr><td>Desconto comercial</td><td>Planilha com NUM_LIGACAO, REFERENCIA e DESCONTO</td><td>Desconto de cada ligação no mês da REFERENCIA.</td></tr>
           <tr><td>Perfil do cliente</td><td>Planilha com NUM_LIGACAO, SEQ_RESPONSAVEL e CLUSTER SALDO</td><td>Adimplente, Inadimplente ou Nunca Pagou de cada ligação + contrato.</td></tr>
@@ -585,9 +585,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v63-20261110"></script>
-<script src="assets/calculos.js?v=v63-20261110"></script>
-<script>const VERSAO_SITE = "v63-20261110"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v63-20261110"></script>
+<script src="assets/regras.js?v=v64-20261110"></script>
+<script src="assets/calculos.js?v=v64-20261110"></script>
+<script>const VERSAO_SITE = "v64-20261110"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v64-20261110"></script>
 </body>
 </html>

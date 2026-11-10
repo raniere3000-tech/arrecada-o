@@ -413,6 +413,22 @@
     return out;
   }
 
+  // Superintendência (pela cidade) com mais valor num arquivo exportado: diz de qual base é o arquivo (Interior/Lagos ou
+  // Leste), para que o arquivo diário de uma base só substitua os acumulados da mesma base.
+  function supPrincipal(exp) {
+    const zonaDe = exp.combos.map((ck) => zonaInfo(ck.split(SEP)[0])[1]), soma = new Map();
+    for (const X of Object.values(exp.meses)) {
+      const V = X.V;
+      for (let i = 0; i < V.k.length; i++) {
+        const k = V.k[i], vi = k % MAX_VENC, c = ((k - vi) / MAX_VENC) % MAX_COMBOS, s = zonaDe[c];
+        soma.set(s, (soma.get(s) || 0) + Math.abs(V.valor[i]));
+      }
+    }
+    let melhor = "", max = -1;
+    for (const [s, v] of soma) if (v > max) { max = v; melhor = s; }
+    return melhor;
+  }
+
   // ---------- consultas (página) ----------
   // dados = resultado(); filtro = { sup, cidade, grupo } ("" = todos)
   // cada filtro: um valor, uma lista de valores (filtros de vários itens do cabeçalho) ou vazio = todos
@@ -1103,7 +1119,7 @@
 
   return {
     MAX_DIA, MESES_CURTOS, chave, separaCsv, refDeTexto, vencNum, consertaAcento, LeituraFaturamento, cruzaFaturamento, matrizConversao, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
-    zonaInfo, subInfo, chaveLig, mascaraAte, diasDaMascara, estendeSel, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
+    zonaInfo, supPrincipal, subInfo, chaveLig, mascaraAte, diasDaMascara, estendeSel, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
     clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes, negociacao, faixaNum, montaReceber, analisaReceber, situacaoPadrao, colunasReceber,

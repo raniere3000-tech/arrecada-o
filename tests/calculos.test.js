@@ -471,6 +471,20 @@ test("comparativo por mês: uma coluna por mês, em branco onde não pagou", () 
   assert.deepEqual(C.valoresPorMes(d.analise, mis, C.marcaCombos(d, { sup: "LESTE" })).ligs, [4]);
 });
 
+test("base de cada arquivo (para o diário só substituir o acumulado da mesma base): a superintendência com mais valor", () => {
+  const lagos = new C.LeituraArquivo(), leste = new C.LeituraArquivo();
+  lagos.adiciona(linha(1, "03/11/2026", "500,00")); lagos.adiciona({ ...linha(2, "03/11/2026", "20,00"), zona: "16-SAO GONCALO" });
+  leste.adiciona({ ...linha(3, "03/11/2026", "900,00"), zona: "16-SAO GONCALO" }); leste.adiciona({ ...linha(4, "03/11/2026", "300,00"), zona: "12-MARICA" });
+  const eL = lagos.exporta(), eE = leste.exporta();
+  assert.equal(C.supPrincipal(eL), "INTERIOR");
+  assert.equal(C.supPrincipal(eE), "LESTE");
+  // diário do Interior e acumulado da Leste no mesmo mês: os dois entram
+  const a = new C.Agregador(), base = new Set(["INTERIOR|2026-11"]);
+  a.junta(eL); a.junta(eE, (m) => !base.has(C.supPrincipal(eE) + "|" + m));
+  const d = a.resultado(new Map());
+  perto(C.totalDoMes(d, 0, C.marcaCombos(d, {}), C.mascaraAte(23, true)).valor, 500 + 20 + 900 + 300);
+});
+
 test("negociação: pagaram em todos os meses marcados e não pagaram no mês de referência", () => {
   const a = new C.Agregador();
   a.adiciona(linha(1, "01/07/2026", "100,00")); a.adiciona(linha(1, "03/08/2026", "50,00"));                       // jul e ago, não set
