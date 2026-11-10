@@ -268,7 +268,18 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 .semdados{padding:30px 10px;text-align:center;color:var(--azul-claro)}
 /* dentro do painel de Arrecadação: a pasta vem da pasta principal (subpasta Duplicidades); sem os botões de pasta */
 body.embutido #btnFolder,body.embutido #btnUpdate,body.embutido #btnClear,body.embutido .header-badge,body.embutido .header-linha h1{display:none!important}
-body.embutido .header-exec{border-radius:10px}
+body.embutido .header-exec{border-radius:10px;padding:6px 14px}
+body.embutido .acoes{margin-top:2px}
+/* página inteira e nada rolando para o lado: tabelas e gráficos cabem no quadro (texto e títulos quebram linha) */
+.header-inner,.toolbar,main{max-width:none}
+body.embutido .toolbar{padding:0}
+body.embutido main{padding:0 0 30px}
+.bloco-rolagem{overflow-x:hidden}
+.tabela-wrap{overflow-x:hidden;overflow-y:auto}
+.cons-wrap{overflow-x:hidden;overflow-y:auto}
+th{white-space:normal}
+td.txt,table.res-tab td:first-child,.tab-seg td:first-child{white-space:normal;overflow-wrap:anywhere}
+.cons{width:100%}
 /* Resultado (apresentação): no estilo do resultado da Análise de Garantia */
 .res-kpis{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:12px;margin:10px 0 14px}
 .res-kpi{background:#fff;border:1px solid var(--linha);border-radius:10px;padding:14px 18px;border-left:6px solid var(--marinho)}
@@ -1212,7 +1223,7 @@ function renderGrafico(o){
     const visto = new Set(); return [1, 2, 3, 4].map(n => { let c = 0; x.mn[n].forEach(m => { if (!visto.has(m)){ visto.add(m); c++; } }); return c; });
   };
   const S = meses.map(serie), tot = S.map(s => s[0] + s[1] + s[2] + s[3]);
-  const COL = 76, ROT = 180, W = Math.max(1000, ROT + meses.length * COL), H = 230, top = 24, base = 206;
+  const ROT = 180, W = Math.max(480, $('#grafBloco').parentElement.clientWidth || 1000), H = 230, top = 24, base = 206;   // largura do quadro
   const max = Math.max(1, ...tot), esc1 = v => v / max * (base - top);
   const cw = (W - ROT) / meses.length, bw = Math.min(40, cw * 0.62);
   const fmt = v => med === 'val' ? nf(v) : nf(v);
@@ -1245,7 +1256,7 @@ function renderGrafico(o){
     ${lin('mudo', linhaRef[0], meses.map(r => fmt(linhaRef[1](r))))}
     ${lin('mudo', '% em duplicidade', meses.map((r, k) => pc(tot[k], linhaRef[1](r))))}
   </tbody></table>`;
-  $('#grafBloco').style.minWidth = W + 'px';
+  $('#grafBloco').style.minWidth = '';
   $('#grafBloco').innerHTML = svg + tab;
   const rol = $('#grafBloco').parentElement; rol.scrollLeft = rol.scrollWidth;   // abre nos meses mais recentes
   $('#grafBloco').querySelectorAll('.col-hover').forEach(el => {
@@ -1318,7 +1329,7 @@ function renderResultado(){
   const tot = r => o.mes[r].vn[1] + o.mes[r].vn[2] + o.mes[r].vn[3] + o.mes[r].vn[4];
   if (!meses.length){ $('#resMesGraf').innerHTML = '<p class="semdados">Nenhum valor em duplicidade com os filtros escolhidos.</p>'; $('#resMes').innerHTML = ''; }
   else {
-    const COL = 70, W = Math.max(420, 40 + meses.length * COL), H = 210, top = 22, base = 186, max = Math.max(1, ...meses.map(tot)), cw = (W - 40) / meses.length, bw = Math.min(40, cw * 0.6);
+    const W = Math.max(360, Math.min($('#resMesGraf').parentElement.clientWidth || 900, 40 + meses.length * 110)), H = 210, top = 22, base = 186, max = Math.max(1, ...meses.map(tot)), cw = (W - 40) / meses.length, bw = Math.min(40, cw * 0.6);
     let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="width:${W}px;height:${H}px;max-width:none" role="img" aria-label="Valor recuperado por mês de referência"><line x1="20" x2="${W}" y1="${base}" y2="${base}" stroke="#dbe4ec"/>`;
     meses.forEach((r, k) => {
       const x = 20 + k * cw + (cw - bw) / 2; let y = base;
@@ -1326,7 +1337,7 @@ function renderResultado(){
       svg += `<text x="${x + bw / 2}" y="${y - 5}" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2d3d" font-family="IBM Plex Sans Condensed,Arial">${nf(tot(r))}</text>`;
       svg += `<text x="${x + bw / 2}" y="${base + 16}" text-anchor="middle" font-size="11" fill="#475569" font-family="IBM Plex Sans Condensed,Arial">${mesTxt(d.refs[r])}</text>`;
     });
-    $('#resMesGraf').style.minWidth = W + 'px';
+    $('#resMesGraf').style.minWidth = '';
     $('#resMesGraf').innerHTML = svg + '</svg>';
     const rol = $('#resMesGraf').parentElement; rol.scrollLeft = rol.scrollWidth;
     $('#resMes').innerHTML = `<thead><tr><th>Mês de referência</th>${NIVEIS.map(([n]) => `<th class="num">Nível ${n}</th>`).join('')}<th class="num">Lançamentos a mais</th><th class="num">Valor recuperado</th></tr></thead><tbody>`
@@ -1521,7 +1532,8 @@ document.querySelectorAll('[data-med]').forEach(b => b.onclick = () => {
   renderResumo();
 });
 document.querySelectorAll('[data-lista]').forEach(b => b.onclick = () => { st.lista = b.dataset.lista; showTab('dup'); });
-let tBusca;
+let tBusca, tLarg, largAnt = 0;
+window.addEventListener('resize', () => { clearTimeout(tLarg); tLarg = setTimeout(() => { const w = document.documentElement.clientWidth; if (w !== largAnt){ largAnt = w; if (B && st.tab !== 'dup') refresh(); } }, 200); });
 $('#busca').oninput = e => { clearTimeout(tBusca); tBusca = setTimeout(() => { st.busca = e.target.value; st.pag = 0; renderLista(); }, 200); };
 $('#selNivel').onchange = e => { st.nivel = e.target.value; st.pag = 0; renderLista(); };
 $('#selOrd').onchange = e => { st.ord = e.target.value; st.pag = 0; renderLista(); };

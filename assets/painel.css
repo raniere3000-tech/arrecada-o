@@ -579,3 +579,15 @@ body.modo-dup #btnOrcado, body.modo-dup #btnPdf, body.modo-dup #btnMensal, body.
 #dupArea .dup-nota { margin: 0 0 8px; }
 #dupFrame { display: block; width: 100%; min-height: 400px; border: 0; background: transparent; }
 #dupFrame[hidden] { display: none; }
+
+/* ===== página inteira (como o painel de faturamento) e nada rolando para o lado ===== */
+.top { padding: 10px 20px 8px; }
+.top h1 { font-size: 1.25rem; margin-top: 0; }
+.top-linha, .fonte-status, .progresso, .leitura, .abas, main { max-width: none; }
+.abas { margin-top: 10px; padding: 0 20px; }
+main { padding: 0 20px 40px; }
+/* tabelas: cabem no quadro; o texto e os títulos quebram linha quando precisa (os números não) */
+.wrap { overflow-x: visible; }
+th { white-space: normal; }
+td.rot, td.txt { white-space: normal; overflow-wrap: anywhere; }
+#dupArea { margin-top: 10px; }
