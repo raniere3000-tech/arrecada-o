@@ -1,0 +1,1385 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duplicidades de descontos</title>
+<!-- ícone: quadrado com o degradê do cabeçalho e duas etiquetas de desconto sobrepostas no verde-água do selo -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cdefs%3E%3ClinearGradient id=%22f%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%230b2447%22/%3E%3Cstop offset=%22.6%22 stop-color=%22%2314375e%22/%3E%3Cstop offset=%221%22 stop-color=%22%231b4a76%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22url(%23f)%22/%3E%3Cpath d=%22M8 22h26l12 12-12 12H8z%22 fill=%22none%22 stroke=%22%235ee7c8%22 stroke-width=%225%22 stroke-linejoin=%22round%22 opacity=%22.55%22/%3E%3Cpath d=%22M16 14h26l14 14-14 14H16z%22 fill=%22%235ee7c8%22/%3E%3Ccircle cx=%2246%22 cy=%2228%22 r=%224%22 fill=%22%230b2447%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Mesma paleta do painel de faturamento: marinho/azul = principal e positivo, laranja = negativo */
+:root{
+  --preto:#1f2d3d; --marinho:#102840; --azul:#176b9c; --azul-claro:#64748b; --cinza:#f3f6f9;
+  --linha:#dbe4ec; --tint:#e7f0f6; --zebra:#f7fafc; --laranja:#E8710A; --laranja-texto:#C2560C; --laranja-tint:#FDEEDF;
+  --existente:#BCD0E1; --aviso:#FFF8E1; --aviso-borda:#E0C070;
+  --fonte:'IBM Plex Sans','Segoe UI',Arial,sans-serif;
+  --fonte-cond:'IBM Plex Sans Condensed','Segoe UI',Arial,sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+body{font-family:var(--fonte);background:var(--cinza);margin:0;color:var(--preto);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--azul-claro);outline-offset:2px}
+
+/* ===== Cabeçalho ===== */
+.header-exec{background:linear-gradient(135deg,#0b2447 0%,#14375e 60%,#1b4a76 100%);color:#fff;padding:10px 16px 12px}
+.header-exec :focus-visible{outline-color:#fff}
+.header-inner{max-width:1500px;margin:0 auto}
+.header-linha{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap}
+.header-badge{display:inline-block;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#5ee7c8;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 11px;border-radius:20px}
+.header-exec h1{font-size:18px;font-weight:600;margin:0;line-height:1.2;letter-spacing:-.01em}
+.versao{font-size:11px;font-weight:500;color:#C8D4EA;font-variant-numeric:tabular-nums}
+.header-exec .status{font-size:12px;color:#cbd5e1;margin:0 0 0 auto}
+.acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.btn-top{padding:5px 12px;border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.35)}
+.btn-top:hover{background:rgba(255,255,255,.24)}
+.btn-top.primary{background:#fff;color:var(--marinho);border-color:#fff}
+.btn-top.primary:hover{background:#D5E0F2}
+.btn-top.quiet{background:none;border-color:transparent;color:#C8D4EA;font-weight:500}
+.btn-top.quiet:hover{color:#FFC9A0}
+.btn-top:disabled{opacity:.45;cursor:default}
+.fonte{font-size:12px;color:#C8D4EA}
+.fonte b{color:#fff;font-weight:600}
+.progresso{margin-top:10px}
+.prog-linha{display:flex;align-items:center;gap:12px;font-size:.85rem;color:#D5E0F2;flex-wrap:wrap}
+.prog-linha .barra{flex:0 1 320px;width:320px;height:8px;background:rgba(255,255,255,.2);border-radius:4px;overflow:hidden}
+.barra-fill{height:100%;width:0;background:#5ee7c8;transition:width .2s}
+.prog-linha b{color:#fff;font-variant-numeric:tabular-nums;min-width:38px}
+.progresso .nota{color:#C8D4EA;margin:4px 0 0;font-size:12.5px;min-height:1.2em}
+.progresso.erro #statusTexto,.progresso.erro .nota{color:#FFC9A0}
+.progresso.erro .barra,.progresso.erro #statusPct{display:none}
+
+/* ===== Barra de abas e filtros ===== */
+.toolbar{max-width:1500px;margin:10px auto 0;padding:0 16px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.toggle{display:inline-flex;background:#fff;border:1px solid var(--linha);border-radius:8px;padding:2px}
+.toggle button{padding:4px 16px;border:0;border-radius:6px;background:transparent;color:var(--azul);cursor:pointer;font-size:12.5px;font-weight:600}
+.toggle button:hover{color:var(--marinho)}
+.toggle button.active{background:var(--marinho);color:#fff}
+.abas{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.toggle.painel button{font-size:13px;padding:5px 18px}
+.toggle.painel button.active{background:var(--azul)}
+.toggle.fonte-base button{font-size:13px;padding:5px 16px}
+.filtros{display:flex;gap:8px;flex-wrap:wrap}
+.filtro-wrap{position:relative}
+.btn-filtro{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:8px;border:1px solid var(--linha);background:#fff;color:var(--marinho);cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap}
+.btn-filtro:hover{border-color:var(--azul-claro)}
+.badge{background:var(--marinho);color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-variant-numeric:tabular-nums}
+.painel-filtro{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:100;background:#fff;border:1px solid var(--linha);border-radius:8px;padding:12px;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(5,5,13,.12);min-width:240px}
+.painel-filtro.aberto{display:block}
+.painel-acoes{display:flex;gap:8px;margin-bottom:10px}
+.check-list{display:flex;flex-direction:column;gap:6px}
+.check-item{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.check-item input{accent-color:var(--marinho)}
+.mini-btn{padding:4px 10px;border:1px solid var(--linha);border-radius:6px;background:var(--cinza);color:var(--marinho);cursor:pointer;font-size:12px;font-weight:600}
+
+/* ===== Conteúdo ===== */
+main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
+.card{background:#fff;margin:10px 0;padding:14px 18px;border:1px solid var(--linha);border-radius:12px;box-shadow:0 3px 12px rgba(17,42,66,.045)}
+.card h2{font-size:14px;font-weight:600;margin:0 0 2px;color:var(--marinho);letter-spacing:-.005em}
+.nota-secao{margin:0 0 8px;color:var(--azul-claro);font-size:12px;line-height:1.4}
+.card-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:8px 16px;flex-wrap:wrap}
+.card-topo > div:first-child{flex:1 1 320px;min-width:0}
+.card-topo > .toggle,.card-topo > .card-acoes,.card-topo > .legenda{flex:0 0 auto}
+.card-acoes{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sel-mes{font:inherit;font-size:12.5px;padding:5px 10px;border:1px solid var(--linha);border-radius:8px;background:#fff;color:var(--marinho)}
+.legenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--azul-claro)}
+.legenda i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
+
+/* ===== KPIs: faixa única ===== */
+.kpis-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:1px;margin:10px 0;background:var(--linha);border:1px solid var(--linha);border-radius:8px;overflow:hidden}
+.kpi-card{background:#fff;padding:8px 12px;border-top:3px solid var(--marinho);min-width:0}
+.kpi-card.negativo{border-top-color:var(--laranja)}
+.kpi-card.destaque{background:var(--tint)}
+.kpi-card h3{font-size:11px;font-weight:500;color:var(--azul-claro);margin:0 0 2px;line-height:1.3;min-height:2.6em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.kpi-valor{font-family:var(--fonte-cond);font-size:20px;font-weight:600;margin:0;color:var(--preto);letter-spacing:-.01em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi-card.destaque .kpi-valor{font-size:24px;color:var(--marinho)}
+.kpi-card.negativo .kpi-valor{color:var(--laranja-texto)}
+.kpi-delta{font-size:11px;margin:1px 0 0;color:var(--azul-claro);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+@media (max-width:1100px){.kpis-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:560px){.kpis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+.avisos-card{border-color:var(--laranja);display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;font-size:13px;color:var(--laranja-texto)}
+.btn-just{padding:5px 12px;border:1px solid var(--linha);border-radius:6px;background:#fff;color:var(--marinho);font-size:12.5px;cursor:pointer;font-weight:600}
+.btn-just:hover{border-color:var(--azul-claro)}
+.btn-just:disabled{opacity:.5;cursor:default}
+
+/* ===== Gráfico com tabela alinhada embaixo ===== */
+.bloco-rolagem{overflow-x:auto;scrollbar-width:thin}
+.bloco{min-width:880px}
+.bloco svg{display:block;width:100%;height:auto}
+table{border-collapse:collapse;width:100%;font-family:var(--fonte-cond);font-size:12.5px;line-height:1.35;font-variant-numeric:tabular-nums}
+th,td{padding:4px 7px;text-align:center;white-space:nowrap}
+.tab-alinhada{table-layout:fixed;margin-top:2px}
+.tab-alinhada col.rot{width:18%}
+.tab-alinhada th{color:var(--azul-claro);font-weight:600;font-size:11.5px;border-bottom:1px solid var(--linha)}
+.tab-alinhada td{border-bottom:1px solid #edf1f5}
+.tab-alinhada td:first-child,.tab-alinhada th:first-child{text-align:left;font-family:var(--fonte);font-size:12px;color:#334155;white-space:normal;line-height:1.25}
+.tab-alinhada tr.forte td{font-weight:700;color:var(--marinho);background:var(--tint)}
+.tab-alinhada tr.forte td:first-child{color:var(--marinho)}
+.tab-alinhada tr.info td{color:var(--laranja-texto)}
+.tab-alinhada tr.info td:first-child{color:var(--laranja-texto)}
+.tab-alinhada tr.mudo td{color:var(--azul-claro)}
+.tab-alinhada i.cor{display:inline-block;width:9px;height:9px;margin-right:6px;vertical-align:0}
+
+/* ===== Tabelas por cidade e sub-categoria ===== */
+.tabela-wrap{overflow:auto;max-height:560px;scrollbar-width:thin}
+.tab-seg th{background:var(--marinho);color:#fff;font-weight:600;font-size:11.5px;position:sticky;top:0;z-index:2}
+.tab-seg th.sortable{cursor:pointer}
+.tab-seg th.sortable:hover{background:var(--azul)}
+.tab-seg td{border-bottom:1px solid #edf1f5}
+.tab-seg th.grupo{background:var(--azul);text-align:center}
+.tab-seg .mudo{color:var(--azul-claro);font-size:11px;font-weight:400}
+.tab-seg td.aviso-lista{text-align:left;color:var(--laranja-texto);background:var(--laranja-tint);white-space:normal}
+.btn-num{border:0;background:none;padding:0;font:inherit;color:var(--azul);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.btn-num:disabled{color:var(--azul-claro);text-decoration:none;cursor:default;font-weight:400}
+.tab-seg td:first-child,.tab-seg th:first-child{text-align:left;position:sticky;left:0;z-index:1;background:#fff}
+.tab-seg th:first-child{z-index:3;background:var(--marinho)}
+.tab-seg td:first-child{color:#334155;font-weight:600;font-family:var(--fonte);font-size:12.5px}
+.tab-seg tbody tr:hover td{background:#f8fafc}
+.aviso-abas{background:#fff4e8;border:1px solid #f3c89a;border-left:4px solid var(--laranja,#E8710A);color:#7a3a06;border-radius:8px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.45}
+.aviso-abas b{color:#C2560C}
+.dados span.neg{color:var(--laranja-texto);font-weight:600}
+.dados .tab-seg td{white-space:normal}
+.dados h2{margin-top:18px}.dados h2:first-child{margin-top:0}
+.dados ol{margin:6px 0 4px;padding-left:24px;line-height:1.5;font-size:13.5px;color:#1e293b}
+.dados ol li{margin:7px 0}.dados ol li b{color:var(--marinho)}
+.dados ul{margin:4px 0;padding-left:20px}
+.dados .ex{color:var(--azul-claro);font-size:12.5px}
+.dados table{max-width:760px;margin:6px 0 10px}
+.dados p.nota-secao{max-width:none}
+.tab-seg tr.linha-total td{background:var(--tint);border-top:1.5px solid var(--azul);font-weight:700;color:var(--marinho)}
+.tab-seg td.tot{font-weight:700;color:var(--marinho);background:var(--zebra)}
+.tab-seg td.info{color:var(--laranja-texto)}
+.tab-seg td.zero{color:#b6c2ce}
+
+/* ===== Consolidado ===== */
+.cons-bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-bottom:10px}
+.field{display:flex;align-items:center;gap:8px;color:var(--marinho);font-size:12.5px;font-weight:600}
+.field select,.field input{font-weight:400;padding:5px 10px;border:1px solid var(--linha);border-radius:8px;background:#fff;color:var(--marinho);min-width:160px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--linha);background:#fff;border-radius:999px;padding:2px 11px;font-size:12px;cursor:pointer;color:var(--azul-claro)}
+.chip[aria-pressed="true"]{background:var(--marinho);border-color:var(--marinho);color:#fff}
+.keyline{font-size:12px;color:var(--azul-claro);margin:0 0 6px}
+.keyline i{display:inline-block;width:11px;height:11px;border:1px solid var(--linha);margin:0 5px 0 14px;vertical-align:-1px}
+.keyline i:first-child{margin-left:0}
+.count{color:var(--azul-claro);font-size:12.5px;margin:0 0 6px}
+.aviso-cons{font-size:12px;color:var(--laranja-texto);margin:0 0 6px}
+.btn-link{border:0;background:none;padding:0;color:var(--azul);font-size:12px;font-weight:600;cursor:pointer;text-decoration:underline}
+.cons-wrap{overflow:auto;max-height:620px;border:1px solid var(--linha);border-radius:8px}
+.cons th,.cons td{font-size:12px;padding:4px 8px;border-bottom:1px solid #edf1f5;text-align:right}
+.cons th{background:var(--marinho);color:#fff;font-weight:600;position:sticky;top:0;z-index:2}
+.cons thead tr:nth-child(2) th{background:var(--azul);font-weight:500}
+.cons th.grp{text-align:left;border-left:1px solid rgba(255,255,255,.35)}
+.cons th.gs,.cons td.gs{border-left:1px solid var(--linha)}
+.cons .txt{text-align:left}
+.cons th:first-child,.cons td:first-child{position:sticky;left:0;z-index:1;background:#fff}
+.cons th:first-child{z-index:3;background:var(--marinho)}
+.cons .c2{position:sticky;left:var(--c1w,100px);z-index:1;background:#fff;border-right:1px solid var(--linha)}
+.cons thead th.c2{z-index:3;background:var(--marinho)}
+.cons thead tr:nth-child(2) th{left:auto;z-index:2}
+.cons tbody tr:hover td{background:#f8fafc}
+.cons td.pos{color:var(--marinho);font-weight:600}
+.cons td.neg{color:var(--laranja-texto);font-weight:600}
+.cons td.chg-in{background:var(--tint) !important;color:var(--marinho);font-weight:600}
+.cons td.chg-out{background:var(--laranja-tint) !important;color:var(--laranja-texto);font-weight:600}
+.cons td.warn{background:var(--aviso) !important;outline:1px dashed var(--aviso-borda);outline-offset:-2px}
+.pager{display:flex;align-items:center;gap:10px;justify-content:flex-end;margin-top:10px;color:var(--azul-claro);font-size:12.5px}
+
+/* ===== Tela inicial ===== */
+.inicio{max-width:640px;margin:28px auto;background:#fff;border-radius:16px;border:1px solid var(--linha);box-shadow:0 12px 32px rgba(17,42,66,.08);padding:28px 30px}
+.inicio h2{margin:0 0 8px;font-size:22px;font-weight:600;color:var(--marinho)}
+.inicio p,.inicio li{color:var(--azul-claro)}
+.inicio ol{padding-left:20px}
+.drop{margin-top:18px;border:2px dashed var(--linha);border-radius:10px;padding:24px;text-align:center;color:var(--azul-claro)}
+.drop.over{border-color:var(--azul);background:var(--tint)}
+.bloco svg{cursor:crosshair}
+.dica{position:fixed;z-index:70;pointer-events:none;background:#fff;border:1px solid var(--linha);border-radius:8px;box-shadow:0 8px 24px rgba(17,42,66,.16);padding:8px 12px;font-size:12px;line-height:1.45;min-width:200px;max-width:320px;font-variant-numeric:tabular-nums}
+.dica b.mes{display:block;font-size:12.5px;color:var(--marinho);margin-bottom:4px}
+.dica .lin{display:flex;justify-content:space-between;gap:14px;color:#334155}
+.dica .lin span:last-child{font-family:var(--fonte-cond);font-weight:600;color:var(--preto)}
+.dica .lin i{display:inline-block;width:9px;height:9px;margin-right:6px;vertical-align:0}
+.dica .lin.forte span{font-weight:700;color:var(--marinho)}
+.dica .lin.neg span:last-child{color:var(--laranja-texto)}
+.dica .lin.mudo{color:var(--azul-claro)}
+.dica hr{border:0;border-top:1px solid var(--linha);margin:4px 0}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--marinho);color:#fff;padding:10px 18px;border-radius:8px;z-index:60;font-size:13px;max-width:90vw}
+.rodape{color:var(--azul-claro);font-size:11.5px;margin:12px 2px 0;line-height:1.45}
+@media (prefers-reduced-motion: reduce){.barra-fill{transition:none}}
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+  .acoes,.fonte,.progresso,.toolbar .filtros,.toggle,.btn-just,.cons-bar{display:none !important}
+  .header-exec,th,.kpi-card,.tab-alinhada tr.forte td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .card,.kpis-grid{break-inside:avoid}
+  .bloco{min-width:0}
+}
+/* ===== Específico deste painel ===== */
+.painel-filtro .busca-filtro{width:100%;margin:0 0 8px;padding:5px 9px;border:1px solid var(--linha);border-radius:6px;font-size:12.5px}
+.btn-filtro .badge.todas{background:var(--tint);color:var(--marinho)}
+.filtro-wrap.ligado .btn-filtro{border-color:#f59e0b;background:#ffedd5;color:#9a3412}
+.filtro-wrap.ligado .badge{background:#9a3412}
+.btn-limpar{border:0;background:none;color:var(--laranja-texto);font-size:12px;font-weight:600;cursor:pointer;padding:5px 4px}
+.btn-limpar:hover{text-decoration:underline}
+.tag{display:inline-block;border-radius:10px;padding:0 8px;font-size:11px;font-weight:600;font-family:var(--fonte);white-space:nowrap}
+.tag.n1{background:var(--marinho);color:#fff}
+.tag.n2{background:#dbeaf4;color:var(--azul)}
+.tag.al{background:var(--laranja-tint);color:var(--laranja-texto)}
+.tag.ver{background:#ffedd5;color:#9a3412}
+.tag.ok{background:#dcfce7;color:#166534}
+.tag.rep{background:var(--laranja-tint);color:var(--laranja-texto)}
+.tag.sup{background:#e0e7ff;color:#3730a3}
+.cons td.abre{width:26px;text-align:center;cursor:pointer;color:var(--azul);font-weight:700}
+.cons tr.linha{cursor:pointer}
+.cons tr.aberta td{background:var(--tint)}
+.cons tr.det > td{background:#f8fafc;padding:8px 10px 12px 36px;text-align:left}
+.cons tr.det table{width:auto;min-width:760px;border:1px solid var(--linha);border-radius:6px;background:#fff}
+.cons tr.det th{position:static;background:var(--azul);font-size:11.5px}
+.cons tr.det td{font-size:12px;border-bottom:1px solid #edf1f5}
+.cons tr.det tr.repeticao td{color:var(--laranja-texto)}
+.cons td.num{font-variant-numeric:tabular-nums}
+.cons td.forte{font-weight:700;color:var(--marinho)}
+.cons td.neg{color:var(--laranja-texto);font-weight:600}
+.cons th:first-child,.cons td:first-child{position:static}
+.lista-nota{font-size:12px;color:var(--azul-claro);margin:0 0 8px}
+.tab-seg td.num{text-align:right}
+.tab-seg th{text-align:right}
+.tab-seg th:first-child{text-align:left}
+.tab-usr td:first-child{font-family:var(--fonte-cond)}
+.kpi-delta{white-space:normal}
+.kpi-card.alerta{border-top-color:var(--laranja)}
+.kpi-card.alerta .kpi-valor{color:var(--laranja-texto)}
+.kpi-card.atencao{border-top-color:#f59e0b}
+.bloco svg .col-hover{fill:transparent}
+.bloco svg .col-hover:hover,.bloco svg .col-hover.ativa{fill:rgba(23,107,156,.07)}
+.dados .tab-seg{width:auto}
+.dados .tab-seg th{text-align:left}
+.dados .tab-seg td.num,.dados .tab-seg th.num{text-align:right}
+.bloco .tab-alinhada td:first-child,.bloco .tab-alinhada th:first-child{position:sticky;left:0;z-index:1;background:#fff;box-shadow:6px 0 6px -6px rgba(17,42,66,.18)}
+.bloco .tab-alinhada tr.forte td:first-child{background:var(--tint)}
+.semdados{padding:30px 10px;text-align:center;color:var(--azul-claro)}
+/* dentro do painel de Arrecadação: a pasta vem da pasta principal (subpasta Duplicidades); sem os botões de pasta */
+body.embutido #btnFolder,body.embutido #btnUpdate,body.embutido #btnClear,body.embutido .header-badge,body.embutido .header-linha h1{display:none!important}
+body.embutido .header-exec{border-radius:10px}
+pre.pasta{background:var(--cinza);border:1px solid var(--linha);border-radius:8px;padding:10px 14px;font-size:12.5px;color:var(--marinho);overflow:auto}
+</style>
+</head>
+<body>
+
+<header class="header-exec">
+  <div class="header-inner">
+    <div class="header-linha">
+      <span class="header-badge">Águas do Rio · Descontos</span>
+      <h1>Duplicidades de descontos</h1>
+      <span class="versao" id="versao" title="Versão do painel"></span>
+      <p class="status" id="status">Nenhuma base carregada</p>
+    </div>
+    <div class="acoes">
+      <button class="btn-top primary" id="btnFolder" type="button">📁 Conectar pasta</button>
+      <button class="btn-top" id="btnUpdate" type="button" hidden>↻ Atualizar</button>
+      <span class="fonte" id="fonte">Nenhuma pasta conectada.</span>
+      <button class="btn-top quiet" id="btnClear" type="button" hidden style="margin-left:auto">Apagar dados do navegador</button>
+      <input type="file" id="inFolder" webkitdirectory multiple hidden>
+    </div>
+    <div class="progresso" id="progresso" hidden role="status" aria-live="polite">
+      <div class="prog-linha"><div class="barra"><div class="barra-fill" id="barraFill"></div></div><b id="statusPct">0%</b><span id="statusTexto">Preparando…</span></div>
+      <p class="nota" id="statusNota"></p>
+    </div>
+  </div>
+</header>
+
+<div class="toolbar" id="toolbar" hidden>
+  <div class="abas">
+    <div class="toggle" role="group" aria-label="Visão" id="subAbas">
+      <button type="button" class="active" data-tab="resumo" aria-pressed="true">Resumo</button>
+      <button type="button" data-tab="dup" aria-pressed="false">Duplicidades</button>
+      <button type="button" data-tab="dados" aria-pressed="false">Dados</button>
+    </div>
+  </div>
+  <div class="filtros">
+    <div class="filtro-wrap" id="fSup"></div>
+    <div class="filtro-wrap" id="fCid"></div>
+    <div class="filtro-wrap" id="fZona"></div>
+    <div class="filtro-wrap" id="fUsr"></div>
+    <div class="filtro-wrap" id="fMes"></div>
+    <button type="button" class="btn-limpar" id="btnLimpar" hidden>Limpar filtros</button>
+  </div>
+</div>
+
+<main>
+  <section class="inicio" id="empty">
+    <h2>Conecte a pasta para começar</h2>
+    <p>O painel lê os arquivos .xlsx direto do seu computador. Nada é enviado para a internet: os dados ficam guardados só neste navegador.</p>
+    <ol>
+      <li>Clique em 📁 Conectar pasta e escolha a pasta <b>Painel Análise de Descontos</b> (a cópia do OneDrive sincronizada no seu computador).</li>
+      <li>A pasta precisa ter as duas subpastas abaixo. Da subpasta Descontos, o painel usa só o arquivo mais recente; da subpasta Cadastro, lê todos.</li>
+      <li>Nas próximas vezes, no Chrome ou no Edge, é só clicar em ↻ Atualizar. Em outros navegadores, escolha a pasta de novo.</li>
+    </ol>
+    <pre class="pasta">Painel Análise de Descontos/
+  Descontos/   exportação de descontos (.xlsx)
+  Cadastro/    um arquivo por superintendência (.xlsx)</pre>
+  </section>
+
+  <!-- ===== Resumo ===== -->
+  <section id="view-resumo" hidden>
+    <div class="kpis-grid" id="kpis"></div>
+
+    <div class="card">
+      <div class="card-topo">
+        <div>
+          <h2 id="grafTit">Lançamentos a mais por mês de referência</h2>
+          <p class="nota-secao" id="grafNota"></p>
+        </div>
+        <div class="card-acoes">
+          <div class="legenda"><span><i style="background:var(--marinho)"></i>Nível 1 – idênticos</span><span><i style="background:var(--azul)"></i>Nível 2 – total diferente</span></div>
+          <div class="toggle" role="group" aria-label="Medida do gráfico">
+            <button type="button" class="active" data-med="rep" aria-pressed="true">Lançamentos</button>
+            <button type="button" data-med="mat" aria-pressed="false">Matrículas</button>
+            <button type="button" data-med="val" aria-pressed="false">Valor (R$)</button>
+          </div>
+        </div>
+      </div>
+      <div class="bloco-rolagem"><div class="bloco" id="grafBloco"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-topo">
+        <div>
+          <h2>Por usuário</h2>
+          <p class="nota-secao">Quem fez os lançamentos dos descontos repetidos. Os lançamentos a mais contam para o usuário que os fez (o lançamento mais recente de cada desconto repetido é o válido). Clique no número de lançamentos a mais para ver os descontos repetidos do usuário.</p>
+        </div>
+      </div>
+      <div class="tabela-wrap"><table class="tab-seg tab-usr" id="tblUsr"></table></div>
+    </div>
+    <p class="rodape" id="rodapeResumo"></p>
+  </section>
+
+  <!-- ===== Duplicidades ===== -->
+  <section id="view-dup" hidden>
+    <div class="card">
+      <div class="card-topo">
+        <div>
+          <h2 id="listaTit">Duplicidades</h2>
+          <p class="nota-secao" id="listaNota"></p>
+        </div>
+        <div class="toggle" role="group" aria-label="Lista">
+          <button type="button" class="active" data-lista="dup" aria-pressed="true">Duplicidades</button>
+          <button type="button" data-lista="al" aria-pressed="false">Alerta entre meses</button>
+          <button type="button" data-lista="ver" aria-pressed="false">A verificar</button>
+        </div>
+      </div>
+      <div class="cons-bar">
+        <label class="field">Buscar <input type="search" id="busca" placeholder="Matrícula ou cliente"></label>
+        <label class="field" id="campoNivel">Nível
+          <select id="selNivel"><option value="">Níveis 1 e 2</option><option value="1">Nível 1 – idênticos</option><option value="2">Nível 2 – total diferente</option></select>
+        </label>
+        <label class="field">Ordenar
+          <select id="selOrd">
+            <option value="valor">Maior valor em duplicidade</option>
+            <option value="vezes">Mais lançamentos</option>
+            <option value="recente">Mais recentes</option>
+            <option value="mat">Matrícula</option>
+          </select>
+        </label>
+        <button type="button" class="btn-just" id="btnCsv">⬇ Baixar lista</button>
+      </div>
+      <p class="count" id="contagem"></p>
+      <div class="cons-wrap"><table class="cons" id="tblLista"></table></div>
+      <div class="pager" id="pager"></div>
+    </div>
+  </section>
+
+  <!-- ===== Dados ===== -->
+  <section id="view-dados" hidden>
+    <div class="card dados" id="dados"></div>
+  </section>
+</main>
+<div class="dica" id="dica" hidden></div>
+
+<script type="text/plain" id="worker-src">
+const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase().replace(/\s+/g,'_');
+const str = v => v == null ? '' : String(v).trim();
+function toNum(v){
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  let s = String(v).trim();
+  if (s.indexOf(',') >= 0) s = s.replace(/\./g,'').replace(',', '.');
+  const n = Number(s); return isFinite(n) ? n : 0;
+}
+function refKey(v){
+  if (v == null || v === '') return null;
+  if (typeof v === 'number'){
+    if (v < 20000 || v > 80000) return null;
+    const d = new Date(Math.round((v - 25569) * 86400000));
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2,'0');
+  }
+  const s = String(v).trim(); let m;
+  if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s))) return m[3] + '-' + m[2].padStart(2,'0');
+  if ((m = /^(\d{4})-(\d{1,2})/.exec(s))) return m[1] + '-' + m[2].padStart(2,'0');
+  if ((m = /^(\d{1,2})\/(\d{4})$/.exec(s))) return m[2] + '-' + m[1].padStart(2,'0');
+  const t = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if ((m = /^([a-z]{3})[a-z]*[\/\-. ](\d{2}|\d{4})$/.exec(t))){
+    const i = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'].indexOf(m[1]);
+    if (i >= 0) return (m[2].length === 4 ? m[2] : '20' + m[2]) + '-' + String(i + 1).padStart(2, '0');
+  }
+  return null;
+}
+function dec(s){
+  if (s.indexOf('&') < 0) return s;
+  return s.replace(/&(amp|lt|gt|quot|apos|#x[0-9a-fA-F]+|#\d+);/g, (x, e) =>
+    e === 'amp' ? '&' : e === 'lt' ? '<' : e === 'gt' ? '>' : e === 'quot' ? '"' : e === 'apos' ? "'" :
+    e[1] === 'x' ? String.fromCodePoint(parseInt(e.slice(2), 16)) : String.fromCodePoint(+e.slice(1)));
+}
+function texts(xml){
+  xml = xml.replace(/<rPh\b[\s\S]*?<\/rPh>/g, '');
+  let out = '', m; const re = /<t\b[^>]*>([\s\S]*?)<\/t>/g;
+  while ((m = re.exec(xml))) out += m[1];
+  return dec(out);
+}
+function colIdx(letters){ let n = 0; for (let i = 0; i < letters.length; i++) n = n * 26 + (letters.charCodeAt(i) - 64); return n - 1; }
+
+/* ---------- leitura do zip (.xlsx) por partes ---------- */
+async function readZip(file){
+  const tailLen = Math.min(file.size, 65557 + 22);
+  const tail = new DataView(await file.slice(file.size - tailLen).arrayBuffer());
+  let eocd = -1;
+  for (let i = tailLen - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+  if (eocd < 0) throw new Error(file.name + ' não parece ser um arquivo .xlsx válido.');
+  let n = tail.getUint16(eocd + 10, true), cdSize = tail.getUint32(eocd + 12, true), cdOff = tail.getUint32(eocd + 16, true);
+  if ((cdOff === 0xFFFFFFFF || n === 0xFFFF) && eocd >= 20 && tail.getUint32(eocd - 20, true) === 0x07064b50){
+    const z64off = Number(tail.getBigUint64(eocd - 12, true));
+    const z = new DataView(await file.slice(z64off, z64off + 56).arrayBuffer());
+    n = Number(z.getBigUint64(32, true)); cdSize = Number(z.getBigUint64(40, true)); cdOff = Number(z.getBigUint64(48, true));
+  }
+  const cd = new DataView(await file.slice(cdOff, cdOff + cdSize).arrayBuffer());
+  const td = new TextDecoder();
+  const entries = []; let p = 0;
+  while (p + 46 <= cd.byteLength && cd.getUint32(p, true) === 0x02014b50){
+    const method = cd.getUint16(p + 10, true);
+    let csize = cd.getUint32(p + 20, true), usize = cd.getUint32(p + 24, true);
+    const nl = cd.getUint16(p + 28, true), xl = cd.getUint16(p + 30, true), cl = cd.getUint16(p + 32, true);
+    let off = cd.getUint32(p + 42, true);
+    const name = td.decode(new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nl));
+    let q = p + 46 + nl; const xend = q + xl;
+    while (q + 4 <= xend){
+      const id = cd.getUint16(q, true), sz = cd.getUint16(q + 2, true); let r = q + 4;
+      if (id === 0x0001){
+        if (usize === 0xFFFFFFFF){ usize = Number(cd.getBigUint64(r, true)); r += 8; }
+        if (csize === 0xFFFFFFFF){ csize = Number(cd.getBigUint64(r, true)); r += 8; }
+        if (off === 0xFFFFFFFF){ off = Number(cd.getBigUint64(r, true)); r += 8; }
+      }
+      q += 4 + sz;
+    }
+    entries.push({ name, method, csize, usize, off });
+    p = xend + cl;
+  }
+  return entries;
+}
+async function entryStream(file, e){
+  const lh = new DataView(await file.slice(e.off, e.off + 30).arrayBuffer());
+  const start = e.off + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+  let s = file.slice(start, start + e.csize).stream();
+  if (e.method === 8) s = s.pipeThrough(new DecompressionStream('deflate-raw'));
+  else if (e.method !== 0) throw new Error('Compressão não suportada em ' + e.name);
+  return s.pipeThrough(new TextDecoderStream());
+}
+async function entryText(file, e){
+  const r = (await entryStream(file, e)).getReader(); let out = '';
+  for (;;){ const { value, done } = await r.read(); if (done) break; out += value; }
+  return out;
+}
+async function streamBlocks(file, e, closeTag, onBlock, onProgress){
+  const reader = (await entryStream(file, e)).getReader();
+  let buf = '', seen = 0;
+  for (;;){
+    const { value, done } = await reader.read();
+    if (done) break;
+    seen += value.length; buf += value;
+    let pos = 0, idx;
+    while ((idx = buf.indexOf(closeTag, pos)) !== -1){
+      const blk = buf.slice(pos, idx); pos = idx + closeTag.length;
+      if (onBlock(blk) === false){ try { await reader.cancel(); } catch (_) {} return; }
+    }
+    buf = buf.slice(pos);
+    if (onProgress) onProgress(Math.min(1, seen / Math.max(1, e.usize)));
+  }
+}
+
+const RE_C = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+const RE_R = /\br="([A-Z]+)/, RE_T = /\bt="([^"]+)"/, RE_V = /<v>([\s\S]*?)<\/v>/;
+function parseCells(blk, sst){
+  const out = []; let m, seq = 0; RE_C.lastIndex = 0;
+  while ((m = RE_C.exec(blk))){
+    const a = m[1], inner = m[2];
+    const rm = RE_R.exec(a); const col = rm ? colIdx(rm[1]) : seq; seq = col + 1;
+    if (inner === undefined) continue;
+    const tm = RE_T.exec(a); const t = tm ? tm[1] : 'n';
+    let v;
+    if (t === 'inlineStr') v = texts(inner);
+    else {
+      const vm = RE_V.exec(inner); if (!vm) continue;
+      const raw = vm[1];
+      if (t === 's') v = sst[+raw];
+      else if (t === 'str' || t === 'e') v = dec(raw);
+      else if (t === 'b') v = raw === '1' ? 'VERDADEIRO' : 'FALSO';
+      else v = +raw;
+    }
+    out[col] = v;
+  }
+  return out;
+}
+
+/* ---------- acumuladores ---------- */
+class G {
+  constructor(T, n){ this.T = T; this.a = new T(n || 65536); this.n = 0; }
+  push(x){ if (this.n === this.a.length){ const b = new this.T(this.a.length * 2); b.set(this.a); this.a = b; } this.a[this.n++] = x; }
+  out(){ return this.a.slice(0, this.n); }
+}
+class Dict {
+  constructor(){ this.m = new Map(); this.list = []; }
+  id(s){ let i = this.m.get(s); if (i === undefined){ i = this.list.length; this.m.set(s, i); this.list.push(s); } return i; }
+}
+let lastPost = 0;
+function progress(title, msg, pct, force){
+  const now = Date.now();
+  if (!force && now - lastPost < 200) return;
+  lastPost = now; self.postMessage({ type: 'progress', title, msg, pct });
+}
+async function sheetList(file, byName){
+  const wb = byName.get('xl/workbook.xml'), rel = byName.get('xl/_rels/workbook.xml.rels');
+  const out = [];
+  if (wb && rel){
+    const wx = await entryText(file, wb), rx = await entryText(file, rel);
+    const targets = {};
+    for (const m of rx.matchAll(/<Relationship\b[^>]*>/g)){
+      const id = /\bId="([^"]+)"/.exec(m[0]), tg = /\bTarget="([^"]+)"/.exec(m[0]);
+      if (id && tg) targets[id[1]] = tg[1];
+    }
+    for (const m of wx.matchAll(/<sheet\b[^>]*>/g)){
+      const nm = /\bname="([^"]*)"/.exec(m[0]), id = /\br:id="([^"]+)"/.exec(m[0]);
+      if (!nm || !id || !targets[id[1]]) continue;
+      let t = targets[id[1]];
+      t = t.startsWith('/') ? t.slice(1) : 'xl/' + t.replace(/^\.\//, '');
+      if (byName.has(t)) out.push({ name: dec(nm[1]), entry: byName.get(t) });
+    }
+  }
+  if (!out.length) for (const [k, e] of byName) if (/^xl\/worksheets\/sheet\d+\.xml$/.test(k)) out.push({ name: k.split('/').pop(), entry: e });
+  return out;
+}
+
+/* ---------- arquivo de descontos ---------- */
+const ALIAS_DESC = { EMP_CODIGO:'emp', DAT_ACESSO:'dat', DAT_ACESSO_HORA:'hora', REFERENCIA:'ref', ANO_LOG:'ano', NUM_LOG:'log',
+  ZONA_LIGACAO:'zona', NUM_LIGACAO:'mat', COD_USUARIO:'usr', VALOR_A_VISTA:'vav', DESCONTO:'desc', VALOR_TOTAL:'tot', PCT_DESCONTO:'pct' };
+const OBRIG_DESC = ['EMP_CODIGO', 'DAT_ACESSO', 'REFERENCIA', 'NUM_LOG', 'NUM_LIGACAO', 'COD_USUARIO', 'VALOR_A_VISTA', 'DESCONTO', 'VALOR_TOTAL'];
+const vazio = v => v == null || v === '';
+// valor numérico de verdade (número, ou texto que vira número); "NULL" e vazio não contam
+const temNum = v => typeof v === 'number' ? isFinite(v) : !vazio(v) && /^-?[\d.]+(,\d+)?$|^-?\d+(\.\d+)?$/.test(String(v).trim());
+// data do Excel (número de série) ou texto dd/mm/aaaa [hh:mm[:ss]] / aaaa-mm-dd → dias no padrão do Excel
+function diaSerial(v){
+  if (vazio(v)) return NaN;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim(); let m;
+  if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(s)))
+    return Date.UTC(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)) / 86400000 + 25569;
+  if ((m = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(s)))
+    return Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)) / 86400000 + 25569;
+  return NaN;
+}
+// hora como fração do dia (número do Excel) ou texto hh:mm[:ss]
+function horaFrac(v){
+  if (vazio(v)) return NaN;
+  if (typeof v === 'number') return v >= 1 ? v % 1 : v;
+  const m = /(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(String(v));
+  return m ? (+m[1] * 3600 + +m[2] * 60 + +(m[3] || 0)) / 86400 : NaN;
+}
+async function abreXlsx(file, label){
+  const entries = await readZip(file), byName = new Map(entries.map(e => [e.name, e]));
+  const sst = []; const se = byName.get('xl/sharedStrings.xml');
+  if (se){
+    progress(label, 'Lendo os textos do arquivo…', 0, true);
+    await streamBlocks(file, se, '</si>', blk => { sst.push(texts(blk.slice(blk.indexOf('<si')))); }, p => progress(label, 'Lendo os textos do arquivo…', p));
+  }
+  return { sst, sheets: await sheetList(file, byName) };
+}
+async function lerDescontos(file){
+  const label = 'Descontos: ' + file.name;
+  progress(label, 'Abrindo o arquivo…', 0, true);
+  const { sst, sheets } = await abreXlsx(file, label);
+  for (const sh of sheets){
+    let h = null, seen = 0, falta = null;
+    const emp = new G(Int32Array), mat = new G(Float64Array), zona = new G(Int32Array), ref = new G(Int16Array), dt = new G(Float64Array),
+      log = new G(Float64Array), ano = new G(Int16Array), usr = new G(Int32Array), vav = new G(Float64Array), desc = new G(Float64Array),
+      tot = new G(Float64Array), pct = new G(Float64Array), ok = new G(Uint8Array);
+    const dRef = new Dict(), dUsr = new Dict();
+    const st = { linhas: 0, semData: 0, semRef: 0 };
+    await streamBlocks(file, sh.entry, '</row>', blk => {
+      seen++;
+      const c = parseCells(blk, sst);
+      if (!h){
+        const cols = c.map(norm);
+        if (cols.includes('NUM_LOG') && cols.includes('DESCONTO')){
+          falta = OBRIG_DESC.filter(n => !cols.includes(n));
+          if (falta.length) return false;
+          h = {}; cols.forEach((n, i) => { const k = ALIAS_DESC[n]; if (k && h[k] === undefined) h[k] = i; });
+        } else if (seen > 30) return false;
+        return;
+      }
+      if (vazio(c[h.mat]) && vazio(c[h.log])) return;               // linha em branco
+      const dia = diaSerial(c[h.dat]), hr = h.hora === undefined ? NaN : horaFrac(c[h.hora]);
+      let x = isNaN(hr) ? dia : Math.floor(dia) + hr;
+      if (isNaN(x)){ st.semData++; x = 25569; }
+      const rk = refKey(c[h.ref]); if (!rk) st.semRef++;
+      emp.push(Math.round(toNum(c[h.emp]))); mat.push(Math.round(toNum(c[h.mat]))); zona.push(h.zona === undefined ? 0 : Math.round(toNum(c[h.zona])));
+      ref.push(dRef.id(rk || '')); dt.push(Math.round((x - 25569) * 86400000)); log.push(Math.round(toNum(c[h.log])));
+      ano.push(h.ano === undefined ? 0 : Math.round(toNum(c[h.ano]))); usr.push(dUsr.id(str(c[h.usr]).toUpperCase()));
+      vav.push(toNum(c[h.vav])); desc.push(toNum(c[h.desc])); tot.push(toNum(c[h.tot])); pct.push(h.pct === undefined ? 0 : toNum(c[h.pct]));
+      ok.push(temNum(c[h.desc]) && temNum(c[h.tot]) && rk ? 1 : 0);
+      st.linhas++;
+    }, p => progress(label, `${st.linhas.toLocaleString('pt-BR')} lançamentos lidos`, p));
+    if (falta && falta.length) return { erro: 'faltam as colunas ' + falta.join(', ') };
+    if (!h) continue;
+    return { arquivo: file.name, modificado: file.lastModified, tamanho: file.size, aba: sh.name, refs: dRef.list, usrs: dUsr.list, stats: st,
+      emp: emp.out(), mat: mat.out(), zona: zona.out(), ref: ref.out(), dt: dt.out(), log: log.out(), ano: ano.out(), usr: usr.out(),
+      vav: vav.out(), desc: desc.out(), tot: tot.out(), pct: pct.out(), ok: ok.out() };
+  }
+  return { erro: 'nenhuma aba com as colunas NUM_LOG e DESCONTO' };
+}
+
+/* ---------- cadastro (guarda só as matrículas que aparecem nos descontos) ---------- */
+async function lerCadastro(files, chaves, mats){
+  const keys = [], nomes = [], sup = new G(Uint16Array), cid = new G(Uint16Array), dSup = new Dict(), dCid = new Dict(), idx = new Map();
+  const arquivos = [];
+  for (const file of files){
+    const label = 'Cadastro: ' + file.name;
+    progress(label, 'Abrindo o arquivo…', 0, true);
+    const { sst, sheets } = await abreXlsx(file, label);
+    const a = { nome: file.name, modificado: file.lastModified, linhas: 0, cruzadas: 0, sups: {}, motivo: '' };
+    for (const sh of sheets){
+      let h = null, seen = 0;
+      await streamBlocks(file, sh.entry, '</row>', blk => {
+        seen++;
+        const c = parseCells(blk, sst);
+        if (!h){
+          const cols = c.map(norm);
+          if (cols.includes('NUM_LIGACAO') && cols.includes('SUPERINTENDENCIA')){
+            const pos = n => { const i = cols.indexOf(n); return i < 0 ? undefined : i; };
+            h = { mat: pos('NUM_LIGACAO'), chave: pos('CHAVE_LIGACAO'), sup: pos('SUPERINTENDENCIA'), cid: pos('CIDADE'), nome: pos('NOM_CLIENTE') };
+          } else if (seen > 30) return false;
+          return;
+        }
+        if (vazio(c[h.mat])) return;
+        a.linhas++;
+        const s = str(c[h.sup]).toUpperCase(); a.sups[s] = (a.sups[s] || 0) + 1;
+        const mk = String(Math.round(toNum(c[h.mat])));
+        const ch = h.chave === undefined ? '' : str(c[h.chave]).replace(/\s+/g, '');
+        const key = ch ? ch : '*-' + mk;
+        if (!(ch ? chaves.has(key) : mats.has(mk))) return;
+        a.cruzadas++;
+        let i = idx.get(key);
+        if (i === undefined){ i = keys.length; idx.set(key, i); keys.push(key); nomes.push(''); sup.push(0); cid.push(0); }
+        sup.a[i] = dSup.id(s); cid.a[i] = dCid.id(h.cid === undefined ? '' : str(c[h.cid]).toUpperCase()); nomes[i] = h.nome === undefined ? '' : str(c[h.nome]);
+      }, p => progress(label, `${a.linhas.toLocaleString('pt-BR')} matrículas lidas`, p));
+      if (h) a.aba = sh.name;
+    }
+    if (!a.aba) a.motivo = 'sem as colunas NUM_LIGACAO e SUPERINTENDENCIA';
+    arquivos.push(a);
+  }
+  return { keys, nomes, sup: sup.out(), cid: cid.out(), dict: { sup: dSup.list, cid: dCid.list }, arquivos };
+}
+
+self.onmessage = async ev => {
+  try {
+    const { desc, cad } = ev.data, pulados = [];
+    let d = null;
+    for (const f of desc){                                    // do mais recente para o mais antigo: vale o primeiro com o layout certo
+      const r = await lerDescontos(f);
+      if (r.erro){ pulados.push({ nome: f.name, modificado: f.lastModified, motivo: r.erro }); continue; }
+      d = r; break;
+    }
+    if (!d) throw new Error('Nenhum arquivo de descontos com o layout esperado na subpasta Descontos' + (pulados.length ? ' (' + pulados.map(p => p.nome + ': ' + p.motivo).join('; ') + ')' : '') + '.');
+    d.pulados = pulados;
+    const chaves = new Set(), mats = new Set();
+    for (let i = 0; i < d.mat.length; i++){ chaves.add(d.emp[i] + '-' + d.mat[i]); mats.add(String(d.mat[i])); }
+    const c = await lerCadastro(cad, chaves, mats);
+    progress('Montando o painel', 'Identificando as duplicidades…', 1, true);
+    const tr = [d.emp, d.mat, d.zona, d.ref, d.dt, d.log, d.ano, d.usr, d.vav, d.desc, d.tot, d.pct, d.ok, c.sup, c.cid].map(a => a.buffer);
+    self.postMessage({ type: 'done', data: { desc: d, cad: c } }, tr);
+  } catch (err){
+    self.postMessage({ type: 'error', message: err && err.message ? err.message : String(err) });
+  }
+};
+</script>
+
+<script>
+const VERSAO_SITE = 'v1.1';
+const $ = s => document.querySelector(s);
+$('#versao').textContent = VERSAO_SITE;
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, '_');
+const nf = n => Math.round(n).toLocaleString('pt-BR');
+const rs = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const rs0 = v => 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+const dec2 = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pc = (a, b) => b ? (a / b * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '–';
+const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const mesTxt = k => k ? MES[+k.slice(5, 7) - 1] + '/' + k.slice(2, 4) : '(sem referência)';
+const p2 = n => String(n).padStart(2, '0');
+// datas do arquivo: guardadas como horário "de parede" (UTC), sem fuso
+const dataTxt = ms => { const d = new Date(ms); return `${p2(d.getUTCDate())}/${p2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`; };
+const horaTxt = ms => { const d = new Date(ms); return `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`; };
+const dtTxt = ms => dataTxt(ms) + ' ' + horaTxt(ms);
+// datas do computador (modificação do arquivo, leitura): horário local
+const localTxt = ms => { const d = new Date(ms); return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
+const intervaloTxt = ms => {
+  const m = Math.round(ms / 60000);
+  if (m < 60) return m + ' min';
+  const h = m / 60;
+  if (h < 48) return (Math.round(h * 10) / 10).toLocaleString('pt-BR') + ' h';
+  return nf(h / 24) + ' dias';
+};
+// SUPERINTENDENCIA do cadastro: LAGOS é a Superintendência Interior
+const supNome = s => { const n = norm(s); return n === 'LAGOS' || n === 'INTERIOR' ? 'Interior' : n === 'LESTE' ? 'Leste' : n ? s.charAt(0) + s.slice(1).toLowerCase() : '(sem superintendência)'; };
+const cidNome = s => s ? s.toLowerCase().replace(/(^|[\s.(-])([a-zà-ú])/g, (x, a, b) => a + b.toUpperCase()).replace(/\b(De|Do|Da|Dos|Das|E)\b/g, w => w.toLowerCase()) : '(sem cidade)';
+
+let R = null, B = null, rodando = false;
+const st = { tab: 'resumo', med: 'rep', sup: null, cid: null, zona: null, usr: null, mes: null, lista: 'dup', busca: '', nivel: '', ord: 'valor', pag: 0, abertos: new Set(), usrOrd: { k: 'rep', dir: -1 } };
+const F = {};   // componentes de filtro
+
+/* ---------- progresso no cabeçalho ---------- */
+function prog(on, titulo, nota, pct){
+  const p = $('#progresso'); p.hidden = !on; p.classList.remove('erro');
+  if (!on) return;
+  $('#statusTexto').textContent = titulo || ''; $('#statusNota').textContent = nota || '';
+  const v = Math.round((pct || 0) * 100); $('#barraFill').style.width = v + '%'; $('#statusPct').textContent = v + '%';
+}
+function progErro(titulo, nota){
+  const p = $('#progresso'); p.hidden = false; p.classList.add('erro');
+  $('#statusTexto').textContent = titulo; $('#statusNota').textContent = nota || '';
+}
+function bloqueia(sim){ rodando = sim; ['#btnFolder', '#btnUpdate', '#btnClear'].forEach(id => { $(id).disabled = sim; }); }
+function toast(msg){ const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3200); }
+
+/* ---------- armazenamento no navegador ---------- */
+function idb(){
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('painel-duplicidade-descontos', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('dados');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function idbDo(mode, fn){
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const t = db.transaction('dados', mode); const req = fn(t.objectStore('dados'));
+    t.oncomplete = () => res(req && req.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+  });
+}
+const idbSave = v => idbDo('readwrite', s => s.put(v, 'atual'));
+const idbLoad = () => idbDo('readonly', s => s.get('atual'));
+const idbClear = () => idbDo('readwrite', s => { s.delete('pasta'); return s.delete('atual'); });
+const idbSavePasta = h => idbDo('readwrite', s => s.put(h, 'pasta'));
+const idbLoadPasta = () => idbDo('readonly', s => s.get('pasta'));
+
+/* ---------- leitura ---------- */
+function lerNoWorker(desc, cad){
+  return new Promise((res, rej) => {
+    let w;
+    try { w = new Worker(URL.createObjectURL(new Blob([$('#worker-src').textContent], { type: 'text/javascript' }))); }
+    catch (e){ rej(new Error('O navegador bloqueou o processamento. Use o Chrome ou o Edge atualizados.')); return; }
+    w.onmessage = ev => {
+      const m = ev.data;
+      if (m.type === 'progress') prog(true, m.title, m.msg, m.pct);
+      else if (m.type === 'error'){ w.terminate(); rej(new Error(m.message)); }
+      else if (m.type === 'done'){ w.terminate(); res(m.data); }
+    };
+    w.onerror = e => rej(new Error(e.message || 'Verifique se são arquivos .xlsx válidos.'));
+    w.postMessage({ desc, cad });
+  });
+}
+// separa os arquivos pelas subpastas Descontos e Cadastro (sem acento ou maiúscula também vale);
+// fora delas, pelo nome do arquivo
+function separa(lista){
+  const desc = [], cad = [], outros = [];
+  for (const f of lista){
+    if (!/\.xlsx$/i.test(f.name) || f.name.startsWith('~$')) continue;
+    const pastas = norm(f.caminho || f.webkitRelativePath || f.name).split('/').slice(0, -1);
+    if (pastas.includes('DESCONTOS')) desc.push(f);
+    else if (pastas.includes('CADASTRO')) cad.push(f);
+    else if (/desconto/i.test(f.name)) desc.push(f);
+    else if (/cadastro/i.test(f.name)) cad.push(f);
+    else outros.push(f.webkitRelativePath || f.caminho || f.name);
+  }
+  desc.sort((a, b) => b.lastModified - a.lastModified);
+  return { desc, cad, outros };
+}
+async function lerArquivos(lista, origem){
+  if (rodando) return;
+  const { desc, cad, outros } = separa([...lista]);
+  if (!desc.length){ progErro('Nenhum arquivo de descontos encontrado.', 'Coloque a exportação de descontos (.xlsx) na subpasta Descontos e clique em ↻ Atualizar.'); return; }
+  if (!cad.length){ progErro('Nenhum arquivo de cadastro encontrado.', 'Coloque os cadastros das superintendências (.xlsx) na subpasta Cadastro e clique em ↻ Atualizar.'); return; }
+  bloqueia(true);
+  prog(true, 'Lendo os arquivos…', `${desc.length} arquivo(s) de descontos e ${cad.length} de cadastro`, 0);
+  try {
+    const d = await lerNoWorker(desc, cad);
+    d.meta = { origem, lidoEm: Date.now(), outros, versao: VERSAO_SITE }; d.formato = 1;
+    try { await idbSave(d); } catch (_) { toast('A base não pôde ser guardada no navegador; ela vale só enquanto a página estiver aberta.'); }
+    prog(false);
+    usaBase(d);
+    toast(`Base lida: ${d.desc.arquivo}`);
+  } catch (e){
+    progErro('Não foi possível ler os arquivos.', e.message);
+  } finally { bloqueia(false); }
+}
+
+let pasta = null;
+const temPicker = 'showDirectoryPicker' in window;
+function mostraFonte(){
+  const base = R ? ` Base: <b>${esc(R.desc.arquivo)}</b>, modificado em ${localTxt(R.desc.modificado)}.` : '';
+  $('#fonte').innerHTML = (document.body.classList.contains('embutido') ? '📁 Pasta <b>Duplicidades</b> da pasta do painel de Arrecadação.' : pasta ? `📁 <b>${esc(pasta.name)}</b>.` : temPicker ? 'Nenhuma pasta conectada.' : 'Este navegador não lembra a pasta: escolha de novo para atualizar.') + base;
+  $('#btnUpdate').hidden = !pasta;
+  $('#btnUpdate').classList.toggle('primary', !!pasta);
+  $('#btnFolder').classList.toggle('primary', !pasta);
+  $('#btnFolder').textContent = pasta || R ? '📁 Trocar pasta' : '📁 Conectar pasta';
+  $('#btnClear').hidden = !R && !pasta;
+  $('#status').textContent = R ? `Lido em ${localTxt(R.meta.lidoEm)}` : 'Nenhuma base carregada';
+}
+async function coletaXlsx(dir, out, caminho = ''){
+  for await (const [nome, e] of dir.entries()){
+    if (e.kind === 'file'){
+      if (/\.xlsx$/i.test(nome) && !nome.startsWith('~$')){ const f = await e.getFile(); f.caminho = caminho + nome; out.push(f); }
+    } else await coletaXlsx(e, out, caminho + nome + '/');
+  }
+}
+async function lePasta(h){
+  if (rodando) return;
+  try {
+    if ((await h.queryPermission({ mode: 'read' })) !== 'granted' && (await h.requestPermission({ mode: 'read' })) !== 'granted'){
+      progErro('O acesso à pasta não foi liberado.', 'Clique em ↻ Atualizar e permita a leitura quando o navegador perguntar.'); return;
+    }
+    prog(true, 'Lendo a pasta…', `Procurando os arquivos .xlsx em “${h.name}”.`, 0);
+    const files = []; await coletaXlsx(h, files);
+    lerArquivos(files, `pasta “${h.name}”`);
+  } catch (e){
+    if (e && (e.name === 'NotFoundError' || e.name === 'NotReadableError'))
+      progErro(`A pasta “${h.name}” não foi encontrada.`, 'Ela pode ter mudado de nome ou de lugar. Clique em 📁 Trocar pasta e escolha de novo.');
+    else progErro('Não foi possível ler a pasta.', String(e && e.message || e));
+  }
+}
+async function conectaPasta(){
+  if (rodando) return;
+  if (!temPicker){ $('#inFolder').click(); return; }
+  let h;
+  try { h = await window.showDirectoryPicker({ id: 'descontos', mode: 'read' }); }
+  catch (e){ if (e && e.name !== 'AbortError') progErro('Não foi possível abrir a pasta.', String(e.message || e)); return; }
+  pasta = h;
+  try { await idbSavePasta(h); } catch (_) {}
+  mostraFonte();
+  lePasta(h);
+}
+
+/* ---------- derivados: grupos calculados uma vez sobre a base inteira ---------- */
+function derive(R){
+  const d = R.desc, c = R.cad, n = d.mat.length;
+  const supNomes = [...new Set(c.dict.sup.map(supNome))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const supDe = c.dict.sup.map(s => supNomes.indexOf(supNome(s)));          // índice do dicionário → superintendência
+  const cadIdx = new Map(); c.keys.forEach((k, i) => cadIdx.set(k, i));
+  const rc = new Int32Array(n).fill(-1), rSup = new Int16Array(n).fill(-1), rCid = new Int32Array(n).fill(-1);
+  const cnt = { total: n, semValor: 0, mat0: 0, zero: 0, fora: 0, foraValor: 0, base: 0, baseValor: 0 };
+  const base = [], fora = [];
+  for (let i = 0; i < n; i++){
+    if (!d.ok[i]){ cnt.semValor++; continue; }
+    if (!(d.mat[i] > 0)){ cnt.mat0++; continue; }
+    if (!(d.desc[i] > 0)){ cnt.zero++; continue; }
+    let ci = cadIdx.get(d.emp[i] + '-' + d.mat[i]);
+    if (ci === undefined) ci = cadIdx.get('*-' + d.mat[i]);
+    if (ci === undefined){ fora.push(i); cnt.fora++; cnt.foraValor += d.desc[i]; continue; }
+    rc[i] = ci; rSup[i] = supDe[c.sup[ci]]; rCid[i] = c.cid[ci];
+    base.push(i); cnt.base++; cnt.baseValor += d.desc[i];
+  }
+  const ordem = (a, b) => d.dt[a] - d.dt[b] || d.log[a] - d.log[b];
+  const cent = v => Math.round(v * 100);
+  function agrupa(lista){
+    const mDup = new Map(), mAl = new Map(), mVer = new Map();
+    const add = (m, k, i) => { const a = m.get(k); if (a) a.push(i); else m.set(k, [i]); };
+    for (const i of lista){
+      const cd = cent(d.desc[i]);
+      add(mDup, d.mat[i] + '|' + d.ref[i] + '|' + cd, i);
+      add(mAl, d.mat[i] + '|' + cd, i);
+      add(mVer, d.mat[i] + '|' + d.ref[i], i);
+    }
+    const dups = [], al = [], ver = [];
+    for (const a of mDup.values()){
+      if (a.length < 2) continue;
+      a.sort(ordem);
+      const nTot = new Set(a.map(i => cent(d.tot[i]))).size;
+      const k = a.length;
+      dups.push({ i0: a[0], idx: a, n: k, niv: nTot === 1 ? 1 : 2, nTot, desc: d.desc[a[0]], ref: d.ref[a[0]], mat: d.mat[a[0]],
+        ini: d.dt[a[0]], fim: d.dt[a[k - 1]], rep: k - 1, val: (k - 1) * d.desc[a[0]] });
+    }
+    for (const a of mAl.values()){
+      if (a.length < 2) continue;
+      const refs = [...new Set(a.map(i => d.ref[i]))];
+      if (refs.length < 2) continue;
+      a.sort(ordem);
+      refs.sort((x, y) => d.refs[x].localeCompare(d.refs[y]));
+      al.push({ i0: a[0], idx: a, n: a.length, refs, desc: d.desc[a[0]], mat: d.mat[a[0]], ini: d.dt[a[0]], fim: d.dt[a[a.length - 1]], val: a.length * d.desc[a[0]] });
+    }
+    for (const a of mVer.values()){
+      if (a.length < 2) continue;
+      const nd = new Set(a.map(i => cent(d.desc[i]))).size;
+      if (nd < 2) continue;
+      a.sort(ordem);
+      ver.push({ i0: a[0], idx: a, n: a.length, nd, ref: d.ref[a[0]], mat: d.mat[a[0]], ini: d.dt[a[0]], fim: d.dt[a[a.length - 1]], val: a.reduce((s, i) => s + d.desc[i], 0) });
+    }
+    return { dups, al, ver };
+  }
+  const g = agrupa(base), gf = agrupa(fora);
+  const recRep = new Uint8Array(n), recG = new Int32Array(n).fill(-1);
+  g.dups.forEach((x, gi) => x.idx.forEach((i, k) => { recG[i] = gi; if (k < x.n - 1) recRep[i] = 1; }));
+  // cidades de cada superintendência e zonas presentes na base
+  const cidSup = new Map(), zonas = new Set(), usrs = new Set(), refs = new Set();
+  for (const i of base){ cidSup.set(rCid[i], rSup[i]); zonas.add(d.zona[i]); usrs.add(d.usr[i]); refs.add(d.ref[i]); }
+  const foraRes = { grupos: gf.dups.length, rep: gf.dups.reduce((s, x) => s + x.rep, 0), val: gf.dups.reduce((s, x) => s + x.val, 0),
+    mats: new Set(fora.map(i => d.mat[i])).size, matsDup: new Set(gf.dups.map(x => x.mat)).size, al: gf.al.length, ver: gf.ver.length };
+  return { d, c, n, rc, rSup, rCid, supNomes, cnt, base, fora, foraRes, dups: g.dups, al: g.al, ver: g.ver, recRep, recG, cidSup,
+    zonas: [...zonas].sort((a, b) => a - b), usrs: [...usrs], refs: [...refs].sort((a, b) => d.refs[a].localeCompare(d.refs[b])) };
+}
+
+/* ---------- filtros ---------- */
+// itens: [{ v, t }] ; chave do st ; null = todos marcados
+function montaFiltro(id, nome, itens, chave, todos = 'Todas', opc = {}){
+  const wrap = $('#' + id);
+  const lista = opc.ordena === false ? itens : [...itens].sort((a, b) => a.t.localeCompare(b.t, 'pt-BR'));
+  const sel = st[chave];
+  wrap.innerHTML = `<button class="btn-filtro" type="button" aria-expanded="false">${nome} <span class="badge"></span></button>
+    <div class="painel-filtro">${lista.length > 15 ? '<input type="search" class="busca-filtro" placeholder="Procurar…">' : ''}
+    <div class="painel-acoes"><button type="button" class="mini-btn" data-a="todas">${todos}</button><button type="button" class="mini-btn" data-a="nenhuma">${todos === 'Todas' ? 'Nenhuma' : 'Nenhum'}</button></div>
+    <div class="check-list">${lista.map(x => `<label class="check-item"><input type="checkbox" value="${x.v}"${!sel || sel.has(x.v) ? ' checked' : ''}> ${esc(x.t)}</label>`).join('')}</div></div>`;
+  const btn = wrap.querySelector('.btn-filtro'), painel = wrap.querySelector('.painel-filtro'), badge = wrap.querySelector('.badge');
+  const caixas = [...wrap.querySelectorAll('.check-list input')];
+  const mostra = () => {
+    const k = caixas.filter(c => c.checked).length;
+    badge.textContent = st[chave] ? String(k) : todos; badge.classList.toggle('todas', !st[chave]);
+    wrap.classList.toggle('ligado', !!st[chave]);
+    $('#btnLimpar').hidden = !['sup', 'cid', 'zona', 'usr', 'mes'].some(x => st[x]);
+  };
+  const aplica = () => {
+    const marcadas = caixas.filter(c => c.checked).map(c => +c.value);
+    st[chave] = marcadas.length === caixas.length ? null : new Set(marcadas);
+    mostra();
+    if (opc.depois) opc.depois();
+    refresh();
+  };
+  btn.onclick = e => {
+    e.stopPropagation();
+    document.querySelectorAll('.painel-filtro.aberto').forEach(p => { if (p !== painel){ p.classList.remove('aberto'); p.previousElementSibling.setAttribute('aria-expanded', 'false'); } });
+    const ab = painel.classList.toggle('aberto'); btn.setAttribute('aria-expanded', String(ab));
+    const b = painel.querySelector('.busca-filtro'); if (ab && b) b.focus();
+  };
+  painel.onclick = e => e.stopPropagation();
+  caixas.forEach(c => c.onchange = aplica);
+  const busca = painel.querySelector('.busca-filtro');
+  if (busca) busca.oninput = () => { const q = norm(busca.value); caixas.forEach(c => { c.parentElement.hidden = q && !norm(c.parentElement.textContent).includes(q); }); };
+  wrap.querySelectorAll('.mini-btn').forEach(b => b.onclick = () => {
+    const vis = caixas.filter(c => !c.parentElement.hidden);
+    vis.forEach(c => { c.checked = b.dataset.a === 'todas'; }); aplica();
+  });
+  mostra();
+  F[chave] = { set: s => { st[chave] = s; caixas.forEach(c => { c.checked = !s || s.has(+c.value); }); mostra(); } };
+}
+document.addEventListener('click', () => document.querySelectorAll('.painel-filtro.aberto').forEach(p => { p.classList.remove('aberto'); p.previousElementSibling.setAttribute('aria-expanded', 'false'); }));
+
+function montaCidades(){
+  // só as cidades das superintendências marcadas; as cidades marcadas que saírem da lista deixam de valer
+  const vis = [...B.cidSup.entries()].filter(([, s]) => !st.sup || st.sup.has(s)).map(([c]) => c);
+  if (st.cid){ const s = new Set(vis.filter(c => st.cid.has(c))); st.cid = s.size === vis.length ? null : s; }
+  montaFiltro('fCid', 'Cidade', vis.map(c => ({ v: c, t: cidNome(B.c.dict.cid[c]) })), 'cid');
+}
+function montaFiltros(){
+  montaFiltro('fSup', 'Superintendência', B.supNomes.map((s, i) => ({ v: i, t: s })), 'sup', 'Todas', { depois: montaCidades });
+  montaCidades();
+  montaFiltro('fZona', 'Zona', B.zonas.map(z => ({ v: z, t: 'Zona ' + z })), 'zona', 'Todas', { ordena: false });
+  montaFiltro('fUsr', 'Usuário', B.usrs.map(u => ({ v: u, t: B.d.usrs[u] || '(sem usuário)' })), 'usr', 'Todos');
+  montaFiltro('fMes', 'Mês de referência', B.refs.map(r => ({ v: r, t: mesTxt(B.d.refs[r]) })), 'mes', 'Todos', { ordena: false });
+}
+$('#btnLimpar').onclick = () => { ['sup', 'cid', 'zona', 'usr', 'mes'].forEach(k => { st[k] = null; }); montaFiltros(); refresh(); };
+
+const okLoc = i => (!st.sup || st.sup.has(B.rSup[i])) && (!st.cid || st.cid.has(B.rCid[i])) && (!st.zona || st.zona.has(B.d.zona[i]));
+const okMes = r => !st.mes || st.mes.has(r);
+const okUsrAny = idx => !st.usr || idx.some(i => st.usr.has(B.d.usr[i]));
+const okRec = i => okLoc(i) && okMes(B.d.ref[i]) && (!st.usr || st.usr.has(B.d.usr[i]));
+const okDup = g => okLoc(g.i0) && okMes(g.ref) && okUsrAny(g.idx);
+const okAl = g => okLoc(g.i0) && (!st.mes || g.refs.some(r => st.mes.has(r))) && okUsrAny(g.idx);
+const okVer = g => okLoc(g.i0) && okMes(g.ref) && okUsrAny(g.idx);
+
+/* ---------- Resumo ---------- */
+function calcula(){
+  const d = B.d, nR = d.refs.length;
+  const o = { lanc: 0, lancV: 0, matsDesc: new Set(), mes: Array.from({ length: nR }, () => ({ l: 0, v: 0, m: new Set(), r1: 0, r2: 0, v1: 0, v2: 0, m1: new Set(), m2: new Set() })) };
+  for (const i of B.base) if (okRec(i)){ const x = o.mes[d.ref[i]]; o.lanc++; o.lancV += d.desc[i]; o.matsDesc.add(d.mat[i]); x.l++; x.v += d.desc[i]; x.m.add(d.mat[i]); }
+  o.G = B.dups.filter(okDup); o.A = B.al.filter(okAl); o.V = B.ver.filter(okVer);
+  o.mats = new Set(); o.rep = 0; o.val = 0; o.niv = { 1: { g: 0, r: 0, v: 0 }, 2: { g: 0, r: 0, v: 0 } };
+  for (const g of o.G){
+    o.mats.add(g.mat); o.rep += g.rep; o.val += g.val;
+    const z = o.niv[g.niv]; z.g++; z.r += g.rep; z.v += g.val;
+    const x = o.mes[g.ref];
+    if (g.niv === 1){ x.r1 += g.rep; x.v1 += g.val; x.m1.add(g.mat); } else { x.r2 += g.rep; x.v2 += g.val; x.m2.add(g.mat); }
+  }
+  o.matsA = new Set(o.A.map(g => g.mat)).size; o.matsV = new Set(o.V.map(g => g.mat)).size;
+  return o;
+}
+function kpi(titulo, valor, delta, cls = ''){
+  return `<div class="kpi-card ${cls}"><h3 title="${esc(titulo)}">${esc(titulo)}</h3><p class="kpi-valor">${valor}</p><p class="kpi-delta" title="${esc(delta)}">${esc(delta)}</p></div>`;
+}
+function renderResumo(){
+  const o = calcula();
+  $('#kpis').innerHTML = [
+    kpi('Lançamentos com desconto analisados', nf(o.lanc), rs0(o.lancV) + ' em descontos'),
+    kpi('Matrículas com desconto em duplicidade', nf(o.mats.size), pc(o.mats.size, o.matsDesc.size) + ' de ' + nf(o.matsDesc.size) + ' com desconto', 'destaque'),
+    kpi('Lançamentos a mais', nf(o.rep), 'em ' + nf(o.G.length) + ' descontos repetidos', 'destaque'),
+    kpi('Valor registrado em duplicidade', rs0(o.val), pc(o.val, o.lancV) + ' do valor lançado', 'destaque'),
+    kpi('Nível 1 – descontos repetidos idênticos', nf(o.niv[1].g), 'lançados ' + nf(o.niv[1].r) + ' vezes a mais, ' + rs0(o.niv[1].v)),
+    kpi('Nível 2 – descontos repetidos com total diferente', nf(o.niv[2].g), 'lançados ' + nf(o.niv[2].r) + ' vezes a mais, ' + rs0(o.niv[2].v)),
+    kpi('Alerta: mesmo desconto em meses diferentes', nf(o.A.length), 'em ' + nf(o.matsA) + ' matrículas', 'alerta'),
+    kpi('Matrículas a verificar', nf(o.matsV), 'descontos diferentes no mesmo mês (' + nf(o.V.length) + ' casos)', 'atencao')
+  ].join('');
+  renderGrafico(o);
+  renderUsuarios(o);
+  const c = B.cnt;
+  $('#rodapeResumo').textContent = `Base: ${R.desc.arquivo} (modificado em ${localTxt(R.desc.modificado)}). Entram os lançamentos com desconto maior que zero de matrículas das superintendências ${B.supNomes.join(' e ')}. ` +
+    `${nf(c.fora)} lançamentos (${rs0(c.foraValor)}) de matrículas fora dessas superintendências ficam de fora por enquanto; o detalhe está na aba Dados.`;
+}
+
+let dicaAlvo = null;
+function ligaDica(el, dados){
+  el.onmouseenter = el.onfocus = () => { dicaAlvo = el; mostraDica(dados); el.classList.add('ativa'); };
+  el.onmousemove = e => posDica(e.clientX, e.clientY);
+  el.onmouseleave = el.onblur = () => { $('#dica').hidden = true; el.classList.remove('ativa'); };
+  el.ontouchstart = e => { mostraDica(dados); const t = e.touches[0]; posDica(t.clientX, t.clientY); };
+}
+function mostraDica(x){
+  const di = $('#dica');
+  di.innerHTML = `<b class="mes">${esc(x.titulo)}</b>` + x.linhas.map(l => l === '-' ? '<hr>' :
+    `<div class="lin ${l.c || ''}"><span>${l.cor ? `<i style="background:${l.cor}"></i>` : ''}${esc(l.k)}</span><span>${esc(l.v)}</span></div>`).join('');
+  di.hidden = false;
+}
+function posDica(x, y){
+  const di = $('#dica'), w = di.offsetWidth, h = di.offsetHeight;
+  di.style.left = Math.min(window.innerWidth - w - 8, x + 14) + 'px';
+  di.style.top = Math.max(8, Math.min(window.innerHeight - h - 8, y - h - 12)) + 'px';
+}
+
+function renderGrafico(o){
+  const d = B.d, med = st.med;
+  const meses = B.refs.filter(r => okMes(r) && (o.mes[r].l > 0 || o.mes[r].r1 + o.mes[r].r2 > 0));
+  const nomeMed = { rep: 'Lançamentos a mais', mat: 'Matrículas com desconto repetido', val: 'Valor registrado em duplicidade (R$)' }[med];
+  $('#grafTit').textContent = nomeMed + ' por mês de referência';
+  $('#grafNota').textContent = {
+    rep: 'Lançamentos que repetem um desconto já registrado na mesma matrícula e mês, sem contar o válido (o mais recente). O valor exato fica em cima da coluna.',
+    mat: 'Matrículas com pelo menos um desconto repetido no mês. Quem tem os dois níveis no mesmo mês conta uma vez, no nível 1.',
+    val: 'Soma dos descontos dos lançamentos a mais: (vezes lançado − 1) × desconto, em cada desconto repetido.'
+  }[med];
+  if (!meses.length){ $('#grafBloco').innerHTML = '<p class="semdados">Nenhum lançamento com os filtros escolhidos.</p>'; return; }
+  const serie = r => {
+    const x = o.mes[r];
+    if (med === 'rep') return [x.r1, x.r2];
+    if (med === 'val') return [x.v1, x.v2];
+    let m2 = 0; x.m2.forEach(m => { if (!x.m1.has(m)) m2++; }); return [x.m1.size, m2];
+  };
+  const S = meses.map(serie), tot = S.map(s => s[0] + s[1]);
+  const COL = 76, ROT = 180, W = Math.max(1000, ROT + meses.length * COL), H = 230, top = 24, base = 206;
+  const max = Math.max(1, ...tot), esc1 = v => v / max * (base - top);
+  const cw = (W - ROT) / meses.length, bw = Math.min(40, cw * 0.62);
+  const fmt = v => med === 'val' ? nf(v) : nf(v);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(nomeMed)} por mês de referência">`;
+  svg += `<line x1="${ROT}" x2="${W}" y1="${base}" y2="${base}" stroke="#dbe4ec"/>`;
+  meses.forEach((r, k) => {
+    const x = ROT + k * cw + (cw - bw) / 2, [a, b] = S[k];
+    const ha = esc1(a), hb = esc1(b);
+    if (a > 0) svg += `<rect x="${x}" y="${base - ha}" width="${bw}" height="${ha}" fill="#102840"/>`;
+    if (b > 0) svg += `<rect x="${x}" y="${base - ha - hb}" width="${bw}" height="${hb}" fill="#176b9c"/>`;
+    if (a > 0 && ha >= 17) svg += `<text x="${x + bw / 2}" y="${base - ha / 2 + 4}" text-anchor="middle" font-size="11" fill="#fff" font-family="IBM Plex Sans Condensed,Arial">${fmt(a)}</text>`;
+    if (b > 0 && hb >= 17) svg += `<text x="${x + bw / 2}" y="${base - ha - hb / 2 + 4}" text-anchor="middle" font-size="11" fill="#fff" font-family="IBM Plex Sans Condensed,Arial">${fmt(b)}</text>`;
+    svg += `<text x="${x + bw / 2}" y="${base - ha - hb - 6}" text-anchor="middle" font-size="12" font-weight="600" fill="#1f2d3d" font-family="IBM Plex Sans Condensed,Arial">${fmt(tot[k])}</text>`;
+    svg += `<rect class="col-hover" data-k="${k}" x="${ROT + k * cw}" y="0" width="${cw}" height="${H}"/>`;
+  });
+  svg += '</svg>';
+  const linhaRef = { rep: ['Lançamentos com desconto no mês', r => o.mes[r].l, 'Total de lançamentos a mais'],
+    mat: ['Matrículas com desconto no mês', r => o.mes[r].m.size, 'Total de matrículas com desconto repetido'],
+    val: ['Descontos lançados no mês (R$)', r => o.mes[r].v, 'Total em duplicidade (R$)'] }[med];
+  const cols = `<colgroup><col style="width:${ROT / W * 100}%">${meses.map(() => '<col>').join('')}</colgroup>`;
+  const lin = (cls, rot, vals) => `<tr class="${cls}"><td>${rot}</td>${vals.map(v => `<td>${v}</td>`).join('')}</tr>`;
+  const tab = `<table class="tab-alinhada">${cols}<thead><tr><th></th>${meses.map(r => `<th>${mesTxt(d.refs[r])}</th>`).join('')}</tr></thead><tbody>
+    ${lin('', '<i class="cor" style="background:#102840"></i>Nível 1 – idênticos', S.map(s => fmt(s[0])))}
+    ${lin('', '<i class="cor" style="background:#176b9c"></i>Nível 2 – total diferente', S.map(s => fmt(s[1])))}
+    ${lin('forte', linhaRef[2], tot.map(fmt))}
+    ${lin('mudo', linhaRef[0], meses.map(r => fmt(linhaRef[1](r))))}
+    ${lin('mudo', '% em duplicidade', meses.map((r, k) => pc(tot[k], linhaRef[1](r))))}
+  </tbody></table>`;
+  $('#grafBloco').style.minWidth = W + 'px';
+  $('#grafBloco').innerHTML = svg + tab;
+  const rol = $('#grafBloco').parentElement; rol.scrollLeft = rol.scrollWidth;   // abre nos meses mais recentes
+  $('#grafBloco').querySelectorAll('.col-hover').forEach(el => {
+    const k = +el.dataset.k, r = meses[k], x = o.mes[r];
+    ligaDica(el, { titulo: mesTxt(d.refs[r]), linhas: [
+      { k: 'Nível 1 – lançamentos a mais', v: nf(x.r1), cor: '#102840' }, { k: 'Nível 1 – valor', v: rs(x.v1) },
+      { k: 'Nível 2 – lançamentos a mais', v: nf(x.r2), cor: '#176b9c' }, { k: 'Nível 2 – valor', v: rs(x.v2) }, '-',
+      { k: 'Total de lançamentos a mais', v: nf(x.r1 + x.r2), c: 'forte' }, { k: 'Valor em duplicidade', v: rs(x.v1 + x.v2), c: 'forte' },
+      { k: 'Matrículas com desconto repetido', v: nf(new Set([...x.m1, ...x.m2]).size) }, '-',
+      { k: 'Lançamentos com desconto', v: nf(x.l), c: 'mudo' }, { k: 'Descontos lançados', v: rs(x.v), c: 'mudo' }, { k: 'Matrículas com desconto', v: nf(x.m.size), c: 'mudo' }
+    ] });
+  });
+}
+
+function renderUsuarios(o){
+  const d = B.d, U = new Map();
+  const get = u => { let x = U.get(u); if (!x){ x = { u, lanc: 0, rep: 0, val: 0, g: new Set(), m: new Set() }; U.set(u, x); } return x; };
+  for (const i of B.base) if (okRec(i)) get(d.usr[i]).lanc++;
+  o.G.forEach(g => g.idx.forEach(i => {
+    if (st.usr && !st.usr.has(d.usr[i])) return;
+    const x = get(d.usr[i]); x.g.add(g); x.m.add(g.mat);
+    if (B.recRep[i]){ x.rep++; x.val += d.desc[i]; }
+  }));
+  const rows = [...U.values()].filter(x => x.g.size).map(x => ({ ...x, nome: d.usrs[x.u] || '(sem usuário)', grupos: x.g.size, mats: x.m.size, pct: x.lanc ? x.rep / x.lanc : 0 }));
+  const { k, dir } = st.usrOrd;
+  rows.sort((a, b) => (k === 'nome' ? a.nome.localeCompare(b.nome) : a[k] - b[k]) * dir || b.rep - a.rep);
+  const th = (key, t) => `<th class="sortable" data-k="${key}" title="Ordenar">${t}${k === key ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+  const tl = rows.reduce((s, x) => s + x.lanc, 0), tr = rows.reduce((s, x) => s + x.rep, 0), tv = rows.reduce((s, x) => s + x.val, 0);
+  $('#tblUsr').innerHTML = rows.length ? `<thead><tr>${th('nome', 'Usuário')}${th('lanc', 'Lançamentos com desconto')}${th('grupos', 'Descontos repetidos')}${th('mats', 'Matrículas')}${th('rep', 'Lançamentos a mais')}${th('pct', '% a mais')}${th('val', 'Valor em duplicidade (R$)')}</tr></thead>
+    <tbody>${rows.map(x => `<tr><td>${esc(x.nome)}</td><td class="num">${nf(x.lanc)}</td><td class="num">${nf(x.grupos)}</td><td class="num">${nf(x.mats)}</td>
+      <td class="num">${x.rep ? `<button type="button" class="btn-num" data-u="${x.u}">${nf(x.rep)}</button>` : '<span class="mudo">0</span>'}</td><td class="num">${pc(x.rep, x.lanc)}</td><td class="num">${dec2(x.val)}</td></tr>`).join('')}
+    <tr class="linha-total"><td>Total (${nf(rows.length)} usuários)</td><td class="num">${nf(tl)}</td><td class="num">${nf(o.G.length)}</td><td class="num">${nf(o.mats.size)}</td><td class="num">${nf(tr)}</td><td class="num">${pc(tr, tl)}</td><td class="num">${dec2(tv)}</td></tr></tbody>`
+    : '<tbody><tr><td class="semdados">Nenhum desconto repetido com os filtros escolhidos.</td></tr></tbody>';
+  $('#tblUsr').querySelectorAll('th.sortable').forEach(el => el.onclick = () => {
+    const key = el.dataset.k; st.usrOrd = { k: key, dir: st.usrOrd.k === key ? -st.usrOrd.dir : (key === 'nome' ? 1 : -1) }; renderUsuarios(o);
+  });
+  $('#tblUsr').querySelectorAll('.btn-num').forEach(b => b.onclick = () => {
+    F.usr.set(new Set([+b.dataset.u])); st.lista = 'dup'; st.nivel = ''; $('#selNivel').value = ''; showTab('dup');
+  });
+}
+
+/* ---------- Duplicidades, alerta entre meses e a verificar ---------- */
+const nomeDe = i => B.rc[i] >= 0 ? B.c.nomes[B.rc[i]] : '';
+const supDe = i => B.rSup[i] >= 0 ? B.supNomes[B.rSup[i]] : '';
+const cidDe = i => B.rCid[i] >= 0 ? cidNome(B.c.dict.cid[B.rCid[i]]) : '';
+const usrsDe = g => [...new Set(g.idx.map(i => B.d.usrs[B.d.usr[i]]))];
+function listaAtual(){
+  const q = norm(st.busca).replace(/_/g, ' ');
+  const busca = g => !q || String(g.mat).includes(q) || norm(nomeDe(g.i0)).replace(/_/g, ' ').includes(q);
+  let L;
+  if (st.lista === 'dup') L = B.dups.filter(g => okDup(g) && (!st.nivel || g.niv === +st.nivel) && busca(g));
+  else if (st.lista === 'al') L = B.al.filter(g => okAl(g) && busca(g));
+  else L = B.ver.filter(g => okVer(g) && busca(g));
+  const ord = { valor: (a, b) => b.val - a.val, vezes: (a, b) => b.n - a.n || b.val - a.val, recente: (a, b) => b.fim - a.fim, mat: (a, b) => a.mat - b.mat || a.ini - b.ini }[st.ord];
+  return L.sort(ord);
+}
+const chaveG = g => g.mat + '|' + g.i0;
+function renderLista(){
+  const L = listaAtual(), d = B.d, porPag = 100;
+  const paginas = Math.max(1, Math.ceil(L.length / porPag)); st.pag = Math.min(st.pag, paginas - 1);
+  const P = L.slice(st.pag * porPag, st.pag * porPag + porPag);
+  $('#campoNivel').hidden = st.lista !== 'dup';
+  $('#selOrd').options[0].text = st.lista === 'dup' ? 'Maior valor em duplicidade' : st.lista === 'al' ? 'Maior valor somado' : 'Maior soma de descontos';
+  const tit = { dup: 'Descontos repetidos (níveis 1 e 2)', al: 'Alerta: mesmo desconto em meses diferentes', ver: 'A verificar: descontos diferentes no mesmo mês' }[st.lista];
+  $('#listaTit').textContent = tit;
+  $('#listaNota').textContent = {
+    dup: 'Uma linha por desconto repetido: mesmo valor de desconto lançado mais de uma vez na mesma matrícula e no mesmo mês de referência. O lançamento mais recente é o válido; os anteriores são lançamentos a mais. Clique na linha para ver os lançamentos.',
+    al: 'Mesma matrícula com o mesmo valor de desconto em meses de referência diferentes. Fica separado dos níveis e não soma no valor em duplicidade.',
+    ver: 'Mesma matrícula e mês com valores de desconto diferentes, como um desconto por fatura. Não é duplicidade: confirme na matrícula.'
+  }[st.lista];
+  let soma;
+  if (st.lista === 'dup') soma = `${nf(L.length)} descontos repetidos, ${nf(new Set(L.map(g => g.mat)).size)} matrículas, ${nf(L.reduce((s, g) => s + g.rep, 0))} lançamentos a mais, ${rs(L.reduce((s, g) => s + g.val, 0))} em duplicidade`;
+  else soma = `${nf(L.length)} ${st.lista === 'al' ? 'descontos em meses diferentes' : 'casos de matrícula e mês'}, ${nf(new Set(L.map(g => g.mat)).size)} matrículas, ${nf(L.reduce((s, g) => s + g.n, 0))} lançamentos`;
+  $('#contagem').textContent = soma + (paginas > 1 ? ` · mostrando ${nf(st.pag * porPag + 1)} a ${nf(st.pag * porPag + P.length)}` : '');
+  let cab, linha;
+  const base = g => `<td class="txt num">${g.mat}</td><td class="txt">${esc(nomeDe(g.i0))}</td><td class="txt"><span class="tag sup">${esc(supDe(g.i0))}</span></td><td class="txt">${esc(cidDe(g.i0))}</td>`;
+  const usrTd = g => { const u = usrsDe(g); return `<td class="txt" title="${esc(u.join(', '))}">${esc(u.slice(0, 2).join(', '))}${u.length > 2 ? ` +${u.length - 2}` : ''}</td>`; };
+  if (st.lista === 'dup'){
+    cab = ['', 'Nível', 'Matrícula', 'Cliente', 'Superint.', 'Cidade', 'Mês ref.', 'Desconto (R$)', 'Vezes lançado', 'Lançamentos a mais', 'Valor em duplicidade (R$)', 'Primeiro lançamento', 'Último lançamento', 'Intervalo', 'Usuários'];
+    linha = g => `<td class="txt"><span class="tag n${g.niv}">Nível ${g.niv}</span></td>${base(g)}<td class="txt">${mesTxt(d.refs[g.ref])}</td><td class="num">${dec2(g.desc)}</td>
+      <td class="num forte">${g.n}</td><td class="num">${g.rep}</td><td class="num neg">${dec2(g.val)}</td><td class="txt">${dtTxt(g.ini)}</td><td class="txt">${dtTxt(g.fim)}</td><td class="num">${intervaloTxt(g.fim - g.ini)}</td>${usrTd(g)}`;
+  } else if (st.lista === 'al'){
+    cab = ['', 'Matrícula', 'Cliente', 'Superint.', 'Cidade', 'Desconto (R$)', 'Meses de referência', 'Lançamentos', 'Primeiro lançamento', 'Último lançamento', 'Usuários'];
+    linha = g => `${base(g)}<td class="num">${dec2(g.desc)}</td><td class="txt">${g.refs.map(r => mesTxt(d.refs[r])).join(', ')}</td><td class="num forte">${g.n}</td><td class="txt">${dtTxt(g.ini)}</td><td class="txt">${dtTxt(g.fim)}</td>${usrTd(g)}`;
+  } else {
+    cab = ['', 'Matrícula', 'Cliente', 'Superint.', 'Cidade', 'Mês ref.', 'Lançamentos', 'Descontos diferentes', 'Soma dos descontos (R$)', 'Também em duplicidade', 'Usuários'];
+    linha = g => `${base(g)}<td class="txt">${mesTxt(d.refs[g.ref])}</td><td class="num forte">${g.n}</td><td class="num">${g.nd}</td><td class="num">${dec2(g.val)}</td>
+      <td class="txt">${g.idx.some(i => B.recG[i] >= 0) ? '<span class="tag rep">Sim</span>' : 'Não'}</td>${usrTd(g)}`;
+  }
+  const det = g => {
+    const ult = g.idx[g.idx.length - 1];
+    return `<tr class="det"><td colspan="${cab.length}"><table><thead><tr><th>#</th>${st.lista !== 'dup' ? '<th>Mês ref.</th>' : ''}<th>Data e hora</th><th>NUM_LOG</th><th>Usuário</th><th>À vista (R$)</th><th>Desconto (R$)</th><th>Total (R$)</th><th>% desconto</th><th>Situação</th></tr></thead><tbody>
+      ${g.idx.map((i, k) => {
+        const sit = st.lista === 'dup' ? (i === ult ? '<span class="tag ok">Válido (mais recente)</span>' : '<span class="tag rep">Lançamento a mais</span>')
+          : B.recG[i] >= 0 ? (B.recRep[i] ? `<span class="tag rep">Lançamento a mais (nível ${B.dups[B.recG[i]].niv})</span>` : `<span class="tag ok">Válido (nível ${B.dups[B.recG[i]].niv})</span>`) : '–';
+        return `<tr class="${st.lista === 'dup' && i !== ult ? 'repeticao' : ''}"><td>${k + 1}</td>${st.lista !== 'dup' ? `<td class="txt">${mesTxt(d.refs[d.ref[i]])}</td>` : ''}<td class="txt">${dtTxt(d.dt[i])}</td><td class="num">${d.log[i]}</td><td class="txt">${esc(d.usrs[d.usr[i]])}</td>
+          <td class="num">${dec2(d.vav[i])}</td><td class="num">${dec2(d.desc[i])}</td><td class="num">${dec2(d.tot[i])}</td><td class="num">${dec2(d.pct[i])}</td><td class="txt">${sit}</td></tr>`;
+      }).join('')}</tbody></table></td></tr>`;
+  };
+  $('#tblLista').innerHTML = P.length ? `<thead><tr>${cab.map((c, k) => `<th class="${k > 0 ? 'txt' : ''}">${c}</th>`).join('')}</tr></thead><tbody>${P.map(g => {
+    const k = chaveG(g), ab = st.abertos.has(k);
+    return `<tr class="linha${ab ? ' aberta' : ''}" data-k="${esc(k)}" tabindex="0" aria-expanded="${ab}"><td class="abre">${ab ? '▾' : '▸'}</td>${linha(g)}</tr>${ab ? det(g) : ''}`;
+  }).join('')}</tbody>` : '<tbody><tr><td class="semdados">Nada encontrado com os filtros escolhidos.</td></tr></tbody>';
+  $('#tblLista').querySelectorAll('tr.linha').forEach(tr => {
+    const alterna = () => { const k = tr.dataset.k; if (st.abertos.has(k)) st.abertos.delete(k); else st.abertos.add(k); renderLista(); };
+    tr.onclick = alterna; tr.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); alterna(); } };
+  });
+  $('#pager').innerHTML = paginas > 1 ? `<button type="button" class="mini-btn" id="pgAnt"${st.pag === 0 ? ' disabled' : ''}>‹ Anterior</button><span>Página ${st.pag + 1} de ${paginas}</span><button type="button" class="mini-btn" id="pgProx"${st.pag >= paginas - 1 ? ' disabled' : ''}>Próxima ›</button>` : '';
+  if (paginas > 1){ $('#pgAnt').onclick = () => { st.pag--; renderLista(); }; $('#pgProx').onclick = () => { st.pag++; renderLista(); }; }
+}
+
+/* ---------- CSV (; com BOM e vírgula decimal) ---------- */
+function baixaCsv(nome, cab, linhas){
+  const cel = v => { if (v == null) return ''; if (typeof v === 'number') return String(v).replace('.', ','); const s = String(v); return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const txt = '\ufeff' + [cab, ...linhas].map(l => l.map(cel).join(';')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' })); a.download = nome;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+const COLS_LANC = ['SUPERINTENDENCIA', 'CIDADE', 'EMP_CODIGO', 'ZONA_LIGACAO', 'NUM_LIGACAO', 'NOM_CLIENTE', 'REFERENCIA', 'DAT_ACESSO', 'DAT_ACESSO_HORA', 'ANO_LOG', 'NUM_LOG', 'COD_USUARIO', 'VALOR_A_VISTA', 'DESCONTO', 'VALOR_TOTAL', 'PCT_DESCONTO'];
+const lancCols = i => { const d = B.d; const r = d.refs[d.ref[i]]; return [supDe(i), B.c.dict.cid[B.rCid[i]] || '', d.emp[i], d.zona[i], d.mat[i], nomeDe(i), r ? r.slice(5, 7) + '/' + r.slice(0, 4) : '',
+  dataTxt(d.dt[i]), horaTxt(d.dt[i]), d.ano[i], String(d.log[i]), d.usrs[d.usr[i]], +d.vav[i].toFixed(2), +d.desc[i].toFixed(2), +d.tot[i].toFixed(2), +d.pct[i].toFixed(2)]; };
+function exportaLista(){
+  const L = listaAtual(), hoje = new Date(), dia = `${hoje.getFullYear()}${p2(hoje.getMonth() + 1)}${p2(hoje.getDate())}`, lin = [];
+  if (st.lista === 'dup'){
+    L.forEach((g, gi) => g.idx.forEach((i, k) => { const rep = k < g.n - 1; lin.push([gi + 1, g.niv, rep ? 'LANCAMENTO_A_MAIS' : 'VALIDO', k + 1, g.n, rep ? +g.desc.toFixed(2) : 0, ...lancCols(i)]); }));
+    baixaCsv(`duplicidades_descontos_${dia}.csv`, ['ID_DESCONTO_REPETIDO', 'NIVEL', 'SITUACAO', 'ORDEM_DO_LANCAMENTO', 'VEZES_LANCADO', 'VALOR_EM_DUPLICIDADE', ...COLS_LANC], lin);
+  } else if (st.lista === 'al'){
+    L.forEach((g, gi) => { const ms = g.refs.map(r => mesTxt(B.d.refs[r])).join(', '); g.idx.forEach(i => lin.push([gi + 1, g.n, ms, B.recG[i] >= 0 ? (B.recRep[i] ? 'LANCAMENTO_A_MAIS' : 'VALIDO') : '', ...lancCols(i)])); });
+    baixaCsv(`alerta_entre_meses_${dia}.csv`, ['ID_ALERTA', 'QTD_LANCAMENTOS', 'MESES_COM_O_DESCONTO', 'SITUACAO_NO_DESCONTO_REPETIDO', ...COLS_LANC], lin);
+  } else {
+    L.forEach((g, gi) => g.idx.forEach(i => lin.push([gi + 1, g.n, g.nd, B.recG[i] >= 0 ? (B.recRep[i] ? 'LANCAMENTO_A_MAIS' : 'VALIDO') : '', ...lancCols(i)])));
+    baixaCsv(`a_verificar_${dia}.csv`, ['ID_CASO', 'QTD_LANCAMENTOS', 'DESCONTOS_DIFERENTES', 'SITUACAO_NO_DESCONTO_REPETIDO', ...COLS_LANC], lin);
+  }
+}
+
+/* ---------- Dados ---------- */
+function renderDados(){
+  const c = B.cnt, f = B.foraRes, d = R.desc;
+  const li = t => `<li>${t}</li>`;
+  const tr = (k, v, x = '') => `<tr><td>${k}</td><td class="num">${v}</td><td class="num">${x}</td></tr>`;
+  const cad = R.cad.arquivos.map(a => `<tr><td>${esc(a.nome)}</td><td>${a.motivo ? `<span class="neg">${esc(a.motivo)}</span>` : Object.entries(a.sups).map(([s, n]) => `${esc(supNome(s))} (${esc(s)}): ${nf(n)}`).join('<br>')}</td>
+    <td class="num">${nf(a.linhas)}</td><td class="num">${nf(a.cruzadas)}</td><td>${localTxt(a.modificado)}</td></tr>`).join('');
+  $('#dados').innerHTML = `
+    <h2>Arquivos lidos</h2>
+    <p class="nota-secao">Lidos em ${localTxt(R.meta.lidoEm)}, da ${esc(R.meta.origem || 'pasta')}.</p>
+    <table class="tab-seg"><thead><tr><th>Descontos (usado)</th><th>Aba</th><th class="num">Linhas</th><th>Modificado em</th></tr></thead>
+      <tbody><tr><td>${esc(d.arquivo)}</td><td>${esc(d.aba)}</td><td class="num">${nf(d.stats.linhas)}</td><td>${localTxt(d.modificado)}</td></tr>
+      ${(d.pulados || []).map(p => `<tr><td>${esc(p.nome)}</td><td colspan="2"><span class="neg">não usado: ${esc(p.motivo)}</span></td><td>${localTxt(p.modificado)}</td></tr>`).join('')}</tbody></table>
+    <table class="tab-seg"><thead><tr><th>Cadastro</th><th>Superintendência (como vem no arquivo)</th><th class="num">Matrículas</th><th class="num">Com desconto no arquivo</th><th>Modificado em</th></tr></thead><tbody>${cad}</tbody></table>
+    ${R.meta.outros && R.meta.outros.length ? `<p class="nota-secao">Arquivos fora das subpastas Descontos e Cadastro, ignorados: ${R.meta.outros.map(esc).join(', ')}.</p>` : ''}
+    ${d.stats.semData || d.stats.semRef ? `<p class="nota-secao"><span class="neg">${nf(d.stats.semData)} linhas sem data de acesso e ${nf(d.stats.semRef)} sem referência reconhecida.</span></p>` : ''}
+
+    <h2>Lançamentos considerados</h2>
+    <table class="tab-seg"><thead><tr><th>Linhas do arquivo de descontos</th><th class="num">Lançamentos</th><th class="num">Desconto (R$)</th></tr></thead><tbody>
+      ${tr('Total de linhas', nf(c.total))}
+      ${tr('Sem valor de desconto ou total (vazio ou NULL) ou sem referência (fora)', nf(c.semValor))}
+      ${tr('Matrícula 0 ou vazia (fora)', nf(c.mat0))}
+      ${tr('Desconto igual a zero (fora)', nf(c.zero))}
+      ${tr('Matrículas fora das superintendências ' + B.supNomes.join(' e ') + ' (ignoradas por enquanto)', nf(c.fora), dec2(c.foraValor))}
+      <tr class="linha-total"><td>Base analisada no painel</td><td class="num">${nf(c.base)}</td><td class="num">${dec2(c.baseValor)}</td></tr>
+    </tbody></table>
+    <p class="nota-secao">Nas matrículas ignoradas (${nf(f.mats)} matrículas), as mesmas regras dariam ${nf(f.grupos)} descontos repetidos em ${nf(f.matsDup)} matrículas, com ${nf(f.rep)} lançamentos a mais e ${rs(f.val)} em duplicidade, além de ${nf(f.al)} alertas entre meses e ${nf(f.ver)} casos a verificar. Esses números não entram em nenhuma tela.</p>
+
+    <h2>Regras</h2>
+    <ol>
+      ${li('<b>Arquivo de descontos:</b> da subpasta Descontos, vale só o .xlsx mais recente pela data de modificação que tenha as colunas EMP_CODIGO, DAT_ACESSO, REFERENCIA, NUM_LOG, NUM_LIGACAO, COD_USUARIO, VALOR_A_VISTA, DESCONTO e VALOR_TOTAL (DAT_ACESSO_HORA, ANO_LOG, ZONA_LIGACAO e PCT_DESCONTO são lidas quando existem). Um arquivo mais recente sem esse layout é pulado e aparece acima. Arquivos começados por ~$ (temporários do Excel) são ignorados.')}
+      ${li('<b>Lançamento:</b> cada linha do arquivo é um registro de negociação/desconto (um NUM_LOG). O painel mostra o que foi registrado mais de uma vez mas se refere ao mesmo desconto.')}
+      ${li('<b>Linhas fora da análise:</b> sem valor numérico em DESCONTO ou VALOR_TOTAL (vazio ou NULL), sem REFERENCIA reconhecida, com NUM_LIGACAO 0 ou com desconto igual a zero.')}
+      ${li('<b>Superintendência:</b> vem dos cadastros da subpasta Cadastro (todos os .xlsx são lidos), pela coluna SUPERINTENDENCIA e não pelo nome do arquivo. <b>LAGOS é a Superintendência Interior</b> e aparece sempre como Interior; LESTE aparece como Leste. A cidade e o nome do cliente também vêm do cadastro.')}
+      ${li('<b>Cruzamento:</b> pela CHAVE_LIGACAO do cadastro, que é EMP_CODIGO-NUM_LIGACAO do arquivo de descontos (ex.: 56-100607450). Cadastro sem CHAVE_LIGACAO cruza só pelo NUM_LIGACAO.')}
+      ${li('<b>Matrículas fora das superintendências:</b> continuam sendo lidas, mas ficam fora de indicadores, gráficos, tabelas e listas por enquanto. A quantidade e o que dariam pelas mesmas regras estão em “Lançamentos considerados”.')}
+      ${li('<b>Desconto repetido:</b> o mesmo valor de DESCONTO (comparado ao centavo) lançado duas ou mais vezes na mesma matrícula (NUM_LIGACAO) e no mesmo mês de referência (REFERENCIA). Cada desconto repetido é uma linha na aba Duplicidades.')}
+      ${li('<b>Nível 1 – descontos repetidos idênticos:</b> todos os lançamentos do desconto repetido têm também o mesmo VALOR_TOTAL. <b>Nível 2 – descontos repetidos com total diferente:</b> mesmo desconto, mas o VALOR_TOTAL mudou entre os lançamentos (provavelmente a mesma negociação refeita com o débito atualizado). Um desconto repetido com totais misturados (dois iguais e um diferente, por exemplo) fica inteiro no nível 2.')}
+      ${li('<b>Lançamento válido:</b> o mais recente de cada desconto repetido, por DAT_ACESSO + DAT_ACESSO_HORA; no empate, o de maior NUM_LOG. Os demais são <b>lançamentos a mais</b>. <b>Valor registrado em duplicidade</b> = soma dos descontos dos lançamentos a mais = (vezes lançado − 1) × desconto, em cada desconto repetido.')}
+      ${li('<b>Alerta entre meses:</b> mesma matrícula com o mesmo valor de desconto em dois ou mais meses de referência diferentes, independentemente do total. Fica separado dos níveis e não soma no valor em duplicidade.')}
+      ${li('<b>A verificar:</b> mesma matrícula e mês de referência com dois ou mais valores de desconto diferentes (por exemplo, um desconto aplicado em cada fatura em vez de um só). Não é duplicidade: só se confirma entrando na matrícula. Um caso a verificar pode ter, dentro dele, um desconto repetido (coluna “Também em duplicidade”).')}
+      ${li('<b>Filtros:</b> Superintendência, Cidade e Zona valem pela matrícula; a lista de cidades mostra só as das superintendências marcadas. Mês de referência vale pela referência do desconto repetido (no alerta entre meses, o desconto entra se algum dos seus meses estiver marcado). Usuário: o desconto repetido entra se tiver pelo menos um lançamento de um usuário marcado, com todos os seus lançamentos; “Lançamentos com desconto analisados” conta só os lançamentos dos usuários marcados.')}
+      ${li('<b>Por usuário:</b> lançamentos a mais e valor em duplicidade ficam com o usuário que fez o lançamento a mais; descontos repetidos e matrículas contam onde o usuário fez algum lançamento do desconto repetido (inclusive o válido). A soma da coluna de descontos repetidos pode passar do total porque um desconto pode ter lançamentos de mais de um usuário.')}
+      ${li('<b>Indicadores:</b> matrículas com desconto em duplicidade = matrículas com pelo menos um desconto repetido de nível 1 ou 2; o percentual é sobre as matrículas com desconto na base filtrada. Matrículas a verificar contam cada matrícula uma vez, mesmo com casos em mais de um mês.')}
+      ${li('<b>Datas e horários:</b> exatamente como vêm no arquivo, sem conversão de fuso.')}
+      ${li('<b>Downloads:</b> CSV com separador ponto e vírgula, vírgula decimal e acentos (abre direto no Excel), uma linha por lançamento da lista mostrada, respeitando filtros, busca e nível. No arquivo de descontos repetidos, cada desconto tem um ID_DESCONTO_REPETIDO, e a soma de VALOR_EM_DUPLICIDADE é o valor em duplicidade da lista.')}
+      ${li('<b>Privacidade:</b> os arquivos são lidos só no seu computador; a base processada fica guardada neste navegador até você atualizar ou apagar. Nada vai para a internet nem para o repositório.')}
+    </ol>`;
+}
+
+/* ---------- navegação ---------- */
+function showTab(t){
+  st.tab = t;
+  document.querySelectorAll('[data-tab]').forEach(b => { const a = b.dataset.tab === t; b.classList.toggle('active', a); b.setAttribute('aria-pressed', String(a)); });
+  $('#view-resumo').hidden = t !== 'resumo'; $('#view-dup').hidden = t !== 'dup'; $('#view-dados').hidden = t !== 'dados';
+  document.querySelectorAll('[data-lista]').forEach(b => { const a = b.dataset.lista === st.lista; b.classList.toggle('active', a); b.setAttribute('aria-pressed', String(a)); });
+  st.pag = 0; refresh();
+}
+function refresh(){
+  if (!B) return;
+  if (st.tab === 'resumo') renderResumo();
+  else if (st.tab === 'dup'){ st.pag = 0; renderLista(); }
+  else renderDados();
+}
+function usaBase(d){
+  R = d; B = derive(R);
+  ['sup', 'cid', 'zona', 'usr', 'mes'].forEach(k => { st[k] = null; }); st.abertos.clear();
+  montaFiltros();
+  $('#empty').hidden = true; $('#toolbar').hidden = false;
+  mostraFonte();
+  showTab(st.tab);
+}
+
+document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+document.querySelectorAll('[data-med]').forEach(b => b.onclick = () => {
+  st.med = b.dataset.med;
+  document.querySelectorAll('[data-med]').forEach(x => { const a = x === b; x.classList.toggle('active', a); x.setAttribute('aria-pressed', String(a)); });
+  renderResumo();
+});
+document.querySelectorAll('[data-lista]').forEach(b => b.onclick = () => { st.lista = b.dataset.lista; showTab('dup'); });
+let tBusca;
+$('#busca').oninput = e => { clearTimeout(tBusca); tBusca = setTimeout(() => { st.busca = e.target.value; st.pag = 0; renderLista(); }, 200); };
+$('#selNivel').onchange = e => { st.nivel = e.target.value; st.pag = 0; renderLista(); };
+$('#selOrd').onchange = e => { st.ord = e.target.value; st.pag = 0; renderLista(); };
+$('#btnCsv').onclick = () => { if (B) exportaLista(); };
+$('#btnFolder').onclick = conectaPasta;
+$('#btnUpdate').onclick = () => { if (pasta) lePasta(pasta); };
+$('#inFolder').onchange = e => {
+  const f = e.target.files; const nome = f.length && f[0].webkitRelativePath ? f[0].webkitRelativePath.split('/')[0] : 'pasta';
+  lerArquivos(f, `pasta “${nome}”`); e.target.value = '';
+};
+$('#btnClear').onclick = async () => {
+  if (!confirm('Apagar a base guardada neste navegador e desconectar a pasta? Os arquivos no seu computador não são afetados.')) return;
+  try { await idbClear(); } catch (_) {}
+  location.reload();
+};
+
+(async () => {
+  mostraFonte();
+  try { const h = await idbLoadPasta(); if (h){ pasta = h; mostraFonte(); } } catch (_) {}
+  try {
+    const d = await idbLoad();
+    if (d && d.formato === 1) usaBase(d);
+  } catch (_) {}
+})();
+</script>
+<script>
+/* ---------- dentro do painel de Arrecadação (iframe): recebe os arquivos da pasta Duplicidades da pasta principal ---------- */
+(function(){
+  if (window.parent === window) return;
+  document.body.classList.add('embutido');
+  mostraFonte();
+  let ultima = 0;
+  const avisaAltura = () => {
+    const h = Math.ceil(document.documentElement.scrollHeight);
+    if (h !== ultima){ ultima = h; parent.postMessage({ tipo: 'dup-altura', altura: h }, location.origin); }
+  };
+  new ResizeObserver(avisaAltura).observe(document.body);
+  window.addEventListener('message', ev => {
+    if (ev.origin !== location.origin || !ev.data || ev.data.tipo !== 'dup-arquivos') return;
+    const files = ev.data.itens.filter(x => /\.xlsx$/i.test(x.rel)).map(x => { const f = x.file; try { f.caminho = x.rel; } catch (_) {} return f; });
+    if (!files.length){ progErro('Nenhum arquivo .xlsx na pasta Duplicidades.', 'Coloque a exportação de descontos na subpasta Descontos e os cadastros na subpasta Cadastro, e clique em ↻ Atualizar no topo do painel.'); return; }
+    lerArquivos(files, 'pasta Duplicidades');
+  });
+  parent.postMessage({ tipo: 'dup-pronto' }, location.origin);
+})();
+</script>
+</body>
+</html>

@@ -61,20 +61,30 @@
   E.dupArquivos = [];
   const naPastaDup = (rel) => rel.split("/").slice(0, -1).some((p) => semAcentoDup(p) === "duplicidades");
   const semAcentoDup = (t) => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  // O painel de Duplicidades (duplicidades/index.html, o mesmo da v1.1) roda isolado num iframe, com o próprio código,
+  // a própria base no navegador e as próprias abas e filtros. Ele recebe os arquivos da pasta Duplicidades da pasta
+  // principal (subpastas Descontos e Cadastro): na 1ª vez que a área é aberta e a cada ↻ Atualizar.
+  let dupPronto = false, dupEnviados = null;
+  function enviaDuplicidades() {
+    const fr = $("dupFrame");
+    if (!dupPronto || !E.dupArquivos.length || dupEnviados === E.dupArquivos) return;
+    dupEnviados = E.dupArquivos;
+    fr.contentWindow.postMessage({ tipo: "dup-arquivos", itens: E.dupArquivos.map((i) => ({ rel: i.rel, file: i.file })) }, location.origin);
+  }
+  window.addEventListener("message", (ev) => {
+    if (ev.origin !== location.origin || !ev.data) return;
+    if (ev.data.tipo === "dup-pronto") { dupPronto = true; enviaDuplicidades(); }
+    if (ev.data.tipo === "dup-altura") $("dupFrame").style.height = Math.max(400, ev.data.altura) + "px";
+  });
   function desenhaDuplicidades() {
-    const el = $("dupArquivos");
-    if (!E.pasta && !E.res && !E.dupArquivos.length) { el.innerHTML = '<p class="nota">Conecte a pasta principal (📁 Conectar pasta) para ver os arquivos de Duplicidades.</p>'; return; }
-    if (!E.dupArquivos.length) { el.innerHTML = '<p class="nota">Nenhum arquivo na pasta <b>Duplicidades</b> da pasta conectada.</p>'; return; }
-    const grupos = new Map();
-    for (const it of E.dupArquivos) {
-      const partes = it.rel.split("/"), i = partes.findIndex((p) => semAcentoDup(p) === "duplicidades"), sub = partes.slice(i + 1, -1).join(" / ") || "(na própria pasta)";
-      if (!grupos.has(sub)) grupos.set(sub, []);
-      grupos.get(sub).push(it);
-    }
-    el.innerHTML = [...grupos].sort(([a], [b]) => a.localeCompare(b, "pt-BR")).map(([sub, l]) => `<h3 class="dup-sub">${esc(sub)} <small>${fmt(l.length)} arquivo(s)</small></h3>`
-      + `<div class="wrap"><table class="compacta"><thead><tr><th>Arquivo</th><th>Tamanho</th><th>Modificado em</th></tr></thead><tbody>`
-      + l.sort((a, b) => a.rel.localeCompare(b.rel, "pt-BR")).map((it) => `<tr>${td(esc(it.rel.split("/").pop()), "rot")}${td(it.file.size >= 1048576 ? fmt(it.file.size / 1048576, 1) + " MB" : fmt(it.file.size / 1024, 0) + " KB")}`
-        + `${td(new Date(it.file.lastModified).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }))}</tr>`).join("") + "</tbody></table></div>").join("");
+    const el = $("dupArquivos"), fr = $("dupFrame");
+    if (!fr.src) fr.src = "duplicidades/index.html?v=" + VERSAO_SITE;      // carrega só quando a área é aberta
+    fr.hidden = false;
+    const n = E.dupArquivos.length;
+    el.innerHTML = n ? `Lendo da pasta <b>Duplicidades</b>: ${fmt(n)} arquivo(s) (${[...new Set(E.dupArquivos.map((i) => i.rel.split("/").slice(-2, -1)[0]))].map(esc).join(", ")}). Ao trocar os arquivos, clique em <b>↻ Atualizar</b>.`
+      : E.res || E.pasta ? "A pasta conectada não tem a pasta <b>Duplicidades</b> (com as subpastas Descontos e Cadastro). Abaixo, a última base lida neste navegador, se houver."
+      : "Conecte a pasta principal (📁 Conectar pasta). Abaixo, a última base lida neste navegador, se houver.";
+    enviaDuplicidades();
   }
 
   // ===== pasta =====

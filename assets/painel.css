@@ -574,5 +574,7 @@ body.bi .btn-excel { color: #1f6f43; }
 /* painel de Duplicidades (botões Arrecadação / Duplicidades no lugar de Painel / Power BI) */
 body.modo-dup #filtros, body.modo-dup #abas, body.modo-dup #area, body.modo-dup #vazio, body.modo-dup #leitura,
 body.modo-dup #btnOrcado, body.modo-dup #btnPdf, body.modo-dup #btnMensal, body.modo-dup #menuPrintWrap { display: none !important; }
-#dupArea .dup-sub { margin: 16px 0 6px; font-size: 14px; color: var(--marinho); }
-#dupArea .dup-sub small { font-weight: 400; color: #64748b; margin-left: 6px; }
+#dupArea { margin-top: 14px; }
+#dupArea .dup-nota { margin: 0 0 8px; }
+#dupFrame { display: block; width: 100%; min-height: 400px; border: 0; background: transparent; }
+#dupFrame[hidden] { display: none; }
