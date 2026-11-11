@@ -889,12 +889,14 @@
   }
   // Comparativo por mês: cada matrícula (nas combinações marcadas) com pagamento em algum dos meses mis, e o valor pago em
   // cada um (Val. Autenticado). pagou[p * k + j] = 1 se a matrícula p teve pagamento no mês j (valor em branco quando 0).
-  function valoresPorMes(an, mis, marcas) {
+  // sel (opcional): só os pagamentos nos dias úteis marcados (máscara do seletor; bit 0 = fins de semana e feriados)
+  function valoresPorMes(an, mis, marcas, sel) {
     const k = mis.length, pos = new Map(), ligs = [], comb = [], maior = [], vals = [], pagou = [];
     mis.forEach((mi, j) => {
       for (const { L, mapa } of (mi >= 0 && an.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
         const cl = L.k[i] % COMBOS_ARQ, c = mapa[cl];
         if (marcas && !marcas[c]) continue;
+        if (sel != null && !(sel & (1 << L.d[i]))) continue;
         const l = (L.k[i] - cl) / COMBOS_ARQ;
         let p = pos.get(l);
         if (p === undefined) {
@@ -910,8 +912,9 @@
   // Negociação: matrículas que pagaram em TODOS os meses misPagou e não pagaram no mês de referência miRef (nas combinações
   // marcadas). vals[j] = valor pago no mês misPagou[j]. Do maior total pago para o menor. incluiPagantes: entram também os que
   // pagaram na referência (pagouRef = true, valRef = valor pago nela), para a coluna de indicativo.
-  function negociacao(an, misPagou, miRef, marcas, incluiPagantes = false) {
-    const r = valoresPorMes(an, [...misPagou, miRef], marcas), k = r.k, n = misPagou.length, out = [];
+  // sel (opcional): só os dias úteis marcados, em todos os meses (como o card Deixaram de pagar de Clientes e oportunidades)
+  function negociacao(an, misPagou, miRef, marcas, incluiPagantes = false, sel = null) {
+    const r = valoresPorMes(an, [...misPagou, miRef], marcas, sel), k = r.k, n = misPagou.length, out = [];
     for (let p = 0; p < r.ligs.length; p++) {
       const pagouRef = r.pagou[p * k + n] === 1;
       if (pagouRef && !incluiPagantes) continue;

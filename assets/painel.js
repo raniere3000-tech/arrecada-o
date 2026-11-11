@@ -616,7 +616,7 @@
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloDias()} de cada mês`; });
-    $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && !["localidade", "analise", "clientes"].includes(E.aba));   // Diagnóstico, Ranking e Clientes usam os dias marcados
+    $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && !["localidade", "analise", "clientes", "negociacao"].includes(E.aba));   // Diagnóstico, Ranking e Clientes usam os dias marcados
     ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, onepage: desenhaOnePage, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
       conversao: desenhaConversao, clientes: desenhaClientes, negociacao: desenhaNegociacao, localidade: desenhaLocalidade })[E.aba]();
   }
@@ -1296,7 +1296,7 @@
     const meses = E.res.dados.meses;
     if (!meses.includes(ngRef)) { ngRef = E.mes; ngMeses = null; }
     const antes = meses.filter((m) => m < ngRef).reverse();
-    if (!ngMeses) ngMeses = antes.includes(C.mesAnterior(ngRef)) ? [C.mesAnterior(ngRef)] : antes.slice(0, 1);
+    if (!ngMeses) ngMeses = [1, 2, 3].map((n) => C.mesAnterior(ngRef, n)).filter((m) => antes.includes(m));   // padrão: os 3 meses anteriores
     ngMeses = ngMeses.filter((m) => antes.includes(m));
     $("ngRef").innerHTML = [...meses].reverse().map((m) => `<option value="${m}"${m === ngRef ? " selected" : ""}>${C.rotuloMes(m)}</option>`).join("");
     $("ngMeses").innerHTML = antes.length ? antes.map((m) => `<label><input type="checkbox" value="${m}"${ngMeses.includes(m) ? " checked" : ""}> ${C.rotuloMes(m)}</label>`).join("")
@@ -1313,19 +1313,20 @@
     const pagou = [...(ngMeses || [])].sort();
     if (!pagou.length) { toast("Marque pelo menos um mês em que o cliente pagou.", true); return; }
     $("ngGerar").disabled = true; $("ngStatus").textContent = "Cruzando os meses…"; $("ngResultado").innerHTML = "";
+    const soDias = $("ngDias").checked;
     worker.postMessage({ tipo: "negociacao", id: ++idNg, misPagou: pagou.map(idxMes), miRef: idxMes(ngRef), rotulos: pagou.map(C.rotuloMes), rotRef: C.rotuloMes(ngRef), incluiPagantes: $("ngPagantes").checked, marcas: marcas(),
-      nomesSup: NOME_SUP, comFat: $("ngFat").checked, comRec: $("ngRec").checked, recTipo: E.recTipo, pagou, ref: ngRef });
-    ultimaNg = { pagou, ref: ngRef, todos: $("ngPagantes").checked };
+      nomesSup: NOME_SUP, comFat: $("ngFat").checked, comRec: $("ngRec").checked, recTipo: E.recTipo, pagou, ref: ngRef, sel: soDias ? selCalc() : null });
+    ultimaNg = { pagou, ref: ngRef, todos: $("ngPagantes").checked, dias: soDias ? rotuloDias() : "" };
   });
   function recebeNegociacao(m) {
     if (m.id !== idNg) return;
     $("ngGerar").disabled = false;
     if (m.erro) { $("ngStatus").textContent = "Erro: " + m.erro; return; }
-    const { pagou, ref, todos } = ultimaNg, d = E.res.dados, R_ = C.rotuloMes(ref), P = pagou.map(C.rotuloMes);
+    const { pagou, ref, todos, dias } = ultimaNg, d = E.res.dados, R_ = C.rotuloMes(ref), P = pagou.map(C.rotuloMes);
     const ult = d.ultimoCredito[ref], emAndamento = ref === d.meses[d.meses.length - 1] && ult;
     const tot = pagou.map((_, j) => m.porCidade.reduce((a, o) => a + o.vals[j], 0));
-    const nomeArq = todos ? `Negociacao_pagou_${pagou.join("_")}_indicativo_${ref}.csv` : `Negociacao_pagou_${pagou.join("_")}_nao_pagou_${ref}.csv`;
-    const ate = emAndamento ? ` (até ${dataBR(ult)})` : "";
+    const nomeArq = (todos ? `Negociacao_pagou_${pagou.join("_")}_indicativo_${ref}` : `Negociacao_pagou_${pagou.join("_")}_nao_pagou_${ref}`) + (dias ? "_so_dias_marcados" : "") + ".csv";
+    const ate = dias ? ` (só nos dias úteis ${dias} de cada mês)` : emAndamento ? ` (até ${dataBR(ult)})` : "";
     $("ngStatus").textContent = (todos ? `${fmt(m.n)} matrículas pagaram em ${P.join(", ")}: ${fmt(m.nNao)} não pagaram em ${R_}${ate} e ${fmt(m.n - m.nNao)} já pagaram`
       : `${fmt(m.n)} matrículas pagaram em ${P.join(", ")} e não pagaram em ${R_}${ate}`) + ` · ${filtroTexto()}.`
       + `${textoCadastro(m.cadastro)}${textoReceber(m.comReceber)}`;

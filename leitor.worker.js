@@ -747,8 +747,8 @@ function respondeBIMatriculas({ mis, misAnt, meses, marcas, sel, ligs, nomesSup 
 }
 // Negociação (área Análises): pagaram em todos os meses misPagou e não pagaram no mês de referência miRef. Devolve o resumo por
 // cidade e subcategoria, as 100 maiores matrículas (para a tela) e o CSV completo, montado aqui em blocos.
-async function respondeNegociacao({ misPagou, miRef, rotulos, rotRef, incluiPagantes, marcas, nomesSup, comFat, comRec, recTipo }) {
-  const lista = C.negociacao(analise, misPagou, miRef, marcas, incluiPagantes), n = misPagou.length, ex = await colunasExtras(comFat, comRec, recTipo);
+async function respondeNegociacao({ misPagou, miRef, rotulos, rotRef, incluiPagantes, marcas, nomesSup, comFat, comRec, recTipo, sel }) {
+  const lista = C.negociacao(analise, misPagou, miRef, marcas, incluiPagantes, sel == null ? null : sel), n = misPagou.length, ex = await colunasExtras(comFat, comRec, recTipo);
   const txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " ");
   const porCidade = new Map(), porSub = new Map(), top = [], blobs = [], partes = [];
   const soma = (mapa, k, x) => { let o = mapa.get(k); if (!o) { o = { rot: k, n: 0, nNao: 0, vals: new Array(n).fill(0) }; mapa.set(k, o); } o.n++; if (!x.pagouRef) o.nNao++; x.vals.forEach((v, j) => { o.vals[j] += v; }); };

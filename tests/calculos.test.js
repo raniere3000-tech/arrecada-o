@@ -634,3 +634,21 @@ test("projeção pelos dias úteis restantes: ritmo dos dias que faltam, com pes
   perto(proj, A + (calO.uteis - 5) * 12 * 2);               // 60 + dias que faltam × R$ 12 × 2
   assert.deepEqual(r.meses.map((m) => [m.mes, m.peso]), [["2026-08", C.calendario("2026-08").uteis === calO.uteis ? 3 : 1], ["2026-09", C.calendario("2026-09").uteis === calO.uteis ? 3 : 1]]);
 });
+
+test("negociação só nos dias úteis marcados: pagou nesses dias dos meses marcados e não pagou nesses dias na referência", () => {
+  const br = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4);
+  const dia = (mes, k) => br(C.calendario(mes).dataDoDia[k]);
+  const l = new C.LeituraArquivo(null);
+  for (const mes of ["2026-08", "2026-09", "2026-10"]) {
+    l.adiciona(linha(1, dia(mes, 1), "10,00"));          // 1: paga no 1º dia útil
+    l.adiciona(linha(2, dia(mes, 5), "20,00"));          // 2: paga no 5º dia útil (fora dos dias 1 a 2)
+  }
+  l.adiciona(linha(1, dia("2026-11", 8), "10,00"));      // em nov, a 1 só paga no 8º dia útil (fora dos dias marcados)
+  const a = new C.Agregador(); a.junta(l.exporta()); const d = a.resultado(new Map());
+  const mi = (m) => d.meses.indexOf(m), an = a.analise || d.analise;
+  const pag = ["2026-08", "2026-09", "2026-10"].map(mi);
+  const tudo = C.negociacao(an, pag, mi("2026-11"), null, false).map((x) => x.lig);
+  const dias = C.negociacao(an, pag, mi("2026-11"), null, false, C.mascaraAte(2)).map((x) => x.lig);
+  assert.deepEqual(tudo.sort(), [2]);                    // mês inteiro: a 1 pagou em nov (no 8º dia), sai
+  assert.deepEqual(dias, [1]);                           // só dias 1 a 2: a 1 pagou nesses dias e não pagou neles em nov; a 2 nunca pagou neles
+});
