@@ -71,6 +71,8 @@ button,select,input{font:inherit;color:inherit}
 .painel-filtro.aberto{display:block}
 .painel-acoes{display:flex;gap:8px;margin-bottom:10px}
 .check-list{display:flex;flex-direction:column;gap:6px}
+.filtro-anos{display:flex;flex-wrap:wrap;gap:6px 12px;padding:0 0 8px;margin-bottom:8px;border-bottom:1px solid var(--linha)}
+.filtro-anos .check-item{font-weight:600}
 .check-item{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
 .check-item input{accent-color:var(--marinho)}
 .mini-btn{padding:4px 10px;border:1px solid var(--linha);border-radius:6px;background:var(--cinza);color:var(--marinho);cursor:pointer;font-size:12px;font-weight:600}
@@ -795,7 +797,7 @@ self.onmessage = async ev => {
 </script>
 
 <script>
-const VERSAO_SITE = 'v1.5';
+const VERSAO_SITE = 'v1.6';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = VERSAO_SITE;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1065,10 +1067,13 @@ function montaFiltro(id, nome, itens, chave, todos = 'Todas', opc = {}){
   wrap.innerHTML = `<button class="btn-filtro" type="button" aria-expanded="false">${nome} <span class="badge"></span></button>
     <div class="painel-filtro">${lista.length > 15 ? '<input type="search" class="busca-filtro" placeholder="Procurar…">' : ''}
     <div class="painel-acoes"><button type="button" class="mini-btn" data-a="todas">${todos}</button><button type="button" class="mini-btn" data-a="nenhuma">${todos === 'Todas' ? 'Nenhuma' : 'Nenhum'}</button></div>
+    ${opc.grupo ? `<div class="filtro-anos" title="Marca ou desmarca todos os meses do ano">${[...new Set(lista.map(x => opc.grupo(x.v)))].map(a => `<label class="check-item"><input type="checkbox" data-ano="${esc(a)}"> ${esc(a)}</label>`).join('')}</div>` : ''}
     <div class="check-list">${lista.map(x => `<label class="check-item"><input type="checkbox" value="${x.v}"${!sel || sel.has(x.v) ? ' checked' : ''}> ${esc(x.t)}</label>`).join('')}</div></div>`;
   const btn = wrap.querySelector('.btn-filtro'), painel = wrap.querySelector('.painel-filtro'), badge = wrap.querySelector('.badge');
-  const caixas = [...wrap.querySelectorAll('.check-list input')];
+  const caixas = [...wrap.querySelectorAll('.check-list input')], anos = [...wrap.querySelectorAll('.filtro-anos input')];
+  const doAno = a => caixas.filter(c => opc.grupo(+c.value) === a);
   const mostra = () => {
+    anos.forEach(x => { const l = doAno(x.dataset.ano), k = l.filter(c => c.checked).length; x.checked = k === l.length; x.indeterminate = k > 0 && k < l.length; });
     const k = caixas.filter(c => c.checked).length;
     badge.textContent = st[chave] ? String(k) : todos; badge.classList.toggle('todas', !st[chave]);
     wrap.classList.toggle('ligado', !!st[chave]);
@@ -1089,6 +1094,7 @@ function montaFiltro(id, nome, itens, chave, todos = 'Todas', opc = {}){
   };
   painel.onclick = e => e.stopPropagation();
   caixas.forEach(c => c.onchange = aplica);
+  anos.forEach(x => x.onchange = () => { doAno(x.dataset.ano).forEach(c => { c.checked = x.checked; }); aplica(); });
   const busca = painel.querySelector('.busca-filtro');
   if (busca) busca.oninput = () => { const q = norm(busca.value); caixas.forEach(c => { c.parentElement.hidden = q && !norm(c.parentElement.textContent).includes(q); }); };
   wrap.querySelectorAll('.mini-btn').forEach(b => b.onclick = () => {
@@ -1111,7 +1117,7 @@ function montaFiltros(){
   montaCidades();
   montaFiltro('fZona', 'Zona', B.zonas.map(z => ({ v: z, t: 'Zona ' + z })), 'zona', 'Todas', { ordena: false });
   montaFiltro('fUsr', 'Usuário', B.usrs.map(u => ({ v: u, t: B.d.usrs[u] || '(sem usuário)' })), 'usr', 'Todos');
-  montaFiltro('fMes', 'Mês de referência', B.refs.map(r => ({ v: r, t: mesTxt(B.d.refs[r]) })), 'mes', 'Todos', { ordena: false });
+  montaFiltro('fMes', 'Mês de referência', B.refs.map(r => ({ v: r, t: mesTxt(B.d.refs[r]) })), 'mes', 'Todos', { ordena: false, grupo: r => B.d.refs[r].slice(0, 4) });
 }
 $('#btnLimpar').onclick = () => { ['sup', 'cid', 'zona', 'usr', 'mes'].forEach(k => { st[k] = null; }); montaFiltros(); refresh(); };
 
