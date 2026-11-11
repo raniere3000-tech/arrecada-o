@@ -29,6 +29,7 @@ self.onmessage = async (ev) => {
   if (ev.data.tipo === "negociacao") { responde("negociacao", ev.data.id, () => respondeNegociacao(ev.data)); return; }
   if (ev.data.tipo === "oportunidades") { responde("oportunidades", ev.data.id, () => respondeOportunidades(ev.data)); return; }
   if (ev.data.tipo === "mensal") { responde("mensal", ev.data.id, () => extraiMensal(ev.data)); return; }
+  if (ev.data.tipo === "perfil") { C.escolhePerfil(combosArr, ev.data.i); return; }   // perfil atualizado (0) ou congelado (1)
   if (ev.data.tipo === "extrair") { extraiBase(ev.data).catch((e) => avisa("extracao", { id: ev.data.id, erro: String((e && e.message) || e) })); return; }
   try {
     const r = await processa(ev.data.arquivos || []);
@@ -418,7 +419,7 @@ async function leFaturamento(file, aoLer) {
 }
 
 // ---------- cache: o que cada CSV exportou fica no navegador (IndexedDB); arquivo igual não é lido de novo ----------
-const CACHE_VERSAO = 9;                                 // 9: Interior só pela cidade (o cadastro não vale), como no BI
+const CACHE_VERSAO = 10;                                // 10: perfil congelado ao lado do atualizado (combinação "atual\u0002congelado")
 const CACHE_FATURAMENTO = 4;                           // cache do faturamento é separado: muda sem reler a arrecadação
 const banco = () => new Promise((ok, erro) => {
   const r = indexedDB.open("arrecadacao_cache", 1);
@@ -457,7 +458,15 @@ async function processa(itens) {
     arquivos.push({ rel: item.rel, file: item.file, tamanho: item.file.size, ...info });
   }
 
-  const perfis = new Map(), descontos = new Map(), orcados = [], cadastro = new Map();
+  const perfis = new Map(), perfisCg = new Map(), descontos = new Map(), orcados = [], cadastro = new Map();
+  // Dois perfis de pagamento: o atualizado e o congelado. Pelo nome do arquivo: "CONGELADO" ou "ATUALIZADO". O arquivo sem
+  // nenhuma das duas palavras é o outro (ex.: o da subpasta do Power BI fica com o nome de sempre). Sem marca: atualizado.
+  const arqPerfil = arquivos.filter((a) => a.tipo === "perfil"), marca = (a) => {
+    const n = C.chave(a.file.name);
+    return n.includes("CONGELAD") ? "congelado" : n.includes("ATUALIZAD") ? "atualizado" : "";
+  };
+  const temCg = arqPerfil.some((a) => marca(a) === "congelado"), temAt = arqPerfil.some((a) => marca(a) === "atualizado");
+  arqPerfil.forEach((a) => { a.perfilVersao = marca(a) || (temAt && !temCg ? "congelado" : "atualizado"); });
   for (const a of arquivos) {
     try {
       if (a.tipo === "cadastro") {
@@ -466,7 +475,10 @@ async function processa(itens) {
         a.registros = r.n;
         if (r.divergentes) a.motivo = `${r.divergentes} matrícula(s) repetida(s) com outra superintendência: vale a 1ª`;
       }
-      if (a.tipo === "perfil") { avisa("progresso", { pct: 12, texto: `Lendo perfis de pagamento: ${a.rel}` }); a.registros = await lePerfil(a, perfis); a.livro = null; }
+      if (a.tipo === "perfil") {
+        avisa("progresso", { pct: 12, texto: `Lendo perfil de pagamento ${a.perfilVersao}: ${a.rel}` });
+        a.registros = await lePerfil(a, a.perfilVersao === "congelado" ? perfisCg : perfis); a.livro = null;
+      }
       if (a.tipo === "desconto") { avisa("progresso", { pct: 14, texto: `Lendo descontos: ${a.rel}` }); a.registros = await leDesconto(a, descontos); a.livro = null; }
       if (a.tipo === "orcado") {
         const o = await leOrcado(a.file, a.aba);
@@ -504,7 +516,7 @@ async function processa(itens) {
   const agregador = new C.Agregador();
   const diarias = arquivos.filter((a) => a.tipo === "diaria"), acumuladas = arquivos.filter((a) => a.tipo === "acumulada");
   // o perfil entra na leitura de cada linha: trocar a planilha de perfil invalida o cache
-  const assinaturaPerfil = arquivos.filter((a) => a.tipo === "perfil" || a.tipo === "cadastro").map((a) => `${a.tipo}|${a.rel}|${a.tamanho}|${a.file.lastModified}`).join(";");
+  const assinaturaPerfil = arquivos.filter((a) => a.tipo === "perfil" || a.tipo === "cadastro").map((a) => `${a.tipo}|${a.perfilVersao || ""}|${a.rel}|${a.tamanho}|${a.file.lastModified}`).join(";");
   let db = null;
   try { db = await banco(); } catch (e) { /* navegador sem IndexedDB: lê tudo */ }
   const usados = new Set(), exportados = new Map();
@@ -521,7 +533,7 @@ async function processa(itens) {
         exp = await leCsv(a.file, (lidos) => avisa("progresso", {
           pct: 15 + Math.round(((base + lidos) / totalBytes) * 83),
           texto: `Lendo ${a.rel} (${(lidos / 1048576).toFixed(0)} de ${(a.tamanho / 1048576).toFixed(0)} MB)`,
-        }), new C.LeituraArquivo(perfis.size ? perfis : null, cadastro.size ? cadastro : null));
+        }), new C.LeituraArquivo(perfis.size ? perfis : null, cadastro.size ? cadastro : null, perfisCg.size ? perfisCg : null));
         if (db) await cacheGrava(db, id, exp);
       } catch (e) {
         Object.assign(a, { tipo: "ignorado", motivo: "não foi possível ler: " + ((e && e.message) || e), erro: true });
@@ -585,7 +597,9 @@ async function processa(itens) {
   }
   return {
     dados, orcados, cruzamento, receberInfo, receberMapas,
-    temPerfil: perfis.size > 0, temDesconto: descontos.size > 0,
+    temPerfil: perfis.size > 0 || perfisCg.size > 0, temDesconto: descontos.size > 0,
+    perfilArquivos: { atualizado: arqPerfil.filter((a) => a.tipo === "perfil" && a.perfilVersao === "atualizado").map((a) => a.rel),
+      congelado: arqPerfil.filter((a) => a.tipo === "perfil" && a.perfilVersao === "congelado").map((a) => a.rel) },
     cadastroInfo: cadastro.size ? { matriculas: cadastro.size, porSup: [...cadastro.values()].reduce((o, x) => ((o[x] = (o[x] || 0) + 1), o), {}) } : null,
     cadastroMapa: cadastro.size ? cadastro : null,
     mesesDiaria: [...mesesDiaria].sort(),

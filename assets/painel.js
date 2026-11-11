@@ -344,8 +344,42 @@
     $("statusTexto").textContent = texto;
   }
 
+  // ----- Perfil de pagamento: atualizado ou congelado (as duas planilhas são lidas; a escolha não relê a pasta) -----
+  try { E.perfilVersao = localStorage.getItem("arrecadacao_perfil_versao") || "atualizado"; } catch (x) { E.perfilVersao = "atualizado"; }
+  const perfisDaPasta = () => (E.res && E.res.perfilArquivos) || { atualizado: [], congelado: [] };
+  const temPerfilCongelado = () => perfisDaPasta().congelado.length > 0;
+  function aplicaPerfil() {
+    if (!E.res) return;
+    const i = E.perfilVersao === "congelado" && temPerfilCongelado() ? 1 : 0;
+    C.escolhePerfil(E.res.dados.combos, i);
+    if (worker) worker.postMessage({ tipo: "perfil", i });    // a tabela do BI por matrícula (aba Dados) sai do worker
+  }
+  function perfilEscolhido() { return E.perfilVersao === "congelado" && temPerfilCongelado() ? "congelado" : "atualizado"; }
+  function desenhaEscolhaPerfil() {
+    const el = $("perfilEscolha"), arq = perfisDaPasta(), v = perfilEscolhido();
+    if (!el) return;
+    const nomes = (l) => l.map((r) => esc(r.split("/").pop())).join(", ");
+    if (!temPerfilCongelado()) {
+      el.innerHTML = `<p class="nota">Perfil: ${arq.atualizado.length ? `<b>${nomes(arq.atualizado)}</b>` : "nenhuma planilha de perfil na pasta"}.`
+        + ` <span class="sem-pdf">Para comparar com o perfil congelado, ponha a outra planilha na pasta com <b>CONGELADO</b> no nome`
+        + ` (ex.: <code>Cluster_Cliente_Lagos - CONGELADO SET.xlsx</code>).</span></p>`;
+      return;
+    }
+    el.innerHTML = `<div class="perfil-escolha"><label class="sem-pdf">Perfil de pagamento <select id="perfilVersao">`
+      + `<option value="atualizado"${v === "atualizado" ? " selected" : ""}>Atualizado</option>`
+      + `<option value="congelado"${v === "congelado" ? " selected" : ""}>Congelado</option></select></label>`
+      + `<span class="nota">Perfil ${v}: <b>${nomes(arq[v])}</b> · vale para todas as abas (Perfil, Ranking de clientes e Dados)</span></div>`;
+  }
+  document.addEventListener("change", (e) => {
+    if (e.target.id !== "perfilVersao") return;
+    E.perfilVersao = e.target.value;
+    try { localStorage.setItem("arrecadacao_perfil_versao", E.perfilVersao); } catch (x) { /* sem armazenamento */ }
+    aplicaPerfil(); desenha();
+  });
+
   function carrega(res, nomePasta) {
     E.res = res;
+    aplicaPerfil();
     chaveCl = ""; clRes = null;                      // Clientes e oportunidades: recalcula com a pasta nova
     ajustaRecTipo();
     const d = res.dados;
@@ -383,7 +417,7 @@
   }
   function listaArquivos(res) {
     const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (linha da arrecadação)", faturamento: "Faturamento (Fatura de ciclo)", receber: "Contas a receber", cadastro: "Cadastro (superintendência)", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
-    const linhas = res.arquivos.map((a) => `<tr>${td(esc(a.rel), "rot")}${td((USO[a.tipo] || a.tipo) + (a.recTipo ? (a.recTipo === "nfc" ? " (apenas NFC)" : " (total)") : ""), "rot")}${td(a.registros != null ? fmt(a.registros) : "")}`
+    const linhas = res.arquivos.map((a) => `<tr>${td(esc(a.rel), "rot")}${td((USO[a.tipo] || a.tipo) + (a.recTipo ? (a.recTipo === "nfc" ? " (apenas NFC)" : " (total)") : "") + (a.tipo === "perfil" && a.perfilVersao ? ` (${a.perfilVersao})` : ""), "rot")}${td(a.registros != null ? fmt(a.registros) : "")}`
       + `${td(esc((a.meses || []).map(C.rotuloMes).join(", ")), "rot")}${td(esc(a.motivo || [a.puladas ? `${fmt(a.puladas)} linhas de mês que está no arquivo diário não foram usadas` : "", rejeicao(a), a.doCache ? "já lido antes (guardado neste navegador)" : ""].filter(Boolean).join("; ")), "rot")}</tr>`).join("");
     const d = res.dados, avisos = [];
     if (!res.temDesconto) avisos.push("Planilha de desconto comercial não encontrada: a arrecadação aparece sem o desconto.");
@@ -981,7 +1015,8 @@
       { titulo: "Subcategoria", detalheDe: (c) => c.grupo + "\u0001" + c.detalhe });
   }
   function desenhaPerfil() {
-    tresTabelas(["tPerValor", "tPerCli", "tPerCon"], (c) => c.perfil, porOrdem(R.ORDEM_PERFIS, [R.SEM_PERFIL]), { titulo: "Perfil (Cluster Saldo)" });
+    desenhaEscolhaPerfil();
+    tresTabelas(["tPerValor", "tPerCli", "tPerCon"], (c) => c.perfil, porOrdem(R.ORDEM_PERFIS, [R.SEM_PERFIL]), { titulo: perfilEscolhido() === "congelado" && temPerfilCongelado() ? "Perfil congelado (Cluster Saldo)" : "Perfil (Cluster Saldo)" });
     $("legendaPerfil").innerHTML = `<p><b>Adimplente</b> – cliente sem faturas vencidas e que já realizou ao menos um pagamento.</p>
       <p><b>Inadimplente</b> – cliente com débitos em aberto e que já realizou ao menos um pagamento.</p>
       <p><b>Nunca Pagou</b> – cliente que nunca realizou um pagamento.</p>

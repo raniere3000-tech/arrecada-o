@@ -102,6 +102,32 @@ test("tabelas por grupo: subcategoria, perfil e o desconto na linha da ligação
   assert.equal(p.get(R.SEM_PERFIL).get(1).clientes, 1);       // ligação 4 (sem perfil); a 3 pagou só no sábado
 });
 
+test("perfil congelado ao lado do atualizado: a escolha troca o perfil de todas as tabelas sem reler", () => {
+  const perfis = new Map([["1|1", "Adimplente"], ["2|1", "Inadimplente"]]);
+  const perfisCongelado = new Map([["1|1", "Inadimplente"], ["2|1", "Inadimplente"], ["4|1", "Nunca Pagou"]]);
+  const a = new C.Agregador({ perfis, perfisCongelado });
+  a.adiciona(linha(1, "01/10/2026", "100,00"));
+  a.adiciona(linha(2, "01/10/2026", "200,00"));
+  a.adiciona(linha(4, "01/10/2026", "40,00"));
+  const d = a.resultado(new Map()), tudo = C.marcaCombos(d, {});
+  const por = () => {
+    const p = C.porGrupo(d, [0], tudo, C.mascaraAte(3), (c) => c.perfil);
+    return Object.fromEntries([...p].map(([k, m]) => [k, m.get(0).valor]));
+  };
+  assert.deepEqual(por(), { Adimplente: 100, Inadimplente: 200, [R.SEM_PERFIL]: 40 });          // começa no atualizado
+  C.escolhePerfil(d.combos, 1);
+  assert.deepEqual(por(), { Inadimplente: 300, "Nunca Pagou": 40 });
+  C.escolhePerfil(d.combos, 0);
+  assert.deepEqual(por(), { Adimplente: 100, Inadimplente: 200, [R.SEM_PERFIL]: 40 });
+  // sem a planilha congelada, nada muda
+  const b = new C.Agregador({ perfis });
+  b.adiciona(linha(1, "01/10/2026", "100,00"));
+  const e = b.resultado(new Map());
+  assert.equal(e.combos[0].perfis, null);
+  C.escolhePerfil(e.combos, 1);
+  assert.equal(e.combos[0].perfil, "Adimplente");
+});
+
 test("tabela no formato do BI: cidade × subcategoria × mês × perfil, com os clientes do mês anterior", () => {
   const d = exemplo(), tudo = C.marcaCombos(d, {}), t = C.tabelaBI(d, tudo, C.mascaraAte(3));
   const g = C.porGrupo(d, [0, 1], tudo, C.mascaraAte(3), () => "T").get("T");

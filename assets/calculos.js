@@ -147,7 +147,7 @@
   // (zona, subcategoria, perfil) vira um índice; as chaves são números e o que um arquivo exporta são listas tipadas.
   //  - V: somas por mês × dia útil × combinação × mês de vencimento (valor, contas, linhas)
   //  - L: por mês, os dias úteis em que cada ligação pagou (máscara de bits), para contar clientes distintos
-  const SEP = "\u0001";
+  const SEP = "\u0001", PERFIL_SEP = "\u0002";
   // COMBOS_ARQ: combinações num arquivo; DIAS_L: posições de dia útil (0..23) na chave ligação × combinação × dia
   const MAX_COMBOS = 65536, MAX_VENC = 1024, LIG_HASH = 1e10, COMBOS_ARQ = 16384, DIAS_L = 24, VALOR_COM_NOME = 200;
   function chaveLig(t) {                                 // ligação → número (as que não são números: hash, acima de 1e10)
@@ -168,9 +168,18 @@
     return `${1990 + Math.floor((i - 1) / 12)}-${String(((i - 1) % 12) + 1).padStart(2, "0")}`;
   }
 
+  // Perfil mostrado em todas as telas: 0 = atualizado, 1 = congelado (combinações sem o congelado ficam no atualizado)
+  function escolhePerfil(combos, i) {
+    if (!combos) return;
+    for (const c of combos) if (c.perfis) c.perfil = c.perfis[i ? 1 : 0];
+  }
+
   class LeituraArquivo {
-    constructor(perfis, cadastro) {
+    constructor(perfis, cadastro, perfisCongelado) {
       this.perfis = perfis || null;                    // Map "ligação|contrato" → perfil (CLUSTER SALDO)
+      // perfil congelado (outra planilha): entra na combinação ao lado do atualizado ("atual\u0002congelado"); a página
+      // escolhe qual mostrar (escolhePerfil) sem reler os arquivos
+      this.perfisCg = perfisCongelado || null;
       // Map ligação → superintendência do cadastro (já no nome do painel); null = sem planilha de cadastro: SUP pela cidade
       this.cadastro = cadastro || null;
       this.idxCk = new Map();
@@ -192,7 +201,9 @@
       if (!M) { M = { V: new Map(), L: new Map(), P: new Map(), ultimoCredito: "", linhas: 0 }; this.meses.set(mes, M); }
       M.linhas++;
       if (credito > M.ultimoCredito) M.ultimoCredito = credito;
-      const perfil = this.perfis ? (this.perfis.get(ligacao(r.lig) + "|" + ligacao(r.contrato)) || R.SEM_PERFIL) : R.SEM_PERFIL;
+      const kp = ligacao(r.lig) + "|" + ligacao(r.contrato);
+      const perfil = (this.perfis ? (this.perfis.get(kp) || R.SEM_PERFIL) : R.SEM_PERFIL)
+        + (this.perfisCg ? PERFIL_SEP + (this.perfisCg.get(kp) || R.SEM_PERFIL) : "");
       // "" = pela cidade: sem cadastro, ou cidade do Interior (R.SUPS_PELA_CIDADE: o cadastro não vale), ou o cadastro diz
       // Interior numa cidade de fora; nas outras, a do cadastro, e fora dele "Sem SUP"
       const zona = String(r.zona || "").trim();
@@ -255,6 +266,7 @@
   class Agregador {
     constructor(opcoes = {}) {
       this.perfis = opcoes.perfis || null;
+      this.perfisCongelado = opcoes.perfisCongelado || null;
       this.combos = [];
       this.idxCombo = new Map();
       this.meses = new Map();
@@ -275,7 +287,8 @@
       if (grupo === R.SEM_CLASSIFICACAO) this.subSemClasse.set(util, 1);
       i = this.combos.length;
       if (i >= MAX_COMBOS) throw new Error("combinações de zona × subcategoria × perfil demais");
-      this.combos.push({ zona, cidade, sup, util, grupo, detalhe, perfil });
+      const [pAt, pCg] = perfil.split(PERFIL_SEP);           // pCg: perfil congelado (só com a 2ª planilha de perfil)
+      this.combos.push({ zona, cidade, sup, util, grupo, detalhe, perfil: pAt, perfis: pCg === undefined ? null : [pAt, pCg] });
       this.idxCombo.set(ck, i);
       return i;
     }
@@ -312,7 +325,7 @@
       return { linhas: usadas, puladas, meses: meses.sort() };
     }
     adiciona(r) {                                      // atalho (testes): linha a linha, como um arquivo só
-      if (!this.parcial) this.parcial = new LeituraArquivo(this.perfis);
+      if (!this.parcial) this.parcial = new LeituraArquivo(this.perfis, null, this.perfisCongelado);
       this.parcial.adiciona(r);
     }
     // descontos: Map mês → Map ligação → valor do desconto (positivo). O desconto de cada ligação entra no mês da
@@ -1167,7 +1180,7 @@
   }
 
   return {
-    MAX_DIA, MESES_CURTOS, chave, separaCsv, refDeTexto, vencNum, consertaAcento, LeituraFaturamento, cruzaFaturamento, matrizConversao, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
+    MAX_DIA, MESES_CURTOS, chave, separaCsv, escolhePerfil, refDeTexto, vencNum, consertaAcento, LeituraFaturamento, cruzaFaturamento, matrizConversao, ehLinhaArrecadacao, ordemOrcado, numeroBR, dataISO, ligacao, rotuloMes, mesAnterior, calendario, rotuloDia,
     zonaInfo, supPrincipal, subInfo, chaveLig, mascaraAte, diasDaMascara, estendeSel, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,

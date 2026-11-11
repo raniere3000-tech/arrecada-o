@@ -600,3 +600,10 @@ td.rot, td.txt { white-space: normal; overflow-wrap: anywhere; }
 #dgTab tr.grupo:not(.dg-sub) td.rot { font-weight: 600; }
 #dgTab tr.dg-sub.grupo td.rot { font-weight: 600; }
 #dgTab tr.dg-sub:not(.grupo) td.rot { font-weight: 600; }
+
+/* Perfil de pagamento: escolha entre o perfil atualizado e o congelado */
+#perfilEscolha { padding: 10px 16px; }
+#perfilEscolha .nota { margin: 0; }
+.perfil-escolha { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.perfil-escolha label { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.perfil-escolha select { min-height: 32px; font: inherit; font-weight: 400; padding: 2px 8px; }
