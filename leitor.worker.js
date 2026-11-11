@@ -418,7 +418,7 @@ async function leFaturamento(file, aoLer) {
 }
 
 // ---------- cache: o que cada CSV exportou fica no navegador (IndexedDB); arquivo igual não é lido de novo ----------
-const CACHE_VERSAO = 9;                                 // 9: Interior só pela cidade (o cadastro não vale), como no BI
+const CACHE_VERSAO = 10;                                // 10: a combinação traz também o perfil atualizado
 const CACHE_FATURAMENTO = 4;                           // cache do faturamento é separado: muda sem reler a arrecadação
 const banco = () => new Promise((ok, erro) => {
   const r = indexedDB.open("arrecadacao_cache", 1);
@@ -457,7 +457,13 @@ async function processa(itens) {
     arquivos.push({ rel: item.rel, file: item.file, tamanho: item.file.size, ...info });
   }
 
-  const perfis = new Map(), descontos = new Map(), orcados = [], cadastro = new Map();
+  const perfis = new Map(), perfisAtu = new Map(), descontos = new Map(), orcados = [], cadastro = new Map();
+  // perfil do cliente: o congelado (set/2026, o arquivo de sempre, lido também pelo BI) e o atualizado (planilha de perfil com
+  // ATUALIZADO no nome, na pasta principal). Mais de um atualizado: vale o mais recente (data no nome ou de modificação).
+  const ehAtu = (a) => a.tipo === "perfil" && C.chave(a.file.name).includes("ATUALIZADO");
+  const atus = arquivos.filter(ehAtu).sort((x, y) => dataDoArquivo(y.file).localeCompare(dataDoArquivo(x.file)) || y.file.lastModified - x.file.lastModified);
+  atus.slice(1).forEach((a) => Object.assign(a, { tipo: "ignorado", motivo: `perfil atualizado mais antigo: vale ${atus[0].rel}` }));
+  const perfilInfo = { congelado: [], atualizado: null };
   for (const a of arquivos) {
     try {
       if (a.tipo === "cadastro") {
@@ -466,7 +472,12 @@ async function processa(itens) {
         a.registros = r.n;
         if (r.divergentes) a.motivo = `${r.divergentes} matrícula(s) repetida(s) com outra superintendência: vale a 1ª`;
       }
-      if (a.tipo === "perfil") { avisa("progresso", { pct: 12, texto: `Lendo perfis de pagamento: ${a.rel}` }); a.registros = await lePerfil(a, perfis); a.livro = null; }
+      if (a.tipo === "perfil") {
+        const atu = ehAtu(a);
+        avisa("progresso", { pct: 12, texto: `Lendo perfil ${atu ? "atualizado" : "congelado"}: ${a.rel}` });
+        a.registros = await lePerfil(a, atu ? perfisAtu : perfis); a.livro = null; a.perfilTipo = atu ? "atualizado" : "congelado";
+        if (atu) perfilInfo.atualizado = { arquivo: a.rel, registros: a.registros, data: dataDoArquivo(a.file) }; else perfilInfo.congelado.push(a.rel);
+      }
       if (a.tipo === "desconto") { avisa("progresso", { pct: 14, texto: `Lendo descontos: ${a.rel}` }); a.registros = await leDesconto(a, descontos); a.livro = null; }
       if (a.tipo === "orcado") {
         const o = await leOrcado(a.file, a.aba);
@@ -521,7 +532,7 @@ async function processa(itens) {
         exp = await leCsv(a.file, (lidos) => avisa("progresso", {
           pct: 15 + Math.round(((base + lidos) / totalBytes) * 83),
           texto: `Lendo ${a.rel} (${(lidos / 1048576).toFixed(0)} de ${(a.tamanho / 1048576).toFixed(0)} MB)`,
-        }), new C.LeituraArquivo(perfis.size ? perfis : null, cadastro.size ? cadastro : null));
+        }), new C.LeituraArquivo(perfis.size ? perfis : null, cadastro.size ? cadastro : null, perfisAtu.size ? perfisAtu : null));
         if (db) await cacheGrava(db, id, exp);
       } catch (e) {
         Object.assign(a, { tipo: "ignorado", motivo: "não foi possível ler: " + ((e && e.message) || e), erro: true });
@@ -585,7 +596,7 @@ async function processa(itens) {
   }
   return {
     dados, orcados, cruzamento, receberInfo, receberMapas,
-    temPerfil: perfis.size > 0, temDesconto: descontos.size > 0,
+    temPerfil: perfis.size > 0, temDesconto: descontos.size > 0, perfilInfo,
     cadastroInfo: cadastro.size ? { matriculas: cadastro.size, porSup: [...cadastro.values()].reduce((o, x) => ((o[x] = (o[x] || 0) + 1), o), {}) } : null,
     cadastroMapa: cadastro.size ? cadastro : null,
     mesesDiaria: [...mesesDiaria].sort(),

@@ -652,3 +652,15 @@ test("negociação só nos dias úteis marcados: pagou nesses dias dos meses mar
   assert.deepEqual(tudo.sort(), [2]);                    // mês inteiro: a 1 pagou em nov (no 8º dia), sai
   assert.deepEqual(dias, [1]);                           // só dias 1 a 2: a 1 pagou nesses dias e não pagou neles em nov; a 2 nunca pagou neles
 });
+
+test("perfil congelado e atualizado: a combinação guarda os dois, e a matrícula fora do atualizado fica Sem perfil", () => {
+  const cong = new Map([["1|1", "Adimplente"], ["2|1", "Inadimplente"]]), atu = new Map([["1|1", "Inadimplente"]]);
+  const l = new C.LeituraArquivo(cong, null, atu);
+  l.adiciona(linha(1, "01/10/2026", "10,00")); l.adiciona(linha(2, "01/10/2026", "20,00"));
+  const a = new C.Agregador(); a.junta(l.exporta()); const d = a.resultado(new Map());
+  const de = (lig) => d.combos.find((c) => c.perfilCong === (lig === 1 ? "Adimplente" : "Inadimplente"));
+  assert.deepEqual([de(1).perfil, de(1).perfilAtu], ["Adimplente", "Inadimplente"]);
+  assert.deepEqual([de(2).perfil, de(2).perfilAtu], ["Inadimplente", R.SEM_PERFIL]);
+  const sem = new C.LeituraArquivo(cong); sem.adiciona(linha(1, "01/10/2026", "10,00"));
+  const b = new C.Agregador(); b.junta(sem.exporta()); assert.equal(b.resultado(new Map()).combos[0].perfilAtu, null);   // sem arquivo atualizado
+});

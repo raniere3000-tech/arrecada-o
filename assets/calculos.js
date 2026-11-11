@@ -169,8 +169,9 @@
   }
 
   class LeituraArquivo {
-    constructor(perfis, cadastro) {
-      this.perfis = perfis || null;                    // Map "ligação|contrato" → perfil (CLUSTER SALDO)
+    constructor(perfis, cadastro, perfisAtu) {
+      this.perfis = perfis || null;                    // Map "ligação|contrato" → perfil (CLUSTER SALDO): o congelado (set/2026)
+      this.perfisAtu = perfisAtu || null;              // o perfil atualizado (planilha com ATUALIZADO no nome), se houver
       // Map ligação → superintendência do cadastro (já no nome do painel); null = sem planilha de cadastro: SUP pela cidade
       this.cadastro = cadastro || null;
       this.idxCk = new Map();
@@ -192,7 +193,9 @@
       if (!M) { M = { V: new Map(), L: new Map(), P: new Map(), ultimoCredito: "", linhas: 0 }; this.meses.set(mes, M); }
       M.linhas++;
       if (credito > M.ultimoCredito) M.ultimoCredito = credito;
-      const perfil = this.perfis ? (this.perfis.get(ligacao(r.lig) + "|" + ligacao(r.contrato)) || R.SEM_PERFIL) : R.SEM_PERFIL;
+      const kp = ligacao(r.lig) + "|" + ligacao(r.contrato);
+      const perfil = this.perfis ? (this.perfis.get(kp) || R.SEM_PERFIL) : R.SEM_PERFIL;
+      const perfilAtu = this.perfisAtu ? (this.perfisAtu.get(kp) || R.SEM_PERFIL) : "";   // "" = sem perfil atualizado na pasta
       // "" = pela cidade: sem cadastro, ou cidade do Interior (R.SUPS_PELA_CIDADE: o cadastro não vale), ou o cadastro diz
       // Interior numa cidade de fora; nas outras, a do cadastro, e fora dele "Sem SUP"
       const zona = String(r.zona || "").trim();
@@ -203,7 +206,7 @@
         const s = this.cadastro.get(ligacao(r.lig));
         supCad = !s ? R.SEM_SUP : R.SUPS_PELA_CIDADE.includes(s) ? "" : s;
       }
-      const ck = zona + SEP + String(r.util || "").trim() + SEP + perfil + SEP + supCad;
+      const ck = zona + SEP + String(r.util || "").trim() + SEP + perfil + SEP + supCad + SEP + perfilAtu;
       let c = this.idxCk.get(ck);
       if (c === undefined) {
         c = this.cks.length;
@@ -269,13 +272,14 @@
     combo(ck) {
       let i = this.idxCombo.get(ck);
       if (i !== undefined) return i;
-      const [zona, util, perfil, supCad] = ck.split(SEP);
+      const [zona, util, perfil, supCad, perfilAtu] = ck.split(SEP);
       const [cidade, supZona] = zonaInfo(zona), [grupo, detalhe] = subInfo(util), sup = supCad || supZona;   // cadastro, senão a cidade
       if (!supCad && supZona === R.SEM_SUP) this.zonasSemSup.set(zona, 1);
       if (grupo === R.SEM_CLASSIFICACAO) this.subSemClasse.set(util, 1);
       i = this.combos.length;
       if (i >= MAX_COMBOS) throw new Error("combinações de zona × subcategoria × perfil demais");
-      this.combos.push({ zona, cidade, sup, util, grupo, detalhe, perfil });
+      // perfil = o que as telas usam; perfilCong / perfilAtu = os dois arquivos (a página troca entre eles sem reler a pasta)
+      this.combos.push({ zona, cidade, sup, util, grupo, detalhe, perfil, perfilCong: perfil, perfilAtu: perfilAtu || null });
       this.idxCombo.set(ck, i);
       return i;
     }

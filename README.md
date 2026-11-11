@@ -14,6 +14,10 @@ para a internet: tudo é processado no navegador.
   grupo e rota do faturamento mais recente e, no fim, o saldo vencido e a SIT_LIG da base de contas a receber).
 - **Cadastro (superintendência)**: planilha ou CSV com NUM_LIGACAO e SUPERINTENDENCIA; a superintendência de cada matrícula vem
   dele (LAGOS = Interior; fora do cadastro ou com a superintendência em branco = Sem SUP; o Interior vai só pela cidade, como no BI). Sem ela, a superintendência vem da cidade.
+- **Perfil do cliente (cluster)**: o congelado (set/2026) é o arquivo de sempre (`Cluster_Cliente_Lagos - 08.08.xlsx`, na subpasta
+  que o Power BI também lê); o atualizado é uma planilha com as mesmas colunas e **ATUALIZADO** no nome, na pasta principal
+  (ex.: `Cluster_Cliente_ATUALIZADO.xlsx`). O seletor da aba Perfil de pagamento troca entre os dois sem reler a pasta; vale
+  também para o Ranking de clientes, a tabela do BI, o PDF e os Prints. Ao abrir, sempre o congelado.
 - **Contas a receber**: até duas bases na pasta, a total e a só de notas fiscais (com “NFC” no nome); o seletor “Apenas NFC” /
   “Total (com parcelas e NFA)” escolhe qual usar em Clientes e oportunidades e nas bases da aba Base.
 - **Análises** (cruzamentos e oportunidades): Faturamento x Arrecadação; Fat. x Arrec. — mesmo vencimento; Conversão por

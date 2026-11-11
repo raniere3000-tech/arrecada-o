@@ -347,6 +347,7 @@
   function carrega(res, nomePasta) {
     E.res = res;
     chaveCl = ""; clRes = null;                      // Clientes e oportunidades: recalcula com a pasta nova
+    aplicaPerfil();                                  // perfil escolhido (congelado ou atualizado) nas combinações
     ajustaRecTipo();
     const d = res.dados;
     const nArr = res.arquivos.filter((a) => a.tipo === "diaria" || a.tipo === "acumulada").length;
@@ -383,7 +384,7 @@
   }
   function listaArquivos(res) {
     const USO = { diaria: "Arrecadação diária", acumulada: "Arrecadação acumulada", desconto: "Desconto comercial", perfil: "Perfil do cliente", orcado: "Orçado (linha da arrecadação)", faturamento: "Faturamento (Fatura de ciclo)", receber: "Contas a receber", cadastro: "Cadastro (superintendência)", ajustes: "Ajustes do painel (orçado digitado e curva)", ignorado: "Não usado" };
-    const linhas = res.arquivos.map((a) => `<tr>${td(esc(a.rel), "rot")}${td((USO[a.tipo] || a.tipo) + (a.recTipo ? (a.recTipo === "nfc" ? " (apenas NFC)" : " (total)") : ""), "rot")}${td(a.registros != null ? fmt(a.registros) : "")}`
+    const linhas = res.arquivos.map((a) => `<tr>${td(esc(a.rel), "rot")}${td((USO[a.tipo] || a.tipo) + (a.recTipo ? (a.recTipo === "nfc" ? " (apenas NFC)" : " (total)") : "") + (a.perfilTipo ? (a.perfilTipo === "atualizado" ? " — atualizado" : " — congelado (set/2026)") : ""), "rot")}${td(a.registros != null ? fmt(a.registros) : "")}`
       + `${td(esc((a.meses || []).map(C.rotuloMes).join(", ")), "rot")}${td(esc(a.motivo || [a.puladas ? `${fmt(a.puladas)} linhas de mês que está no arquivo diário não foram usadas` : "", rejeicao(a), a.doCache ? "já lido antes (guardado neste navegador)" : ""].filter(Boolean).join("; ")), "rot")}</tr>`).join("");
     const d = res.dados, avisos = [];
     if (!res.temDesconto) avisos.push("Planilha de desconto comercial não encontrada: a arrecadação aparece sem o desconto.");
@@ -611,7 +612,7 @@
     if (!E.res) return;
     desenhaDias();
     const filtros = [`Superintendência: ${supsTexto()}`, E.cidades.length ? `Cidade: ${E.cidades.join(", ")}` : "", E.grupos.length ? `Subcategoria: ${E.grupos.join(", ")}` : "",
-      `Mês: ${C.rotuloMes(E.mes)}`, E.verOrcado ? `Orçado: ${fonteAtiva(E.mes) === DIGITADO ? "digitado" : fonteAtiva(E.mes)}` : "",
+      `Mês: ${C.rotuloMes(E.mes)}`, E.aba === "perfil" || E.aba === "analise" ? `Perfil: ${nomePerfil()}` : "", E.verOrcado ? `Orçado: ${fonteAtiva(E.mes) === DIGITADO ? "digitado" : fonteAtiva(E.mes)}` : "",
       `dias úteis: ${rotuloDias()}`].filter(Boolean).join(" · ");
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
     $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
@@ -980,7 +981,27 @@
     tresTabelas(["tSubValor", "tSubCli", "tSubCon"], (c) => c.grupo, porOrdem(R.ORDEM_SUBCATEGORIAS, [R.SEM_CLASSIFICACAO]),
       { titulo: "Subcategoria", detalheDe: (c) => c.grupo + "\u0001" + c.detalhe });
   }
+  // Perfil do cliente: congelado (set/2026, o de sempre) ou atualizado (planilha com ATUALIZADO no nome). A escolha troca o
+  // perfil de cada combinação (c.perfil) sem reler a pasta; vale para a aba Perfil, o Ranking de clientes, a tabela do BI,
+  // o PDF e os Prints. Ao abrir, sempre o congelado.
+  E.perfilModo = "congelado";
+  function aplicaPerfil() {
+    if (!E.res) return;
+    const temAtu = !!(E.res.perfilInfo && E.res.perfilInfo.atualizado);
+    if (!temAtu) E.perfilModo = "congelado";
+    for (const c of E.res.dados.combos) c.perfil = E.perfilModo === "atualizado" && c.perfilAtu ? c.perfilAtu : (c.perfilCong || c.perfil);
+    const sl = $("selPerfil"), pi = E.res.perfilInfo || {};
+    sl.value = E.perfilModo; sl.options[1].disabled = !temAtu;
+    sl.options[1].textContent = temAtu ? `Atualizado${pi.atualizado.data ? " (" + dataBR(pi.atualizado.data) + ")" : ""}` : "Atualizado — sem arquivo na pasta";
+    $("perfilNota").innerHTML = `Congelado (set/2026): ${pi.congelado && pi.congelado.length ? esc(pi.congelado.join(", ")) : "sem arquivo na pasta"}. `
+      + (temAtu ? `Atualizado: ${esc(pi.atualizado.arquivo)} (${fmt(pi.atualizado.registros)} registros). Matrícula que não está no atualizado fica em “${R.SEM_PERFIL}”.`
+        : "Para usar o perfil atualizado, coloque na pasta principal uma planilha de perfil (mesmas colunas: NUM_LIGACAO, SEQ_RESPONSAVEL e CLUSTER_SALDO) com <b>ATUALIZADO</b> no nome, ex.: Cluster_Cliente_ATUALIZADO.xlsx.")
+      + " A escolha vale também para o Ranking de clientes, a tabela do BI (aba Dados), o PDF e os Prints.";
+  }
+  $("selPerfil").addEventListener("change", (e) => { E.perfilModo = e.target.value; aplicaPerfil(); desenha(); });
+  const nomePerfil = () => (E.perfilModo === "atualizado" ? "perfil atualizado" : "perfil congelado (set/2026)");
   function desenhaPerfil() {
+    aplicaPerfil();
     tresTabelas(["tPerValor", "tPerCli", "tPerCon"], (c) => c.perfil, porOrdem(R.ORDEM_PERFIS, [R.SEM_PERFIL]), { titulo: "Perfil (Cluster Saldo)" });
     $("legendaPerfil").innerHTML = `<p><b>Adimplente</b> – cliente sem faturas vencidas e que já realizou ao menos um pagamento.</p>
       <p><b>Inadimplente</b> – cliente com débitos em aberto e que já realizou ao menos um pagamento.</p>
