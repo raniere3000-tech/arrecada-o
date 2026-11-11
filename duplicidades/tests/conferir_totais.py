@@ -114,16 +114,26 @@ def main():
     base.loc[idx, 'a_mais'] = True
     base.loc[idx, 'nivel'] = 2
     g2 = rest[n2 > 1].groupby(k2).size()
+    # 3) nível 4: do que sobrou, mesma matrícula + mesmo desconto + mesmo total em 2+ meses de referência
+    rest = base[~base.a_mais]
+    k4 = ['NUM_LIGACAO', 'C', 'T']
+    n4 = rest.groupby(k4)['REF'].transform('size')
+    nr4 = rest.groupby(k4)['REF'].transform('nunique')
+    ult4 = ~rest.duplicated(k4, keep='last')
+    idx = rest.index[(n4 > 1) & (nr4 > 1) & ~ult4]
+    base.loc[idx, 'a_mais'] = True
+    base.loc[idx, 'nivel'] = 4
+    g4 = rest[(n4 > 1) & (nr4 > 1)].groupby(k4).size()
     am = base[base.a_mais]
-    qtd = {1: int((grupos[0].nivel == 1).sum()), 2: len(g2), 3: int((grupos[0].nivel == 3).sum())}
+    qtd = {1: int((grupos[0].nivel == 1).sum()), 2: len(g2), 3: int((grupos[0].nivel == 3).sum()), 4: len(g4)}
     print(f'Matrículas com duplicidade: {am["NUM_LIGACAO"].nunique():,}')
     print(f'Lançamentos a mais: {len(am):,} em {sum(qtd.values()):,} descontos repetidos')
     print(f'Valor registrado em duplicidade: R$ {am["DESCONTO"].sum():,.2f}')
-    for n in (1, 2, 3):
+    for n in (1, 2, 3, 4):
         x = am[am.nivel == n]
         print(f'  Nível {n}: {qtd[n]:,} descontos repetidos, {len(x):,} lançamentos a mais, R$ {x["DESCONTO"].sum():,.2f}')
 
-    al = base.groupby(['NUM_LIGACAO', 'C']).agg(nr=('REF', 'nunique'))
+    al = base[~base.a_mais].groupby(['NUM_LIGACAO', 'C']).agg(n=('REF', 'size'), nr=('REF', 'nunique'))
     al = al[al.nr > 1]
     print(f'Alerta entre meses: {len(al):,} descontos, {al.reset_index()["NUM_LIGACAO"].nunique():,} matrículas')
 
@@ -131,11 +141,11 @@ def main():
     ve = ve[ve.nd > 1]
     print(f'A verificar: {ve.reset_index()["NUM_LIGACAO"].nunique():,} matrículas, {len(ve):,} combinações de matrícula e mês')
 
-    print('\nPor mês (lançamentos a mais: nível 1 / nível 2 / nível 3 / total / R$):')
-    t = am.groupby(['REF', 'nivel']).size().unstack(fill_value=0).reindex(columns=[1, 2, 3], fill_value=0)
+    print('\nPor mês (lançamentos a mais: nível 1 / nível 2 / nível 3 / nível 4 / total / R$):')
+    t = am.groupby(['REF', 'nivel']).size().unstack(fill_value=0).reindex(columns=[1, 2, 3, 4], fill_value=0)
     v = am.groupby('REF')['DESCONTO'].sum()
     for ref, r in t.iterrows():
-        print(f'  {ref}: {r[1]:>4} / {r[2]:>4} / {r[3]:>4} / {r.sum():>4} / R$ {v[ref]:,.2f}')
+        print(f'  {ref}: {r[1]:>4} / {r[2]:>4} / {r[3]:>4} / {r[4]:>4} / {r.sum():>4} / R$ {v[ref]:,.2f}')
 
 
 if __name__ == '__main__':

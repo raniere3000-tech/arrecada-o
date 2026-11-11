@@ -99,9 +99,10 @@ main{max-width:1500px;margin:0 auto;padding:0 16px 40px}
 .kpi-card.negativo .kpi-valor{color:var(--laranja-texto)}
 .kpi-delta{font-size:11px;margin:1px 0 0;color:var(--azul-claro);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 /* 9 indicadores: 4 na primeira linha (visão geral) e 5 na segunda (níveis, alerta, a verificar) */
-#kpis .kpi-card{grid-column:span 10}
-#kpis .kpi-card:nth-child(-n+4){grid-column:span 15}
-@media (max-width:900px){.kpis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#kpis .kpi-card,#kpis .kpi-card:nth-child(-n+4){grid-column:span 1}}
+#kpis{grid-template-columns:repeat(84,minmax(0,1fr))}
+#kpis .kpi-card{grid-column:span 12}
+#kpis .kpi-card:nth-child(-n+4){grid-column:span 21}
+@media (max-width:900px){.kpis-grid,#kpis{grid-template-columns:repeat(2,minmax(0,1fr))}#kpis .kpi-card,#kpis .kpi-card:nth-child(-n+4){grid-column:span 1}}
 @media (max-width:560px){.kpis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 
@@ -230,7 +231,8 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 .tag.n1{background:var(--marinho);color:#fff}
 .tag.n2{background:#dbeaf4;color:var(--azul)}
 .tag.n3{background:#e6f1f8;color:#102840;border:1px solid #9cc3dc}
-.tag.n4{background:#fdf0c4;color:#7a4b00;border:1px solid #e0a100}
+.tag.n4{background:#dcf2ea;color:#14634f;border:1px solid #1f8a70}
+.tag.n5{background:#fdf0c4;color:#7a4b00;border:1px solid #e0a100}
 .cons .mudo{color:var(--azul-claro);font-size:11px}
 .tag.al{background:var(--laranja-tint);color:var(--laranja-texto)}
 .tag.ver{background:#ffedd5;color:#9a3412}
@@ -397,7 +399,7 @@ pre.pasta{background:var(--cinza);border:1px solid var(--linha);border-radius:8p
       <div class="tabela-wrap"><table class="res-tab" id="resMes"></table></div>
     </div>
     <div class="card">
-      <div class="card-topo"><div><h2>Verificação manual</h2><p class="nota-secao">Casos de “Alerta entre meses” e “A verificar” conferidos na matrícula (aba Duplicidades). Marcados como duplicidade, entram no nível 4.</p></div></div>
+      <div class="card-topo"><div><h2>Verificação manual</h2><p class="nota-secao">Casos de “Alerta entre meses” e “A verificar” conferidos na matrícula (aba Duplicidades). Marcados como duplicidade, entram no nível 5.</p></div></div>
       <div class="tabela-wrap"><table class="res-tab" id="resVerif"></table></div>
     </div>
   </section>
@@ -413,7 +415,7 @@ pre.pasta{background:var(--cinza);border:1px solid var(--linha);border-radius:8p
           <p class="nota-secao" id="grafNota"></p>
         </div>
         <div class="card-acoes">
-          <div class="legenda"><span><i style="background:#102840"></i>Nível 1 – idênticos</span><span><i style="background:#176b9c"></i>Nível 2 – total diferente</span><span><i style="background:#9cc3dc"></i>Nível 3 – mesmo total, desconto diferente</span><span><i style="background:#e0a100"></i>Nível 4 – verificado manualmente</span></div>
+          <div class="legenda"><span><i style="background:#102840"></i>Nível 1 – idênticos</span><span><i style="background:#176b9c"></i>Nível 2 – total diferente</span><span><i style="background:#9cc3dc"></i>Nível 3 – mesmo total, desconto diferente</span><span><i style="background:#1f8a70"></i>Nível 4 – idêntico em meses diferentes</span><span><i style="background:#e0a100"></i>Nível 5 – verificado manualmente</span></div>
           <div class="toggle" role="group" aria-label="Medida do gráfico">
             <button type="button" class="active" data-med="rep" aria-pressed="true">Lançamentos</button>
             <button type="button" data-med="mat" aria-pressed="false">Matrículas</button>
@@ -453,7 +455,7 @@ pre.pasta{background:var(--cinza);border:1px solid var(--linha);border-radius:8p
       <div class="cons-bar">
         <label class="field">Buscar <input type="search" id="busca" placeholder="Matrícula ou cliente"></label>
         <label class="field" id="campoNivel">Nível
-          <select id="selNivel"><option value="">Todos os níveis</option><option value="1">Nível 1 – idênticos</option><option value="2">Nível 2 – total diferente</option><option value="3">Nível 3 – mesmo total, desconto diferente</option><option value="4">Nível 4 – verificado manualmente</option></select>
+          <select id="selNivel"><option value="">Todos os níveis</option><option value="1">Nível 1 – idênticos</option><option value="2">Nível 2 – total diferente</option><option value="3">Nível 3 – mesmo total, desconto diferente</option><option value="4">Nível 4 – idêntico em meses diferentes</option><option value="5">Nível 5 – verificado manualmente</option></select>
         </label>
         <label class="field">Ordenar
           <select id="selOrd">
@@ -793,7 +795,7 @@ self.onmessage = async ev => {
 </script>
 
 <script>
-const VERSAO_SITE = 'v1.4';
+const VERSAO_SITE = 'v1.5';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = VERSAO_SITE;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1009,7 +1011,16 @@ function derive(R){
     const mDesc = new Map();
     for (const i of reps) add(mDesc, d.mat[i] + '|' + d.ref[i] + '|' + cent(d.desc[i]), i);
     for (const a of mDesc.values()) if (a.length > 1) novo(a, 2);
-    // 3) a verificar: matrícula e mês que ainda têm 2+ valores de desconto depois de tirar os lançamentos a mais
+    // 3) nível 4 – idêntico em meses diferentes: do que sobrou (sem os lançamentos a mais dos níveis 1 a 3), a mesma matrícula
+    //    com o mesmo DESCONTO e o mesmo VALOR_TOTAL (portanto o mesmo à vista) em dois ou mais meses de referência
+    const mIg = new Map();
+    for (const i of lista) if (!aMais.has(i)) add(mIg, d.mat[i] + '|' + cent(d.desc[i]) + '|' + cent(d.tot[i]), i);
+    for (const a of mIg.values()){
+      if (a.length < 2 || new Set(a.map(i => d.ref[i])).size < 2) continue;
+      novo(a, 4);
+      const g = dups[dups.length - 1]; g.refs = [...new Set(a.map(i => d.ref[i]))].sort((x, y) => d.refs[x].localeCompare(d.refs[y])); g.ref = a[a.length - 1] !== undefined ? d.ref[a[a.length - 1]] : g.ref;
+    }
+    // 4) a verificar: matrícula e mês que ainda têm 2+ valores de desconto depois de tirar os lançamentos a mais (níveis 1 a 4)
     for (const a of mVer.values()){
       if (a.length < 2) continue;
       const rest = a.filter(i => !aMais.has(i));
@@ -1019,8 +1030,10 @@ function derive(R){
       ver.push({ i0: a[0], idx: a, n: a.length, nRest: rest.length, nd, ref: d.ref[a[0]], mat: d.mat[a[0]], ini: d.dt[a[0]], fim: d.dt[a[a.length - 1]],
         val: rest.reduce((t, i) => t + d.desc[i], 0) });
     }
-    // alerta: mesmo desconto na mesma matrícula em meses diferentes (sem olhar o total)
-    for (const a of mAl.values()){
+    // alerta: mesmo desconto na mesma matrícula em meses diferentes (sem olhar o total), entre o que não é lançamento a mais
+    // (níveis 1 a 4): o que o nível 4 já resolveu (tudo idêntico) não precisa de verificação manual
+    for (const a0 of mAl.values()){
+      const a = a0.filter(i => !aMais.has(i));
       if (a.length < 2) continue;
       const refs = [...new Set(a.map(i => d.ref[i]))];
       if (refs.length < 2) continue;
@@ -1110,10 +1123,10 @@ const okDup = g => okLoc(g.i0) && okMes(g.ref) && okUsrAny(g.idx);
 const okAl = g => okLoc(g.i0) && (!st.mes || g.refs.some(r => st.mes.has(r))) && okUsrAny(g.idx);
 const okVer = g => okLoc(g.i0) && okMes(g.ref) && okUsrAny(g.idx);
 const okN4 = g => okLoc(g.i0) && (!st.mes || g.refs.some(r => st.mes.has(r))) && okUsrAny(g.idx);
-const okG = g => g.niv === 4 ? okN4(g) : okDup(g);
+const okG = g => g.niv >= 4 ? okN4(g) : okDup(g);
 const eAMais = (g, i, k) => g.aMais ? g.aMais.has(i) : k < g.n - 1;     // lançamento a mais no desconto repetido g (posição k)
 
-/* ---------- verificação manual: Duplicidade (nível 4) ou Válido nos casos de Alerta e A verificar ---------- */
+/* ---------- verificação manual: Duplicidade (nível 5) ou Válido nos casos de Alerta e A verificar ---------- */
 // MARCAS: chave do caso → { d: 'dup' | 'valido', em: data ISO }. Dentro do painel de Arrecadação as marcações ficam no
 // ajustes_arrecadacao.json da pasta principal (o painel de Arrecadação grava e devolve); aberto sozinho, neste navegador.
 let MARCAS = {};
@@ -1125,11 +1138,11 @@ function marca(chave, decisao){
   else MARCAS[chave] = { d: decisao, em: new Date().toISOString() };
   if (EMBUTIDO) parent.postMessage({ tipo: 'dup-marca', chave, valor: MARCAS[chave] || null }, location.origin);
   else try { localStorage.setItem('duplicidades_marcas', JSON.stringify(MARCAS)); } catch (_) {}
-  nivel4(); refresh();
+  nivel5(); refresh();
 }
-// Nível 4: cada caso marcado como duplicidade vira um desconto repetido. O mais recente do caso é o válido; os demais são
-// lançamentos a mais, menos os que já são lançamento a mais nos níveis 1 a 3 ou num caso anterior (cada lançamento conta uma vez).
-function nivel4(){
+// Nível 5: cada caso marcado como duplicidade vira um desconto repetido. O mais recente do caso é o válido; os demais são
+// lançamentos a mais, menos os que já são lançamento a mais nos níveis 1 a 4 ou num caso anterior (cada lançamento conta uma vez).
+function nivel5(){
   if (!B) return;
   const d = B.d, usados = new Set(), out = [];
   const casos = [...B.ver.map(g => [g, 'ver']), ...B.al.map(g => [g, 'al'])];
@@ -1139,25 +1152,25 @@ function nivel4(){
     const idx = g.idx, ult = idx[idx.length - 1];
     const aMais = idx.filter(i => i !== ult && !B.recRep[i] && !usados.has(i));
     aMais.forEach(i => usados.add(i));
-    out.push({ niv: 4, origem: tipo, caso: g, i0: idx[0], idx, n: idx.length, aMais: new Set(aMais), rep: aMais.length, val: aMais.reduce((t, i) => t + d.desc[i], 0),
+    out.push({ niv: 5, origem: tipo, caso: g, i0: idx[0], idx, n: idx.length, aMais: new Set(aMais), rep: aMais.length, val: aMais.reduce((t, i) => t + d.desc[i], 0),
       ref: d.ref[ult], refs: tipo === 'al' ? g.refs : [g.ref], mat: g.mat, desc: d.desc[ult], nDesc: new Set(idx.map(i => Math.round(d.desc[i] * 100))).size,
       nTot: new Set(idx.map(i => Math.round(d.tot[i] * 100))).size, ini: d.dt[idx[0]], fim: d.dt[ult], em: MARCAS[g.chave].em });
   }
-  B.n4 = out;
+  B.n5 = out;
 }
-const todosG = () => B.dups.concat(B.n4 || []);
+const todosG = () => B.dups.concat(B.n5 || []);
 
 /* ---------- Resumo ---------- */
 function calcula(){
   const d = B.d, nR = d.refs.length;
-  const o = { lanc: 0, lancV: 0, matsDesc: new Set(), mes: Array.from({ length: nR }, () => ({ l: 0, v: 0, m: new Set(), r: [0, 0, 0, 0, 0], vn: [0, 0, 0, 0, 0], mn: [null, new Set(), new Set(), new Set(), new Set()] })) };
+  const o = { lanc: 0, lancV: 0, matsDesc: new Set(), mes: Array.from({ length: nR }, () => ({ l: 0, v: 0, m: new Set(), r: [0, 0, 0, 0, 0, 0], vn: [0, 0, 0, 0, 0, 0], mn: [null, new Set(), new Set(), new Set(), new Set(), new Set()] })) };
   for (const i of B.base) if (okRec(i)){ const x = o.mes[d.ref[i]]; o.lanc++; o.lancV += d.desc[i]; o.matsDesc.add(d.mat[i]); x.l++; x.v += d.desc[i]; x.m.add(d.mat[i]); }
   o.G = todosG().filter(okG); o.A = B.al.filter(okAl); o.V = B.ver.filter(okVer);
-  o.mats = new Set(); o.rep = 0; o.val = 0; o.niv = { 1: { g: 0, r: 0, v: 0, m: new Set() }, 2: { g: 0, r: 0, v: 0, m: new Set() }, 3: { g: 0, r: 0, v: 0, m: new Set() }, 4: { g: 0, r: 0, v: 0, m: new Set() } };
+  o.mats = new Set(); o.rep = 0; o.val = 0; o.niv = { 1: { g: 0, r: 0, v: 0, m: new Set() }, 2: { g: 0, r: 0, v: 0, m: new Set() }, 3: { g: 0, r: 0, v: 0, m: new Set() }, 4: { g: 0, r: 0, v: 0, m: new Set() }, 5: { g: 0, r: 0, v: 0, m: new Set() } };
   for (const g of o.G){
     o.mats.add(g.mat); o.rep += g.rep; o.val += g.val;
     const z = o.niv[g.niv]; z.g++; z.r += g.rep; z.v += g.val; z.m.add(g.mat);
-    if (g.niv === 4){ for (const i of g.aMais){ const x = o.mes[d.ref[i]]; x.r[4]++; x.vn[4] += d.desc[i]; x.mn[4].add(g.mat); } continue; }
+    if (g.niv >= 4){ g.idx.forEach((i, k) => { if (!eAMais(g, i, k)) return; const x = o.mes[d.ref[i]]; x.r[g.niv]++; x.vn[g.niv] += d.desc[i]; x.mn[g.niv].add(g.mat); }); continue; }
     const x = o.mes[g.ref];
     x.r[g.niv] += g.rep; x.vn[g.niv] += g.val; x.mn[g.niv].add(g.mat);
   }
@@ -1179,8 +1192,9 @@ function renderResumo(){
     kpi('Valor registrado em duplicidade', rs0(o.val), pc(o.val, o.lancV) + ' do valor lançado', 'destaque'),
     kpi('Nível 1 – descontos repetidos idênticos', nf(o.niv[1].g), 'lançados ' + nf(o.niv[1].r) + ' vezes a mais, ' + rs0(o.niv[1].v)),
     kpi('Nível 2 – descontos repetidos com total diferente', nf(o.niv[2].g), 'lançados ' + nf(o.niv[2].r) + ' vezes a mais, ' + rs0(o.niv[2].v)),
-    kpi('Nível 3 – mesmo total, desconto diferente', nf(o.niv[3].g), nf(o.niv[3].r) + ' lançamentos a mais, ' + rs0(o.niv[3].v)),
-    kpi('Nível 4 – verificado manualmente', nf(o.niv[4].g), nf(o.niv[4].r) + ' lançamentos a mais, ' + rs0(o.niv[4].v)),
+    kpi('Nível 3 – mesmo total, desconto diferente', nf(o.niv[3].g), pl(o.niv[3].r, 'lançamento a mais', 'lançamentos a mais') + ', ' + rs0(o.niv[3].v)),
+    kpi('Nível 4 – idêntico em meses diferentes', nf(o.niv[4].g), pl(o.niv[4].r, 'lançamento a mais', 'lançamentos a mais') + ', ' + rs0(o.niv[4].v)),
+    kpi('Nível 5 – verificado manualmente', nf(o.niv[5].g), pl(o.niv[5].r, 'lançamento a mais', 'lançamentos a mais') + ', ' + rs0(o.niv[5].v)),
     kpi('Alerta: mesmo desconto em meses diferentes', nf(o.cA.pend.length), 'pendentes, em ' + nf(o.matsA) + ' matrículas' + (o.A.length > o.cA.pend.length ? ` (${nf(o.A.length - o.cA.pend.length)} já verificados)` : ''), 'alerta'),
     kpi('Matrículas a verificar', nf(o.matsV), 'pendentes (' + nf(o.cV.pend.length) + ' casos)' + (o.V.length > o.cV.pend.length ? `; ${nf(o.V.length - o.cV.pend.length)} já verificados` : ''), 'atencao')
   ].join('');
@@ -1212,7 +1226,7 @@ function posDica(x, y){
 
 function renderGrafico(o){
   const d = B.d, med = st.med;
-  const meses = B.refs.filter(r => okMes(r) && (o.mes[r].l > 0 || o.mes[r].r[1] + o.mes[r].r[2] + o.mes[r].r[3] + o.mes[r].r[4] > 0));
+  const meses = B.refs.filter(r => okMes(r) && (o.mes[r].l > 0 || o.mes[r].r.some(v => v > 0)));
   const nomeMed = { rep: 'Lançamentos a mais', mat: 'Matrículas com desconto repetido', val: 'Valor registrado em duplicidade (R$)' }[med];
   $('#grafTit').textContent = nomeMed + ' por mês de referência';
   $('#grafNota').textContent = {
@@ -1221,14 +1235,14 @@ function renderGrafico(o){
     val: 'Soma dos descontos dos lançamentos a mais (todos menos o válido, que é o mais recente de cada desconto repetido).'
   }[med];
   if (!meses.length){ $('#grafBloco').innerHTML = '<p class="semdados">Nenhum lançamento com os filtros escolhidos.</p>'; return; }
-  const CORES = ['#102840', '#176b9c', '#9cc3dc', '#e0a100'], TXT = ['#fff', '#fff', '#102840', '#102840'];
+  const CORES = ['#102840', '#176b9c', '#9cc3dc', '#1f8a70', '#e0a100'], TXT = ['#fff', '#fff', '#102840', '#fff', '#102840'];
   const serie = r => {
     const x = o.mes[r];
-    if (med === 'rep') return [x.r[1], x.r[2], x.r[3], x.r[4]];
-    if (med === 'val') return [x.vn[1], x.vn[2], x.vn[3], x.vn[4]];
-    const visto = new Set(); return [1, 2, 3, 4].map(n => { let c = 0; x.mn[n].forEach(m => { if (!visto.has(m)){ visto.add(m); c++; } }); return c; });
+    if (med === 'rep') return [x.r[1], x.r[2], x.r[3], x.r[4], x.r[5]];
+    if (med === 'val') return [x.vn[1], x.vn[2], x.vn[3], x.vn[4], x.vn[5]];
+    const visto = new Set(); return [1, 2, 3, 4, 5].map(n => { let c = 0; x.mn[n].forEach(m => { if (!visto.has(m)){ visto.add(m); c++; } }); return c; });
   };
-  const S = meses.map(serie), tot = S.map(s => s[0] + s[1] + s[2] + s[3]);
+  const S = meses.map(serie), tot = S.map(s => s.reduce((a, b) => a + b, 0));
   const ROT = 180, W = Math.max(480, $('#grafBloco').parentElement.clientWidth || 1000), H = 230, top = 24, base = 206;   // largura do quadro
   const max = Math.max(1, ...tot), esc1 = v => v / max * (base - top);
   const cw = (W - ROT) / meses.length, bw = Math.min(40, cw * 0.62);
@@ -1257,7 +1271,8 @@ function renderGrafico(o){
     ${lin('', '<i class="cor" style="background:#102840"></i>Nível 1 – idênticos', S.map(s => fmt(s[0])))}
     ${lin('', '<i class="cor" style="background:#176b9c"></i>Nível 2 – total diferente', S.map(s => fmt(s[1])))}
     ${lin('', '<i class="cor" style="background:#9cc3dc"></i>Nível 3 – mesmo total', S.map(s => fmt(s[2])))}
-    ${lin('', '<i class="cor" style="background:#e0a100"></i>Nível 4 – verificado', S.map(s => fmt(s[3])))}
+    ${lin('', '<i class="cor" style="background:#1f8a70"></i>Nível 4 – idêntico entre meses', S.map(s => fmt(s[3])))}
+    ${lin('', '<i class="cor" style="background:#e0a100"></i>Nível 5 – verificado', S.map(s => fmt(s[4])))}
     ${lin('forte', linhaRef[2], tot.map(fmt))}
     ${lin('mudo', linhaRef[0], meses.map(r => fmt(linhaRef[1](r))))}
     ${lin('mudo', '% em duplicidade', meses.map((r, k) => pc(tot[k], linhaRef[1](r))))}
@@ -1271,9 +1286,10 @@ function renderGrafico(o){
       { k: 'Nível 1 – lançamentos a mais', v: nf(x.r[1]), cor: '#102840' }, { k: 'Nível 1 – valor', v: rs(x.vn[1]) },
       { k: 'Nível 2 – lançamentos a mais', v: nf(x.r[2]), cor: '#176b9c' }, { k: 'Nível 2 – valor', v: rs(x.vn[2]) },
       { k: 'Nível 3 – lançamentos a mais', v: nf(x.r[3]), cor: '#9cc3dc' }, { k: 'Nível 3 – valor', v: rs(x.vn[3]) },
-      { k: 'Nível 4 – lançamentos a mais', v: nf(x.r[4]), cor: '#e0a100' }, { k: 'Nível 4 – valor', v: rs(x.vn[4]) }, '-',
-      { k: 'Total de lançamentos a mais', v: nf(x.r[1] + x.r[2] + x.r[3] + x.r[4]), c: 'forte' }, { k: 'Valor em duplicidade', v: rs(x.vn[1] + x.vn[2] + x.vn[3] + x.vn[4]), c: 'forte' },
-      { k: 'Matrículas com desconto repetido', v: nf(new Set([...x.mn[1], ...x.mn[2], ...x.mn[3], ...x.mn[4]]).size) }, '-',
+      { k: 'Nível 4 – lançamentos a mais', v: nf(x.r[4]), cor: '#1f8a70' }, { k: 'Nível 4 – valor', v: rs(x.vn[4]) },
+      { k: 'Nível 5 – lançamentos a mais', v: nf(x.r[5]), cor: '#e0a100' }, { k: 'Nível 5 – valor', v: rs(x.vn[5]) }, '-',
+      { k: 'Total de lançamentos a mais', v: nf(x.r.reduce((a, b) => a + b, 0)), c: 'forte' }, { k: 'Valor em duplicidade', v: rs(x.vn.reduce((a, b) => a + b, 0)), c: 'forte' },
+      { k: 'Matrículas com desconto repetido', v: nf(new Set([...x.mn[1], ...x.mn[2], ...x.mn[3], ...x.mn[4], ...x.mn[5]]).size) }, '-',
       { k: 'Lançamentos com desconto', v: nf(x.l), c: 'mudo' }, { k: 'Descontos lançados', v: rs(x.v), c: 'mudo' }, { k: 'Matrículas com desconto', v: nf(x.m.size), c: 'mudo' }
     ] });
   });
@@ -1308,14 +1324,14 @@ function renderUsuarios(o){
 
 /* ---------- Resultado (apresentação): o que o trabalho recuperou, níveis 1 a 4 ---------- */
 const NIVEIS = [[1, 'Nível 1 – descontos repetidos idênticos', '#102840'], [2, 'Nível 2 – mesmo desconto, total diferente', '#176b9c'],
-  [3, 'Nível 3 – mesmo total, desconto diferente', '#9cc3dc'], [4, 'Nível 4 – verificado manualmente', '#e0a100']];
+  [3, 'Nível 3 – mesmo total, desconto diferente', '#9cc3dc'], [4, 'Nível 4 – idêntico em meses diferentes', '#1f8a70'], [5, 'Nível 5 – verificado manualmente', '#e0a100']];
 function renderResultado(){
   const o = calcula(), d = B.d;
   const filtros = [st.sup && 'Superintendência', st.cid && 'Cidade', st.zona && 'Zona', st.usr && 'Usuário', st.mes && 'Mês'].filter(Boolean);
-  $('#resNota').textContent = `Valor recuperado = soma dos descontos dos lançamentos a mais (registrados em duplicidade) dos níveis 1 a 4: o lançamento válido (o mais recente) não entra. Base: ${R.desc.arquivo}, `
+  $('#resNota').textContent = `Valor recuperado = soma dos descontos dos lançamentos a mais (registrados em duplicidade) dos níveis 1 a 5: o lançamento válido (o mais recente) não entra. Base: ${R.desc.arquivo}, `
     + `${nf(o.lanc)} lançamentos com desconto (${rs0(o.lancV)}).` + (filtros.length ? ` Com filtros: ${filtros.join(', ')}.` : ` Superintendências ${B.supNomes.join(' e ')}.`);
   // por superintendência (cada desconto repetido pela matrícula)
-  const novo = () => ({ v: 0, r: 0, m: new Set(), n: [0, 0, 0, 0, 0], cid: new Map() });
+  const novo = () => ({ v: 0, r: 0, m: new Set(), n: [0, 0, 0, 0, 0, 0], cid: new Map() });
   const soma = (x, g) => { x.v += g.val; x.r += g.rep; x.m.add(g.mat); x.n[g.niv] += g.val; };
   const porSup = new Map(B.supNomes.map(s => [s, novo()]));
   for (const g of o.G){
@@ -1354,7 +1370,7 @@ function renderResultado(){
   });
   // por mês de referência (gráfico de colunas empilhadas + tabela)
   const meses = B.refs.filter(r => okMes(r) && o.mes[r].vn.some(v => v > 0));
-  const tot = r => o.mes[r].vn[1] + o.mes[r].vn[2] + o.mes[r].vn[3] + o.mes[r].vn[4];
+  const tot = r => o.mes[r].vn.reduce((a, b) => a + b, 0);
   if (!meses.length){ $('#resMesGraf').innerHTML = '<p class="semdados">Nenhum valor em duplicidade com os filtros escolhidos.</p>'; $('#resMes').innerHTML = ''; }
   else {
     const W = Math.max(360, Math.min($('#resMesGraf').parentElement.clientWidth || 900, 40 + meses.length * 110)), H = 210, top = 22, base = 186, max = Math.max(1, ...meses.map(tot)), cw = (W - 40) / meses.length, bw = Math.min(40, cw * 0.6);
@@ -1369,14 +1385,14 @@ function renderResultado(){
     $('#resMesGraf').innerHTML = svg + '</svg>';
     const rol = $('#resMesGraf').parentElement; rol.scrollLeft = rol.scrollWidth;
     $('#resMes').innerHTML = `<thead><tr><th>Mês de referência</th>${NIVEIS.map(([n]) => `<th class="num">Nível ${n}</th>`).join('')}<th class="num">Lançamentos a mais</th><th class="num">Valor recuperado</th></tr></thead><tbody>`
-      + meses.slice().reverse().map(r => { const x = o.mes[r]; return `<tr><td>${mesTxt(d.refs[r])}</td>${NIVEIS.map(([n]) => `<td class="num">${dec2(x.vn[n])}</td>`).join('')}<td class="num">${nf(x.r[1] + x.r[2] + x.r[3] + x.r[4])}</td><td class="num ganho">${rs(tot(r))}</td></tr>`; }).join('')
+      + meses.slice().reverse().map(r => { const x = o.mes[r]; return `<tr><td>${mesTxt(d.refs[r])}</td>${NIVEIS.map(([n]) => `<td class="num">${dec2(x.vn[n])}</td>`).join('')}<td class="num">${nf(x.r.reduce((a, b) => a + b, 0))}</td><td class="num ganho">${rs(tot(r))}</td></tr>`; }).join('')
       + `<tr class="linha-total"><td>Total</td>${NIVEIS.map(([n]) => `<td class="num">${dec2(o.niv[n].v)}</td>`).join('')}<td class="num">${nf(o.rep)}</td><td class="num">${rs(o.val)}</td></tr></tbody>`;
   }
   // verificação manual
   const lv = (nome, c) => `<tr><td>${nome}</td><td class="num">${nf(c.pend.length + c.dup.length + c.ok.length)}</td><td class="num">${nf(c.dup.length)}</td><td class="num">${nf(c.ok.length)}</td><td class="num">${nf(c.pend.length)}</td></tr>`;
   $('#resVerif').innerHTML = `<thead><tr><th>Lista</th><th class="num">Casos</th><th class="num">Marcados como duplicidade</th><th class="num">Marcados como válidos</th><th class="num">Pendentes</th></tr></thead><tbody>`
     + lv('Alerta: mesmo desconto em meses diferentes', o.cA) + lv('A verificar: descontos diferentes no mesmo mês', o.cV)
-    + `<tr class="linha-total"><td>Nível 4 – recuperado na verificação manual</td><td class="num" colspan="3">${pl(o.niv[4].r, 'lançamento a mais', 'lançamentos a mais')}</td><td class="num">${rs(o.niv[4].v)}</td></tr></tbody>`;
+    + `<tr class="linha-total"><td>Nível 5 – recuperado na verificação manual</td><td class="num" colspan="3">${pl(o.niv[5].r, 'lançamento a mais', 'lançamentos a mais')}</td><td class="num">${rs(o.niv[5].v)}</td></tr></tbody>`;
 }
 
 /* ---------- Duplicidades, alerta entre meses e a verificar ---------- */
@@ -1401,12 +1417,12 @@ function renderLista(){
   const P = L.slice(st.pag * porPag, st.pag * porPag + porPag);
   $('#campoNivel').hidden = st.lista !== 'dup';
   $('#selOrd').options[0].text = st.lista === 'dup' ? 'Maior valor em duplicidade' : st.lista === 'al' ? 'Maior valor somado' : 'Maior soma de descontos';
-  const tit = { dup: 'Descontos repetidos (níveis 1 a 4)', al: 'Alerta: mesmo desconto em meses diferentes', ver: 'A verificar: descontos diferentes no mesmo mês' }[st.lista];
+  const tit = { dup: 'Descontos repetidos (níveis 1 a 5)', al: 'Alerta: mesmo desconto em meses diferentes', ver: 'A verificar: descontos diferentes no mesmo mês' }[st.lista];
   $('#listaTit').textContent = tit;
   $('#listaNota').textContent = {
-    dup: 'Uma linha por desconto repetido, na mesma matrícula e mês de referência. Nível 1: mesmo débito (total) e mesmo desconto. Nível 3: mesmo débito com descontos diferentes (renegociado). Nível 2: mesmo desconto com total diferente, entre o que sobrou de cada débito. Nível 4: casos de Alerta ou A verificar marcados como duplicidade na verificação manual. O mais recente é o válido; os anteriores são lançamentos a mais. Clique na linha para ver os lançamentos.',
-    al: 'Mesma matrícula com o mesmo valor de desconto em meses de referência diferentes. Confira na matrícula e marque: Duplicidade (entra no nível 4 e soma no valor em duplicidade) ou Válido. Clicar de novo desfaz. A marcação vale para todos que usam o painel.',
-    ver: 'Mesma matrícula e mês que, depois de tirar os lançamentos a mais, ainda têm valores de desconto diferentes (com totais diferentes), como um desconto por fatura. Confira na matrícula e marque: Duplicidade (entra no nível 4) ou Válido. Clicar de novo desfaz.'
+    dup: 'Uma linha por desconto repetido, na mesma matrícula e mês de referência. Nível 1: mesmo débito (total) e mesmo desconto. Nível 3: mesmo débito com descontos diferentes (renegociado). Nível 2: mesmo desconto com total diferente, entre o que sobrou de cada débito. Nível 4: mesmo desconto e mesmo total (tudo idêntico) em meses diferentes. Nível 5: casos de Alerta ou A verificar marcados como duplicidade na verificação manual. O mais recente é o válido; os anteriores são lançamentos a mais. Clique na linha para ver os lançamentos.',
+    al: 'Mesma matrícula com o mesmo valor de desconto em meses de referência diferentes. Os casos com tudo idêntico (desconto e total) já entram sozinhos no nível 4 e não aparecem aqui. Confira na matrícula e marque: Duplicidade (entra no nível 5 e soma no valor em duplicidade) ou Válido. Clicar de novo desfaz. A marcação vale para todos que usam o painel.',
+    ver: 'Mesma matrícula e mês que, depois de tirar os lançamentos a mais, ainda têm valores de desconto diferentes (com totais diferentes), como um desconto por fatura. Confira na matrícula e marque: Duplicidade (entra no nível 5) ou Válido. Clicar de novo desfaz.'
   }[st.lista];
   let soma;
   if (st.lista === 'dup') soma = `${pl(L.length, 'desconto repetido', 'descontos repetidos')}, ${pl(new Set(L.map(g => g.mat)).size, 'matrícula', 'matrículas')}, ${pl(L.reduce((s, g) => s + g.rep, 0), 'lançamento a mais', 'lançamentos a mais')}, ${rs(L.reduce((s, g) => s + g.val, 0))} em duplicidade`;
@@ -1417,7 +1433,7 @@ function renderLista(){
   const usrTd = g => { const u = usrsDe(g); return `<td class="txt" title="${esc(u.join(', '))}">${esc(u.slice(0, 2).join(', '))}${u.length > 2 ? ` +${u.length - 2}` : ''}</td>`; };
   if (st.lista === 'dup'){
     cab = ['', 'Nível', 'Matrícula', 'Cliente', 'Superint.', 'Cidade', 'Mês ref.', 'Desconto (R$)', 'Vezes lançado', 'Lançamentos a mais', 'Valor em duplicidade (R$)', 'Primeiro lançamento', 'Último lançamento', 'Intervalo', 'Usuários'];
-    linha = g => `<td class="txt"><span class="tag n${g.niv}" title="${g.niv === 4 ? (g.origem === 'al' ? 'Alerta entre meses' : 'A verificar') + ' marcado como duplicidade' : ''}">Nível ${g.niv}</span></td>${base(g)}<td class="txt">${g.niv === 4 && g.refs.length > 1 ? g.refs.map(r => mesTxt(d.refs[r])).join(', ') : mesTxt(d.refs[g.ref])}</td><td class="num">${dec2(g.desc)}${g.nDesc > 1 ? ` <span class="mudo">(${g.nDesc} valores)</span>` : ''}</td>
+    linha = g => `<td class="txt"><span class="tag n${g.niv}" title="${g.niv === 5 ? (g.origem === 'al' ? 'Alerta entre meses' : 'A verificar') + ' marcado como duplicidade' : g.niv === 4 ? 'Mesmo desconto e mesmo total em meses diferentes' : ''}">Nível ${g.niv}</span></td>${base(g)}<td class="txt">${g.niv >= 4 && g.refs && g.refs.length > 1 ? g.refs.map(r => mesTxt(d.refs[r])).join(', ') : mesTxt(d.refs[g.ref])}</td><td class="num">${dec2(g.desc)}${g.nDesc > 1 ? ` <span class="mudo">(${g.nDesc} valores)</span>` : ''}</td>
       <td class="num forte">${g.n}</td><td class="num">${g.rep}</td><td class="num neg">${dec2(g.val)}</td><td class="txt">${dtTxt(g.ini)}</td><td class="txt">${dtTxt(g.fim)}</td><td class="num">${intervaloTxt(g.fim - g.ini)}</td>${usrTd(g)}`;
   } else if (st.lista === 'al'){
     cab = ['', 'Matrícula', 'Cliente', 'Superint.', 'Cidade', 'Desconto (R$)', 'Meses de referência', 'Lançamentos', 'Primeiro lançamento', 'Último lançamento', 'Usuários', 'Verificação'];
@@ -1516,13 +1532,14 @@ function renderDados(){
       ${li('<b>Primeiro passo, o mesmo débito:</b> os lançamentos são agrupados por matrícula + mês + VALOR_TOTAL. Com dois ou mais lançamentos: se todos têm o mesmo DESCONTO, é <b>nível 1 – descontos repetidos idênticos</b>; se os descontos são diferentes, é <b>nível 3 – mesmo total, desconto diferente</b> (o mesmo débito renegociado com outro percentual).')}
       ${li('<b>Segundo passo, nível 2 – total diferente:</b> do que sobrou de cada débito (o lançamento válido ou o lançamento único), os que têm o mesmo DESCONTO com VALOR_TOTAL diferente (provavelmente a mesma negociação com o débito atualizado). Um lançamento pode ser o válido do seu débito (nível 1 ou 3) e, ao mesmo tempo, lançamento a mais no nível 2; por isso ele pode aparecer em duas linhas da lista e do CSV, mas o seu valor entra uma vez só.')}
       ${li('<b>Lançamento válido:</b> o mais recente de cada desconto repetido, por DAT_ACESSO + DAT_ACESSO_HORA; no empate, o de maior NUM_LOG. Os demais são <b>lançamentos a mais</b>. <b>Valor registrado em duplicidade</b> = soma dos descontos dos lançamentos a mais dos três níveis (no nível 3, cada um com o seu próprio valor de desconto).')}
-      ${li('<b>Alerta entre meses:</b> mesma matrícula com o mesmo valor de desconto em dois ou mais meses de referência diferentes, independentemente do total. Fica separado dos níveis e não soma no valor em duplicidade, a não ser que seja marcado como duplicidade (nível 4).')}
+      ${li('<b>Terceiro passo, nível 4 – idêntico em meses diferentes:</b> do que sobrou (sem os lançamentos a mais dos níveis 1 a 3), a mesma matrícula com o mesmo DESCONTO e o mesmo VALOR_TOTAL (e, portanto, o mesmo valor à vista) em dois ou mais meses de referência. O mais recente é o válido; os demais são lançamentos a mais e somam no valor em duplicidade. No gráfico e no Resultado, cada lançamento a mais entra no seu próprio mês.')}
+      ${li('<b>Alerta entre meses:</b> mesma matrícula com o mesmo valor de desconto em dois ou mais meses de referência diferentes, entre os lançamentos que não são lançamento a mais dos níveis 1 a 4 (os casos com tudo idêntico já foram para o nível 4). Fica separado e não soma no valor em duplicidade, a não ser que seja marcado como duplicidade (nível 5).')}
       ${li('<b>A verificar:</b> mesma matrícula e mês de referência que, depois de tirar os lançamentos a mais, ainda tem dois ou mais valores de desconto diferentes, com totais diferentes (por exemplo, um desconto aplicado em cada fatura em vez de um só). Não é duplicidade: só se confirma entrando na matrícula. A lista mostra todos os lançamentos do mês; a coluna “Também em duplicidade” indica se algum deles é desconto repetido.')}
-      ${li('<b>Nível 4 – verificado manualmente:</b> na aba Duplicidades, cada caso de Alerta entre meses ou A verificar tem os botões <b>Duplicidade</b> e <b>Válido</b> (clicar de novo desfaz). Marcado como duplicidade, o caso vira um desconto repetido de nível 4: o lançamento mais recente do caso é o válido e os demais são lançamentos a mais, menos os que já são lançamento a mais nos níveis 1 a 3 (cada lançamento conta uma vez). O valor entra no valor registrado em duplicidade. Marcado como válido, o caso sai dos pendentes e não soma. As marcações ficam no arquivo ajustes_arrecadacao.json da pasta principal (valem para todos) e são guardadas pela matrícula + desconto (alerta) ou matrícula + mês (a verificar): continuam valendo quando o arquivo de descontos é atualizado.')}
-      ${li('<b>Resultado:</b> o valor recuperado é o valor registrado em duplicidade dos níveis 1 a 4 (os lançamentos a mais), por superintendência (pela matrícula; a seta de cada uma abre as cidades), por nível e por mês de referência (no nível 4, cada lançamento a mais no seu mês). Com uma superintendência só no filtro, o cartão do valor recuperado leva o nome dela e a tabela passa a ser por cidade. Segue os filtros do topo.')}
+      ${li('<b>Nível 5 – verificado manualmente:</b> na aba Duplicidades, cada caso de Alerta entre meses ou A verificar tem os botões <b>Duplicidade</b> e <b>Válido</b> (clicar de novo desfaz). Marcado como duplicidade, o caso vira um desconto repetido de nível 5: o lançamento mais recente do caso é o válido e os demais são lançamentos a mais, menos os que já são lançamento a mais nos níveis 1 a 4 (cada lançamento conta uma vez). O valor entra no valor registrado em duplicidade. Marcado como válido, o caso sai dos pendentes e não soma. As marcações ficam no arquivo ajustes_arrecadacao.json da pasta principal (valem para todos) e são guardadas pela matrícula + desconto (alerta) ou matrícula + mês (a verificar): continuam valendo quando o arquivo de descontos é atualizado.')}
+      ${li('<b>Resultado:</b> o valor recuperado é o valor registrado em duplicidade dos níveis 1 a 5 (os lançamentos a mais), por superintendência (pela matrícula; a seta de cada uma abre as cidades), por nível e por mês de referência (nos níveis 4 e 5, cada lançamento a mais no seu mês). Com uma superintendência só no filtro, o cartão do valor recuperado leva o nome dela e a tabela passa a ser por cidade. Segue os filtros do topo.')}
       ${li('<b>Filtros:</b> Superintendência, Cidade e Zona valem pela matrícula; a lista de cidades mostra só as das superintendências marcadas. Mês de referência vale pela referência do desconto repetido (no alerta entre meses, o desconto entra se algum dos seus meses estiver marcado). Usuário: o desconto repetido entra se tiver pelo menos um lançamento de um usuário marcado, com todos os seus lançamentos; “Lançamentos com desconto analisados” conta só os lançamentos dos usuários marcados.')}
       ${li('<b>Por usuário:</b> lançamentos a mais e valor em duplicidade ficam com o usuário que fez o lançamento a mais; descontos repetidos e matrículas contam onde o usuário fez algum lançamento do desconto repetido (inclusive o válido). A soma da coluna de descontos repetidos pode passar do total porque um desconto pode ter lançamentos de mais de um usuário.')}
-      ${li('<b>Indicadores:</b> matrículas com desconto em duplicidade = matrículas com pelo menos um desconto repetido de nível 1, 2, 3 ou 4; Alerta e Matrículas a verificar mostram os casos pendentes (sem marcação); o percentual é sobre as matrículas com desconto na base filtrada. Matrículas a verificar contam cada matrícula uma vez, mesmo com casos em mais de um mês.')}
+      ${li('<b>Indicadores:</b> matrículas com desconto em duplicidade = matrículas com pelo menos um desconto repetido de nível 1 a 5; Alerta e Matrículas a verificar mostram os casos pendentes (sem marcação); o percentual é sobre as matrículas com desconto na base filtrada. Matrículas a verificar contam cada matrícula uma vez, mesmo com casos em mais de um mês.')}
       ${li('<b>Datas e horários:</b> exatamente como vêm no arquivo, sem conversão de fuso.')}
       ${li('<b>Downloads:</b> CSV com separador ponto e vírgula, vírgula decimal e acentos (abre direto no Excel), uma linha por lançamento da lista mostrada, respeitando filtros, busca e nível. No arquivo de descontos repetidos, cada desconto tem um ID_DESCONTO_REPETIDO, e a soma de VALOR_EM_DUPLICIDADE é o valor em duplicidade da lista.')}
       ${li('<b>Privacidade:</b> os arquivos são lidos só no seu computador; a base processada fica guardada neste navegador até você atualizar ou apagar. Nada vai para a internet nem para o repositório.')}
@@ -1545,7 +1562,7 @@ function refresh(){
   else renderDados();
 }
 function usaBase(d){
-  R = d; B = derive(R); nivel4();
+  R = d; B = derive(R); nivel5();
   ['sup', 'cid', 'zona', 'usr', 'mes'].forEach(k => { st[k] = null; }); st.abertos.clear();
   montaFiltros();
   $('#empty').hidden = true; $('#toolbar').hidden = false;
@@ -1601,7 +1618,7 @@ $('#btnClear').onclick = async () => {
   new ResizeObserver(avisaAltura).observe(document.body);
   window.addEventListener('message', ev => {
     if (ev.origin !== location.origin || !ev.data) return;
-    if (ev.data.tipo === 'dup-marcas'){ MARCAS = ev.data.marcas || {}; if (B){ nivel4(); refresh(); } return; }
+    if (ev.data.tipo === 'dup-marcas'){ MARCAS = ev.data.marcas || {}; if (B){ nivel5(); refresh(); } return; }
     if (ev.data.tipo !== 'dup-arquivos') return;
     const files = ev.data.itens.filter(x => /\.xlsx$/i.test(x.rel)).map(x => { const f = x.file; try { f.caminho = x.rel; } catch (_) {} return f; });
     if (!files.length){ progErro('Nenhum arquivo .xlsx na pasta Duplicidades.', 'Coloque a exportação de descontos na subpasta Descontos e os cadastros na subpasta Cadastro, e clique em ↻ Atualizar no topo do painel.'); return; }
