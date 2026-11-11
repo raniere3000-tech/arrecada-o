@@ -591,3 +591,12 @@ main { padding: 0 20px 40px; }
 th { white-space: normal; }
 td.rot, td.txt { white-space: normal; overflow-wrap: anywhere; }
 #dupArea { margin-top: 10px; }
+
+/* Diagnóstico por localidade: cidade → subcategoria → detalhe */
+#dgTab tr.dg-sub td.rot { padding-left: 22px; }
+#dgTab tr.dg-sub td { background: #fbfcfe; }
+#dgTab tr.dg-det td.rot { padding-left: 42px; color: #475569; }
+#dgTab tr.dg-det td { color: #475569; font-size: 12px; }
+#dgTab tr.grupo:not(.dg-sub) td.rot { font-weight: 600; }
+#dgTab tr.dg-sub.grupo td.rot { font-weight: 600; }
+#dgTab tr.dg-sub:not(.grupo) td.rot { font-weight: 600; }

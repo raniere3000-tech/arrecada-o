@@ -1985,7 +1985,8 @@
   }
 
   // ----- Diagnóstico por localidade -----
-  let dgOrdem = ["dv", 1], dgLinhas = [], dgCab = null;
+  let dgOrdem = ["dv", 1], dgLinhas = [], dgCab = null, dgSub = null;
+  const dgAbertos = new Set();                          // cidades (e cidade + subcategoria) abertas na tabela do Diagnóstico
   const NIVEIS_DG = { cidade: ["Cidade", (c) => c.cidade], grupo: ["Subcategoria", (c) => c.grupo], sup: ["Superintendência", (c) => nomeSup(c.sup)],
     cidgrupo: ["Cidade × subcategoria", (c) => `${c.cidade} · ${c.grupo}`] };
   function desenhaLocalidade() {
@@ -2034,6 +2035,36 @@
         cli: a.clientes, dcli: b && b.clientes ? a.clientes / b.clientes - 1 : null, contas: a.contas, ticket: a.contas ? a.valor / a.contas : null,
         proj: pj, fr: f, orc: o, po: o && pj != null ? pj / o : null, fat: fat ? fat.valor : null, mat: fat ? fat.matriculas : null };
     });
+    // por cidade: cada cidade abre por subcategoria e a subcategoria pelos detalhes (como na aba Subcategoria); mesmas colunas,
+    // a projeção de cada linha com os números dela (sem histórico, a da cidade); faturado e orçado só na linha da cidade
+    dgSub = null;
+    if (nivel === "cidade") {
+      const S = "\u0001", kG = (c) => c.cidade + S + c.grupo, kD = (c) => c.cidade + S + c.grupo + S + c.detalhe;
+      const frDe = (fn) => (metodo === "curva" ? () => frC : metodo === "restantes" ? ((m) => (k) => m.get(k))(C.fracaoDiasRestantes(d, E.mes, mk, sel, fn).fr)
+        : ((m) => (k) => m.get(k))(C.fracaoAteDias(d, mm.meses, mk, sel, fn)));
+      const fG = frDe(kG), fD = frDe(kD);
+      const linhaSub = (l, nome, f) => {
+        const a = l.atual, b = l.base, pj = proj(a.valor, f);
+        return { nome, chave: l.rot, v: a.valor, b: b ? b.valor : null, dv: b ? a.valor - b.valor : null, dp: b && b.valor ? a.valor / b.valor - 1 : null,
+          cli: a.clientes, dcli: b && b.clientes ? a.clientes / b.clientes - 1 : null, contas: a.contas, ticket: a.contas ? a.valor / a.contas : null,
+          proj: pj, fr: f, orc: null, po: null, fat: null, mat: null };
+      };
+      const bases = comDados.map(idxMes), gs = C.comparaGrupos(d, mi, bases, mk, sel, kG), ds = C.comparaGrupos(d, mi, bases, mk, sel, kD);
+      dgSub = new Map();
+      const frCid = new Map(dgLinhas.map((x) => [x.nome, x.fr]));
+      for (const l of gs) {
+        const [cid, grp] = l.rot.split(S);
+        if (!dgSub.has(cid)) dgSub.set(cid, []);
+        const det = ds.filter((x) => x.rot.startsWith(l.rot + S)).map((x) => linhaSub(x, x.rot.split(S)[2], fD(x.rot) || fG(l.rot) || frCid.get(cid)));
+        const ln = linhaSub(l, grp, fG(l.rot) || frCid.get(cid));
+        ln.det = det.length > 1 || (det.length === 1 && det[0].nome !== grp) ? det.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { numeric: true })) : [];
+        dgSub.get(cid).push(ln);
+      }
+      for (const [cid, l] of dgSub) {
+        const ordem = porOrdem(R.ORDEM_SUBCATEGORIAS, [R.SEM_CLASSIFICACAO])(l.map((x) => x.nome));
+        dgSub.set(cid, ordem.map((n) => l.find((x) => x.nome === n)));
+      }
+    }
     dgCab = [["nome", titulo], ["v", "Arrecadado (R$)"], ["b", `${rotBase} (R$)`], ["dv", "Variação (R$)"], ["dp", "Variação %"], ["cli", "Clientes"], ["dcli", "Var. clientes"],
       ["contas", "Contas"], ["ticket", "Ticket (R$)"], ["proj", "Projeção do mês (R$)"],
       ...(comOrc ? [["orc", "Orçado (R$)"], ["po", "Projeção ÷ orçado"]] : []), ...(comFat ? [["fat", `Faturado ${C.rotuloMes(E.mes)} (R$)`], ["mat", "Matrículas faturadas"]] : [])];
@@ -2110,11 +2141,24 @@
       proj: projT, orc: soma("orc"), po: null, fat: soma("fat"), mat: soma("mat") };
     if (tot.orc != null && projT != null) tot.po = projT / tot.orc;
     $("dgTab").innerHTML = `<thead><tr>${dgCab.map(([k, t]) => `<th data-col="${k}" class="${k === col ? (dir > 0 ? "asc" : "desc") : ""}">${t}</th>`).join("")}</tr></thead><tbody>`
-      + L.map((o) => `<tr>${dgCab.map(([k]) => cel(k, o[k])).join("")}</tr>`).join("")
+      + L.map((o) => {
+        const sub = dgSub && dgSub.get(o.nome);
+        if (!sub || !sub.length) return `<tr>${dgCab.map(([k]) => cel(k, o[k])).join("")}</tr>`;
+        // linhas fechadas ficam na tabela, escondidas (entram no ⬇ Excel)
+        const ab = dgAbertos.has(o.nome);
+        return `<tr class="grupo${ab ? " aberto" : ""}" data-g="${esc(o.nome)}">${dgCab.map(([k]) => cel(k, o[k])).join("")}</tr>`
+          + sub.map((g) => {
+            const kg = o.nome + "\u0001" + g.nome, abG = dgAbertos.has(kg), tem = g.det.length > 0;
+            return `<tr class="dg-sub${tem ? " grupo" + (abG ? " aberto" : "") : ""}"${tem ? ` data-g="${esc(kg)}"` : ""}${ab ? "" : " hidden"}>${dgCab.map(([k]) => cel(k, g[k])).join("")}</tr>`
+              + g.det.map((x) => `<tr class="dg-det"${ab && abG ? "" : " hidden"}>${dgCab.map(([k]) => cel(k, x[k])).join("")}</tr>`).join("");
+          }).join("");
+      }).join("")
       + `<tr class="total">${dgCab.map(([k]) => cel(k, tot[k])).join("")}</tr></tbody>`;
   }
   ["dgNivel", "dgBase", "dgMetodo"].forEach((id) => $(id).addEventListener("change", () => desenha()));
   $("dgTab").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr.grupo[data-g]");
+    if (tr) { const g = tr.dataset.g; if (dgAbertos.has(g)) dgAbertos.delete(g); else dgAbertos.add(g); desenha(); return; }
     const th = e.target.closest("th[data-col]");
     if (!th) return;
     dgOrdem = [th.dataset.col, th.dataset.col === dgOrdem[0] ? -dgOrdem[1] : th.dataset.col === "nome" ? 1 : th.dataset.col === "dv" || th.dataset.col === "dp" ? 1 : -1];
