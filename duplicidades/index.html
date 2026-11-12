@@ -797,7 +797,7 @@ self.onmessage = async ev => {
 </script>
 
 <script>
-const VERSAO_SITE = 'v1.6';
+const VERSAO_SITE = 'v1.7';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = VERSAO_SITE;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1165,6 +1165,16 @@ function nivel5(){
   B.n5 = out;
 }
 const todosG = () => B.dups.concat(B.n5 || []);
+// caso de Alerta / A verificar → o desconto repetido de nível 5 que ele virou (marcado como duplicidade), ou null
+const n5De = g => (g.marca === 'dup' && B.n5 ? B.n5.find(x => x.caso === g) : null) || null;
+// situação de um lançamento num caso de Alerta / A verificar: a do nível 5 (se o caso foi marcado) ou a dos níveis 1 a 4
+function sitCaso(g, i){
+  const z = n5De(g);
+  if (z && z.aMais.has(i)) return ['a', 5];
+  if (z && i === z.idx[z.idx.length - 1]) return ['v', 5];
+  if (B.recG[i] >= 0) return [B.recRep[i] ? 'a' : 'v', B.dups[B.recG[i]].niv];
+  return null;
+}
 
 /* ---------- Resumo ---------- */
 function calcula(){
@@ -1446,15 +1456,16 @@ function renderLista(){
     linha = g => `${base(g)}<td class="num">${dec2(g.desc)}</td><td class="txt">${g.refs.map(r => mesTxt(d.refs[r])).join(', ')}</td><td class="num forte">${g.n}</td><td class="txt">${dtTxt(g.ini)}</td><td class="txt">${dtTxt(g.fim)}</td>${usrTd(g)}<td class="txt"><span class="marca" data-chave="${esc(g.chave)}"><button type="button" data-d="dup" class="${g.marca === 'dup' ? 'on-dup' : ''}">Duplicidade</button><button type="button" data-d="valido" class="${g.marca === 'valido' ? 'on-ok' : ''}">Válido</button></span></td>`;
   } else {
     cab = ['', 'Matrícula', 'Cliente', 'Superint.', 'Cidade', 'Mês ref.', 'Lançamentos', 'Descontos diferentes (sem os a mais)', 'Soma dos descontos válidos (R$)', 'Também em duplicidade', 'Usuários', 'Verificação'];
-    linha = g => `${base(g)}<td class="txt">${mesTxt(d.refs[g.ref])}</td><td class="num forte">${g.n}</td><td class="num">${g.nd}</td><td class="num">${dec2(g.val)}</td>
-      <td class="txt">${g.idx.some(i => B.recG[i] >= 0) ? '<span class="tag rep">Sim</span>' : 'Não'}</td>${usrTd(g)}<td class="txt"><span class="marca" data-chave="${esc(g.chave)}"><button type="button" data-d="dup" class="${g.marca === 'dup' ? 'on-dup' : ''}">Duplicidade</button><button type="button" data-d="valido" class="${g.marca === 'valido' ? 'on-ok' : ''}">Válido</button></span></td>`;
+    linha = g => { const z = n5De(g), ult = g.idx[g.idx.length - 1];
+      return `${base(g)}<td class="txt">${mesTxt(d.refs[g.ref])}</td><td class="num forte">${g.n}</td><td class="num">${z ? 1 : g.nd}</td><td class="num">${dec2(z ? d.desc[ult] : g.val)}</td>
+      <td class="txt">${z ? '<span class="tag n5">Sim, nível 5</span>' : g.idx.some(i => B.recG[i] >= 0) ? '<span class="tag rep">Sim</span>' : 'Não'}</td>${usrTd(g)}<td class="txt"><span class="marca" data-chave="${esc(g.chave)}"><button type="button" data-d="dup" class="${g.marca === 'dup' ? 'on-dup' : ''}">Duplicidade</button><button type="button" data-d="valido" class="${g.marca === 'valido' ? 'on-ok' : ''}">Válido</button></span></td>`; };
   }
   const det = g => {
     const ult = g.idx[g.idx.length - 1];
     return `<tr class="det"><td colspan="${cab.length}"><table><thead><tr><th>#</th>${st.lista !== 'dup' ? '<th>Mês ref.</th>' : ''}<th>Data e hora</th><th>NUM_LOG</th><th>Usuário</th><th>À vista (R$)</th><th>Desconto (R$)</th><th>Total (R$)</th><th>% desconto</th><th>Situação</th></tr></thead><tbody>
       ${g.idx.map((i, k) => {
         const sit = st.lista === 'dup' ? (eAMais(g, i, k) ? '<span class="tag rep">Lançamento a mais</span>' : i === ult ? '<span class="tag ok">Válido (mais recente)</span>' : `<span class="tag ok">Já contado no nível ${B.recG[i] >= 0 ? B.dups[B.recG[i]].niv : ''}</span>`)
-          : B.recG[i] >= 0 ? (B.recRep[i] ? `<span class="tag rep">Lançamento a mais (nível ${B.dups[B.recG[i]].niv})</span>` : `<span class="tag ok">Válido (nível ${B.dups[B.recG[i]].niv})</span>`) : '–';
+          : (x => !x ? '–' : x[0] === 'a' ? `<span class="tag rep">Lançamento a mais (nível ${x[1]})</span>` : `<span class="tag ok">Válido (nível ${x[1]})</span>`)(sitCaso(g, i));
         return `<tr class="${st.lista === 'dup' && eAMais(g, i, k) ? 'repeticao' : ''}"><td>${k + 1}</td>${st.lista !== 'dup' ? `<td class="txt">${mesTxt(d.refs[d.ref[i]])}</td>` : ''}<td class="txt">${dtTxt(d.dt[i])}</td><td class="num">${d.log[i]}</td><td class="txt">${esc(d.usrs[d.usr[i]])}</td>
           <td class="num">${dec2(d.vav[i])}</td><td class="num">${dec2(d.desc[i])}</td><td class="num">${dec2(d.tot[i])}</td><td class="num">${dec2(d.pct[i])}</td><td class="txt">${sit}</td></tr>`;
       }).join('')}</tbody></table></td></tr>`;
@@ -1482,6 +1493,7 @@ function baixaCsv(nome, cab, linhas){
 const COLS_LANC = ['SUPERINTENDENCIA', 'CIDADE', 'EMP_CODIGO', 'ZONA_LIGACAO', 'NUM_LIGACAO', 'NOM_CLIENTE', 'REFERENCIA', 'DAT_ACESSO', 'DAT_ACESSO_HORA', 'ANO_LOG', 'NUM_LOG', 'COD_USUARIO', 'VALOR_A_VISTA', 'DESCONTO', 'VALOR_TOTAL', 'PCT_DESCONTO'];
 const lancCols = i => { const d = B.d; const r = d.refs[d.ref[i]]; return [supDe(i), B.c.dict.cid[B.rCid[i]] || '', d.emp[i], d.zona[i], d.mat[i], nomeDe(i), r ? r.slice(5, 7) + '/' + r.slice(0, 4) : '',
   dataTxt(d.dt[i]), horaTxt(d.dt[i]), d.ano[i], String(d.log[i]), d.usrs[d.usr[i]], +d.vav[i].toFixed(2), +d.desc[i].toFixed(2), +d.tot[i].toFixed(2), +d.pct[i].toFixed(2)]; };
+const sitCsv = (g, i) => { const x = sitCaso(g, i); return x ? (x[0] === 'a' ? 'LANCAMENTO_A_MAIS' : 'VALIDO') + '_NIVEL_' + x[1] : ''; };
 function exportaLista(){
   const d = B.d, L = listaAtual(), hoje = new Date(), dia = `${hoje.getFullYear()}${p2(hoje.getMonth() + 1)}${p2(hoje.getDate())}`, lin = [];
   if (st.lista === 'dup'){
@@ -1489,11 +1501,11 @@ function exportaLista(){
     baixaCsv(`duplicidades_descontos_${dia}.csv`, ['ID_DESCONTO_REPETIDO', 'NIVEL', 'SITUACAO', 'ORDEM_DO_LANCAMENTO', 'VEZES_LANCADO', 'VALOR_EM_DUPLICIDADE', ...COLS_LANC], lin);
   } else if (st.lista === 'al'){
     const vt = g => g.marca === 'dup' ? 'DUPLICIDADE' : g.marca === 'valido' ? 'VALIDO' : 'PENDENTE';
-    L.forEach((g, gi) => { const ms = g.refs.map(r => mesTxt(B.d.refs[r])).join(', '); g.idx.forEach(i => lin.push([gi + 1, g.n, ms, B.recG[i] >= 0 ? (B.recRep[i] ? 'LANCAMENTO_A_MAIS' : 'VALIDO') : '', vt(g), ...lancCols(i)])); });
+    L.forEach((g, gi) => { const ms = g.refs.map(r => mesTxt(B.d.refs[r])).join(', '); g.idx.forEach(i => lin.push([gi + 1, g.n, ms, sitCsv(g, i), vt(g), ...lancCols(i)])); });
     baixaCsv(`alerta_entre_meses_${dia}.csv`, ['ID_ALERTA', 'QTD_LANCAMENTOS', 'MESES_COM_O_DESCONTO', 'SITUACAO_NO_DESCONTO_REPETIDO', 'VERIFICACAO', ...COLS_LANC], lin);
   } else {
     const vt = g => g.marca === 'dup' ? 'DUPLICIDADE' : g.marca === 'valido' ? 'VALIDO' : 'PENDENTE';
-    L.forEach((g, gi) => g.idx.forEach(i => lin.push([gi + 1, g.n, g.nd, B.recG[i] >= 0 ? (B.recRep[i] ? 'LANCAMENTO_A_MAIS' : 'VALIDO') : '', vt(g), ...lancCols(i)])));
+    L.forEach((g, gi) => g.idx.forEach(i => lin.push([gi + 1, g.n, g.nd, sitCsv(g, i), vt(g), ...lancCols(i)])));
     baixaCsv(`a_verificar_${dia}.csv`, ['ID_CASO', 'QTD_LANCAMENTOS', 'DESCONTOS_DIFERENTES', 'SITUACAO_NO_DESCONTO_REPETIDO', 'VERIFICACAO', ...COLS_LANC], lin);
   }
 }
