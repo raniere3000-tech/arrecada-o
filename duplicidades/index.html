@@ -73,6 +73,18 @@ button,select,input{font:inherit;color:inherit}
 .check-list{display:flex;flex-direction:column;gap:6px}
 .filtro-anos{display:flex;flex-wrap:wrap;gap:6px 12px;padding:0 0 8px;margin-bottom:8px;border-bottom:1px solid var(--linha)}
 .filtro-anos .check-item{font-weight:600}
+/* Comparação */
+.comp-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 14px}
+.comp-kpi{background:#fff;border:1px solid var(--linha);border-radius:10px;padding:12px 14px;border-top:4px solid var(--marinho)}
+.comp-kpi.ok{border-top-color:#1f8a70}.comp-kpi.erro{border-top-color:#C2560C}
+.comp-kpi span{display:block;font-size:11.5px;font-weight:600;color:var(--azul-claro);text-transform:uppercase;letter-spacing:.02em}
+.comp-kpi b{display:block;font-size:26px;font-weight:600;color:var(--marinho);margin:2px 0}
+.comp-kpi small{font-size:12px;color:var(--azul-claro)}
+.comp-matriz td.vp,.comp-matriz td.vn{background:#e7f6ef;font-weight:700;color:#14634f}
+.comp-matriz td.fp,.comp-matriz td.fn{background:#fdeee4;font-weight:700;color:#9a3412}
+.comp-grade{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:14px 0}
+.comp-h3{margin:18px 0 6px;font-size:14px;color:var(--marinho)}
+@media (max-width:900px){.comp-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.comp-grade{grid-template-columns:minmax(0,1fr)}}
 .check-item{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
 .check-item input{accent-color:var(--marinho)}
 .mini-btn{padding:4px 10px;border:1px solid var(--linha);border-radius:6px;background:var(--cinza);color:var(--marinho);cursor:pointer;font-size:12px;font-weight:600}
@@ -353,6 +365,7 @@ pre.pasta{background:var(--cinza);border:1px solid var(--linha);border-radius:8p
       <button type="button" class="active" data-tab="resultado" aria-pressed="true">Resultado</button>
       <button type="button" data-tab="resumo" aria-pressed="false">Diagnóstico</button>
       <button type="button" data-tab="dup" aria-pressed="false">Duplicidades</button>
+      <button type="button" data-tab="comp" aria-pressed="false">Comparação</button>
       <button type="button" data-tab="dados" aria-pressed="false">Dados</button>
     </div>
   </div>
@@ -472,6 +485,18 @@ pre.pasta{background:var(--cinza);border:1px solid var(--linha);border-radius:8p
       <p class="count" id="contagem"></p>
       <div class="cons-wrap"><table class="cons" id="tblLista"></table></div>
       <div class="pager" id="pager"></div>
+    </div>
+  </section>
+
+  <!-- ===== Comparação com a análise manual ===== -->
+  <section id="view-comp" hidden>
+    <div class="card">
+      <div class="card-topo"><div>
+        <h2>Comparação: painel × análise manual</h2>
+        <p class="nota-secao" id="compNota"></p>
+      </div>
+      <div class="card-acoes"><button type="button" class="btn-just" id="btnCompCsv">⬇ Base analítica (CSV)</button></div></div>
+      <div id="compCorpo"></div>
     </div>
   </section>
 
@@ -773,9 +798,38 @@ async function lerCadastro(files, chaves, mats){
   return { keys, nomes, sup: sup.out(), cid: cid.out(), dict: { sup: dSup.list, cid: dCid.list }, arquivos };
 }
 
+/* ---------- planilha da análise manual (subpasta Comparação): só para a aba Comparação, nunca como base de descontos ---------- */
+const ABA_COMP = 'Resultado Fechado 2026 (2)';
+async function lerComparacao(file){
+  const label = 'Comparação: ' + file.name;
+  progress(label, 'Abrindo o arquivo…', 0, true);
+  const { sst, sheets } = await abreXlsx(file, label);
+  const base = { arquivo: file.name, modificado: file.lastModified, aba: ABA_COMP };
+  const sh = sheets.find(x => String(x.name).trim() === ABA_COMP);
+  if (!sh) return { ...base, erro: `sem a aba “${ABA_COMP}”` };
+  let h = null, seen = 0; const linhas = [];
+  await streamBlocks(file, sh.entry, '</row>', blk => {
+    seen++;
+    const c = parseCells(blk, sst);
+    if (!h){
+      const cols = c.map(norm), ix = n => cols.indexOf(n);
+      if (cols.includes('NUM_LOG') && cols.includes('SITUACAO'))
+        h = { log: ix('NUM_LOG'), sit: ix('SITUACAO'), dec: ix('DECISAO'), mat: ix('MATRICULA'), tipo: ix('TIPO_DE_DESCONTO'), desc: cols.findIndex(x => x.startsWith('DESCONTO')) };
+      else if (seen > 30) return false;
+      return;
+    }
+    if (vazio(c[h.log])) return;                                // linhas em branco, totais e notas
+    const sit = norm(c[h.sit]);
+    linhas.push({ log: Math.round(toNum(c[h.log])), mat: h.mat >= 0 ? Math.round(toNum(c[h.mat])) : 0, sit: sit === 'EXCLUIR' ? 1 : sit === 'MANTER' ? 0 : -1,
+      manual: h.dec >= 0 && !vazio(c[h.dec]) ? 1 : 0, desc: h.desc >= 0 ? toNum(c[h.desc]) : 0, tipo: h.tipo >= 0 ? str(c[h.tipo]) : '' });
+  }, p => progress(label, 'Lendo a análise manual…', p));
+  if (!h) return { ...base, erro: 'a aba não tem as colunas NUM_LOG e Situação' };
+  return { ...base, linhas };
+}
+
 self.onmessage = async ev => {
   try {
-    const { desc, cad } = ev.data, pulados = [];
+    const { desc, cad, comp } = ev.data, pulados = [];
     let d = null;
     for (const f of desc){                                    // do mais recente para o mais antigo: vale o primeiro com o layout certo
       const r = await lerDescontos(f);
@@ -787,9 +841,11 @@ self.onmessage = async ev => {
     const chaves = new Set(), mats = new Set();
     for (let i = 0; i < d.mat.length; i++){ chaves.add(d.emp[i] + '-' + d.mat[i]); mats.add(String(d.mat[i])); }
     const c = await lerCadastro(cad, chaves, mats);
+    let cp = null;
+    if (comp && comp.length){ try { cp = await lerComparacao(comp[0]); } catch (e){ cp = { arquivo: comp[0].name, modificado: comp[0].lastModified, erro: 'não foi possível ler: ' + (e && e.message || e) }; } }
     progress('Montando o painel', 'Identificando as duplicidades…', 1, true);
     const tr = [d.emp, d.mat, d.zona, d.ref, d.dt, d.log, d.ano, d.usr, d.vav, d.desc, d.tot, d.pct, d.ok, c.sup, c.cid].map(a => a.buffer);
-    self.postMessage({ type: 'done', data: { desc: d, cad: c } }, tr);
+    self.postMessage({ type: 'done', data: { desc: d, cad: c, comp: cp } }, tr);
   } catch (err){
     self.postMessage({ type: 'error', message: err && err.message ? err.message : String(err) });
   }
@@ -797,7 +853,7 @@ self.onmessage = async ev => {
 </script>
 
 <script>
-const VERSAO_SITE = 'v1.7';
+const VERSAO_SITE = 'v1.8';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = VERSAO_SITE;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -868,7 +924,7 @@ const idbSavePasta = h => idbDo('readwrite', s => s.put(h, 'pasta'));
 const idbLoadPasta = () => idbDo('readonly', s => s.get('pasta'));
 
 /* ---------- leitura ---------- */
-function lerNoWorker(desc, cad){
+function lerNoWorker(desc, cad, comp){
   return new Promise((res, rej) => {
     let w;
     try { w = new Worker(URL.createObjectURL(new Blob([$('#worker-src').textContent], { type: 'text/javascript' }))); }
@@ -880,34 +936,36 @@ function lerNoWorker(desc, cad){
       else if (m.type === 'done'){ w.terminate(); res(m.data); }
     };
     w.onerror = e => rej(new Error(e.message || 'Verifique se são arquivos .xlsx válidos.'));
-    w.postMessage({ desc, cad });
+    w.postMessage({ desc, cad, comp });
   });
 }
 // separa os arquivos pelas subpastas Descontos e Cadastro (sem acento ou maiúscula também vale);
 // fora delas, pelo nome do arquivo
 function separa(lista){
-  const desc = [], cad = [], outros = [];
+  const desc = [], cad = [], comp = [], outros = [];
   for (const f of lista){
     if (!/\.xlsx$/i.test(f.name) || f.name.startsWith('~$')) continue;
     const pastas = norm(f.caminho || f.webkitRelativePath || f.name).split('/').slice(0, -1);
-    if (pastas.includes('DESCONTOS')) desc.push(f);
+    if (pastas.includes('COMPARACAO')) comp.push(f);           // análise manual: só para a aba Comparação (nunca base de descontos)
+    else if (pastas.includes('DESCONTOS')) desc.push(f);
     else if (pastas.includes('CADASTRO')) cad.push(f);
     else if (/desconto/i.test(f.name)) desc.push(f);
     else if (/cadastro/i.test(f.name)) cad.push(f);
     else outros.push(f.webkitRelativePath || f.caminho || f.name);
   }
   desc.sort((a, b) => b.lastModified - a.lastModified);
-  return { desc, cad, outros };
+  comp.sort((a, b) => b.lastModified - a.lastModified);
+  return { desc, cad, comp, outros };
 }
 async function lerArquivos(lista, origem){
   if (rodando) return;
-  const { desc, cad, outros } = separa([...lista]);
+  const { desc, cad, comp, outros } = separa([...lista]);
   if (!desc.length){ progErro('Nenhum arquivo de descontos encontrado.', 'Coloque a exportação de descontos (.xlsx) na subpasta Descontos e clique em ↻ Atualizar.'); return; }
   if (!cad.length){ progErro('Nenhum arquivo de cadastro encontrado.', 'Coloque os cadastros das superintendências (.xlsx) na subpasta Cadastro e clique em ↻ Atualizar.'); return; }
   bloqueia(true);
   prog(true, 'Lendo os arquivos…', `${desc.length} arquivo(s) de descontos e ${cad.length} de cadastro`, 0);
   try {
-    const d = await lerNoWorker(desc, cad);
+    const d = await lerNoWorker(desc, cad, comp);
     d.meta = { origem, lidoEm: Date.now(), outros, versao: VERSAO_SITE }; d.formato = 1;
     try { await idbSave(d); } catch (_) { toast('A base não pôde ser guardada no navegador; ela vale só enquanto a página estiver aberta.'); }
     prog(false);
@@ -1411,6 +1469,115 @@ function renderResultado(){
     + `<tr class="linha-total"><td>Nível 5 – recuperado na verificação manual</td><td class="num" colspan="3">${pl(o.niv[5].r, 'lançamento a mais', 'lançamentos a mais')}</td><td class="num">${rs(o.niv[5].v)}</td></tr></tbody>`;
 }
 
+/* ---------- Comparação: o painel (níveis 1 a 4; o nível 5 à parte) × a análise manual (planilha da subpasta Comparação) ---------- */
+// Cruza lançamento a lançamento pelo NUM_LOG. Análise: EXCLUIR (lançamento a mais) ou MANTER; painel: lançamento a mais dos
+// níveis 1 a 4 = EXCLUIR; o resto = MANTER. Segue os filtros do topo. Fonte da decisão: col. E preenchida = manual; senão, a regra
+// da aba Ago–Out (col. T).
+function comparaLinhas(){
+  const d = B.d, C_ = R.comp;
+  if (!B.logIdx){ B.logIdx = new Map(); for (let i = 0; i < B.n; i++) B.logIdx.set(d.log[i], i); }
+  if (!B.casoDe){ B.casoDe = new Map(); B.al.forEach(g => g.idx.forEach(i => B.casoDe.set(i, 'Alerta entre meses'))); B.ver.forEach(g => g.idx.forEach(i => { if (!B.casoDe.has(i)) B.casoDe.set(i, 'A verificar'); })); }
+  const n5 = new Set(); (B.n5 || []).forEach(g => g.aMais.forEach(i => n5.add(i)));
+  const out = [], logs = new Set();
+  for (const x of C_.linhas){
+    logs.add(x.log);
+    const i = B.logIdx.get(x.log), r = { ...x, i };
+    if (i === undefined){ r.res = 'NAO_ENCONTRADO'; r.motivo = 'NUM_LOG não está no arquivo de descontos'; out.push(r); continue; }
+    if (B.rc[i] < 0){ r.res = 'FORA'; r.motivo = 'fora da análise do painel (sem valor, desconto zero ou fora das superintendências)'; out.push(r); continue; }
+    if (!okRec(i)) continue;                                      // fora dos filtros do topo
+    r.painel = B.recRep[i] ? 1 : 0;
+    r.niv = B.recRep[i] ? B.dups[B.recG[i]].niv : 0;
+    r.motivo = B.recRep[i] ? `lançamento a mais (nível ${r.niv})` : B.recG[i] >= 0 ? `válido do nível ${B.dups[B.recG[i]].niv}` : B.casoDe.get(i) || 'sem duplicidade';
+    r.n5 = n5.has(i) ? 1 : 0;
+    r.res = x.sit < 0 ? 'SEM_DECISAO' : r.painel && x.sit ? 'VP' : !r.painel && !x.sit ? 'VN' : r.painel ? 'FP' : 'FN';
+    out.push(r);
+  }
+  return { linhas: out, logs };
+}
+function metricas(L){
+  const m = { n: 0, vp: 0, vn: 0, fp: 0, fn: 0, vVp: 0, vVn: 0, vFp: 0, vFn: 0 };
+  for (const r of L){ const k = r.res.toLowerCase(); if (!['vp', 'vn', 'fp', 'fn'].includes(k)) continue; m.n++; m[k]++; m['v' + k[0].toUpperCase() + k[1]] += r.desc; }
+  m.acerto = m.n ? (m.vp + m.vn) / m.n : null; m.cob = m.vp + m.fn ? m.vp / (m.vp + m.fn) : null; m.prec = m.vp + m.fp ? m.vp / (m.vp + m.fp) : null;
+  m.vCob = m.vVp + m.vFn ? m.vVp / (m.vVp + m.vFn) : null;
+  return m;
+}
+const pct1 = v => v == null ? '–' : (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+function tabelaComp(titulo, grupos){
+  const linhas = [...grupos].map(([k, L]) => [k, metricas(L)]).filter(([, m]) => m.n);
+  if (!linhas.length) return '';
+  return `<h3 class="comp-h3">${esc(titulo)}</h3><div class="tabela-wrap"><table class="res-tab"><thead><tr><th>${esc(titulo.replace(/^Por /, '').replace(/^./, c => c.toUpperCase()))}</th><th class="num">Lançamentos</th><th class="num">Acerto</th>`
+    + `<th class="num">Excluir (análise)</th><th class="num">Achados pelo painel</th><th class="num">Cobertura</th><th class="num">Apontados pelo painel</th><th class="num">Precisão</th>`
+    + `<th class="num">Falsos positivos</th><th class="num">Falsos negativos</th><th class="num">R$ não encontrado</th></tr></thead><tbody>`
+    + linhas.map(([k, m]) => `<tr><td>${esc(k)}</td><td class="num">${nf(m.n)}</td><td class="num">${pct1(m.acerto)}</td><td class="num">${nf(m.vp + m.fn)}</td><td class="num">${nf(m.vp)}</td><td class="num">${pct1(m.cob)}</td>`
+      + `<td class="num">${nf(m.vp + m.fp)}</td><td class="num">${pct1(m.prec)}</td><td class="num">${nf(m.fp)}</td><td class="num">${nf(m.fn)}</td><td class="num">${dec2(m.vFn)}</td></tr>`).join('')
+    + '</tbody></table></div>';
+}
+function agrupaPor(L, chave){ const m = new Map(); for (const r of L){ const k = chave(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); } return m; }
+let compAtual = null;
+function renderComp(){
+  const C_ = R.comp, d = B.d;
+  $('#btnCompCsv').hidden = true;
+  if (!C_){ $('#compNota').textContent = ''; $('#compCorpo').innerHTML = '<p class="semdados">Coloque a planilha da análise manual na subpasta <b>Duplicidades/Comparação</b> (aba “Resultado Fechado 2026 (2)”, com NUM_LOG e Situação = Manter / Excluir) e clique em ↻ Atualizar.</p>'; return; }
+  if (C_.erro){ $('#compNota').textContent = ''; $('#compCorpo').innerHTML = `<p class="semdados">${esc(C_.arquivo)}: ${esc(C_.erro)}.</p>`; return; }
+  const { linhas, logs } = comparaLinhas(); compAtual = linhas;
+  const ok = linhas.filter(r => ['VP', 'VN', 'FP', 'FN'].includes(r.res)), m = metricas(ok);
+  const naoEnc = linhas.filter(r => r.res === 'NAO_ENCONTRADO' || r.res === 'FORA'), semDec = linhas.filter(r => r.res === 'SEM_DECISAO');
+  $('#btnCompCsv').hidden = false;
+  $('#compNota').textContent = `Análise manual: ${C_.arquivo} (aba ${C_.aba}), ${nf(C_.linhas.length)} lançamentos. Cruzamento pelo NUM_LOG. Painel = premissas automáticas (níveis 1 a 4): lançamento a mais = Excluir; o resto = Manter. O nível 5 (marcação manual no painel) aparece à parte. Segue os filtros do topo.`;
+  // âmbito: superintendências e meses da planilha (para os apontados pelo painel que não foram analisados)
+  const supsC = new Set(ok.map(r => B.rSup[r.i])), refsC = new Set(ok.map(r => d.ref[r.i]));
+  const naoAnal = []; for (let i = 0; i < B.n; i++) if (B.recRep[i] && !logs.has(d.log[i]) && supsC.has(B.rSup[i]) && refsC.has(d.ref[i]) && okRec(i)) naoAnal.push(i);
+  const vNaoAnal = naoAnal.reduce((t, i) => t + d.desc[i], 0);
+  const n5ok = ok.filter(r => r.n5), m5 = metricas(ok.map(r => ({ ...r, res: (r.painel || r.n5) ? (r.sit ? 'VP' : 'FP') : (r.sit ? 'FN' : 'VN') })));
+  const kpi = (cls, t, v, sub) => `<div class="comp-kpi ${cls}"><span>${t}</span><b>${v}</b><small>${sub}</small></div>`;
+  let h = '<div class="comp-kpis">'
+    + kpi('', 'Lançamentos comparados', nf(m.n), `${nf(new Set(ok.map(r => r.mat)).size)} matrículas · ${nf(m.vp + m.fn)} Excluir e ${nf(m.vn + m.fp)} Manter na análise`)
+    + kpi('ok', 'Acerto geral', pct1(m.acerto), `${nf(m.vp + m.vn)} de ${nf(m.n)} lançamentos com a mesma decisão`)
+    + kpi('ok', 'Cobertura (dos Excluir)', pct1(m.cob), `o painel achou ${nf(m.vp)} de ${nf(m.vp + m.fn)} · em R$: ${pct1(m.vCob)} (${rs0(m.vVp)} de ${rs0(m.vVp + m.vFn)})`)
+    + kpi('ok', 'Precisão (do que o painel aponta)', pct1(m.prec), `${nf(m.vp)} de ${nf(m.vp + m.fp)} apontados estavam certos`)
+    + kpi('erro', 'Falsos positivos', nf(m.fp), `o painel excluiria e a análise manteve · ${rs0(m.vFp)}`)
+    + kpi('erro', 'Falsos negativos', nf(m.fn), `a análise excluiu e o painel não pegou · ${rs0(m.vFn)}`)
+    + kpi('', 'Com o nível 5 (marcação no painel)', pct1(m5.cob), `cobertura somando o nível 5 · ${nf(n5ok.length)} lançamento(s) a mais pelo nível 5`)
+    + kpi('', 'Apontados e não analisados', nf(naoAnal.length), `lançamentos a mais do painel fora da planilha (mesmas superintendências e meses) · ${rs0(vNaoAnal)}`)
+    + '</div>';
+  h += `<div class="comp-grade"><div><h3 class="comp-h3">Matriz de decisões (lançamentos · R$)</h3><table class="res-tab comp-matriz"><thead><tr><th></th><th class="num">Painel: Excluir</th><th class="num">Painel: Manter</th><th class="num">Total</th></tr></thead><tbody>`
+    + `<tr><td>Análise: Excluir</td><td class="num vp">${nf(m.vp)} · ${dec2(m.vVp)}</td><td class="num fn">${nf(m.fn)} · ${dec2(m.vFn)}</td><td class="num">${nf(m.vp + m.fn)} · ${dec2(m.vVp + m.vFn)}</td></tr>`
+    + `<tr><td>Análise: Manter</td><td class="num fp">${nf(m.fp)} · ${dec2(m.vFp)}</td><td class="num vn">${nf(m.vn)} · ${dec2(m.vVn)}</td><td class="num">${nf(m.fp + m.vn)} · ${dec2(m.vFp + m.vVn)}</td></tr>`
+    + `<tr class="linha-total"><td>Total</td><td class="num">${nf(m.vp + m.fp)} · ${dec2(m.vVp + m.vFp)}</td><td class="num">${nf(m.fn + m.vn)} · ${dec2(m.vFn + m.vVn)}</td><td class="num">${nf(m.n)} · ${dec2(m.vVp + m.vVn + m.vFp + m.vFn)}</td></tr></tbody></table>`
+    + `<p class="res-nota">Verde = mesma decisão; laranja = divergência. Cobertura = quanto do que a análise excluiu o painel achou; precisão = quanto do que o painel aponta a análise confirmou.</p></div>`
+    + `<div><h3 class="comp-h3">Por onde o painel erra</h3><table class="res-tab"><thead><tr><th>Situação no painel</th><th class="num">Falsos negativos</th><th class="num">R$</th></tr></thead><tbody>`
+    + [...agrupaPor(ok.filter(r => r.res === 'FN'), r => r.n5 ? 'marcado como duplicidade no nível 5' : r.motivo.replace(/ do nível \d/, ' de outro desconto repetido'))].sort((a, b) => b[1].length - a[1].length)
+      .map(([k, L]) => `<tr><td>${esc(k)}</td><td class="num">${nf(L.length)}</td><td class="num">${dec2(L.reduce((t, r) => t + r.desc, 0))}</td></tr>`).join('')
+    + `</tbody></table><table class="res-tab" style="margin-top:10px"><thead><tr><th>Nível que apontou</th><th class="num">Falsos positivos</th><th class="num">R$</th></tr></thead><tbody>`
+    + [...agrupaPor(ok.filter(r => r.res === 'FP'), r => 'Nível ' + r.niv)].sort().map(([k, L]) => `<tr><td>${esc(k)}</td><td class="num">${nf(L.length)}</td><td class="num">${dec2(L.reduce((t, r) => t + r.desc, 0))}</td></tr>`).join('')
+    + '</tbody></table></div></div>';
+  h += tabelaComp('Por fonte da decisão', agrupaPor(ok, r => r.manual ? 'Análise manual (col. E)' : 'Regra da aba Ago–Out (col. T)'));
+  h += tabelaComp('Por nível do painel', agrupaPor(ok, r => r.painel ? `Nível ${r.niv}` : 'Painel: Manter'));
+  h += tabelaComp('Por mês de referência', new Map([...agrupaPor(ok, r => d.refs[d.ref[r.i]])].sort().map(([k, L]) => [mesTxt(k), L])));
+  h += tabelaComp('Por cidade', agrupaPor(ok, r => cidDe(r.i)));
+  h += tabelaComp('Por usuário', agrupaPor(ok, r => d.usrs[d.usr[r.i]] || '(sem usuário)'));
+  // casos divergentes
+  const div = ok.filter(r => r.res === 'FP' || r.res === 'FN').sort((a, b) => a.mat - b.mat || d.dt[a.i] - d.dt[b.i]);
+  h += `<h3 class="comp-h3">Lançamentos em que painel e análise divergem (${nf(div.length)})</h3><div class="tabela-wrap"><table class="res-tab"><thead><tr><th>Resultado</th><th>Matrícula</th><th>Cliente</th><th>Cidade</th><th>Mês ref.</th><th>Data e hora</th><th class="num">NUM_LOG</th><th>Usuário</th><th class="num">Desconto (R$)</th><th class="num">Total (R$)</th><th>Análise</th><th>Painel</th></tr></thead><tbody>`
+    + div.map(r => `<tr><td><span class="tag ${r.res === 'FP' ? 'rep' : 'al'}">${r.res === 'FP' ? 'Falso positivo' : 'Falso negativo'}</span></td><td>${r.mat}</td><td>${esc(nomeDe(r.i))}</td><td>${esc(cidDe(r.i))}</td><td>${mesTxt(d.refs[d.ref[r.i]])}</td><td>${dtTxt(d.dt[r.i])}</td><td class="num">${d.log[r.i]}</td><td>${esc(d.usrs[d.usr[r.i]])}</td>`
+      + `<td class="num">${dec2(d.desc[r.i])}</td><td class="num">${dec2(d.tot[r.i])}</td><td>${r.sit ? 'Excluir' : 'Manter'} <span class="mudo">(${r.manual ? 'manual' : 'regra'})</span></td><td>${esc(r.n5 ? r.motivo + '; nível 5: lançamento a mais' : r.motivo)}</td></tr>`).join('')
+    + '</tbody></table></div>';
+  if (naoEnc.length || semDec.length) h += `<p class="res-nota"><b>Fora da comparação:</b> ${nf(naoEnc.filter(r => r.res === 'NAO_ENCONTRADO').length)} lançamento(s) da planilha sem o NUM_LOG no arquivo de descontos; ${nf(naoEnc.filter(r => r.res === 'FORA').length)} fora da análise do painel; ${nf(semDec.length)} sem Situação Manter/Excluir. Estão na base analítica.</p>`;
+  $('#compCorpo').innerHTML = h;
+  $('#btnCompCsv').onclick = () => {
+    const hoje = new Date(), dia = `${hoje.getFullYear()}${p2(hoje.getMonth() + 1)}${p2(hoje.getDate())}`;
+    const RES = { VP: 'ACERTO_EXCLUIR', VN: 'ACERTO_MANTER', FP: 'FALSO_POSITIVO', FN: 'FALSO_NEGATIVO', NAO_ENCONTRADO: 'NAO_ENCONTRADO_NO_ARQUIVO', FORA: 'FORA_DA_ANALISE_DO_PAINEL', SEM_DECISAO: 'SEM_DECISAO_NA_ANALISE' };
+    const lin = linhas.map(r => { const i = r.i, tem = i !== undefined;
+      return [r.log, r.mat, tem ? nomeDe(i) : '', tem ? supDe(i) : '', tem ? cidDe(i) : '', tem ? mesTxt(d.refs[d.ref[i]]) : '', tem ? dataTxt(d.dt[i]) : '', tem ? horaTxt(d.dt[i]) : '', tem ? d.usrs[d.usr[i]] : '',
+        +r.desc.toFixed(2), tem ? +d.tot[i].toFixed(2) : '', r.tipo, r.sit === 1 ? 'EXCLUIR' : r.sit === 0 ? 'MANTER' : '', r.manual ? 'MANUAL_COL_E' : 'REGRA_COL_T',
+        r.painel == null ? '' : r.painel ? 'EXCLUIR' : 'MANTER', r.niv || '', r.motivo || '', r.n5 ? 'SIM' : '', RES[r.res] || r.res]; });
+    naoAnal.forEach(i => lin.push([d.log[i], d.mat[i], nomeDe(i), supDe(i), cidDe(i), mesTxt(d.refs[d.ref[i]]), dataTxt(d.dt[i]), horaTxt(d.dt[i]), d.usrs[d.usr[i]], +d.desc[i].toFixed(2), +d.tot[i].toFixed(2), '', '', '',
+      'EXCLUIR', B.dups[B.recG[i]].niv, `lançamento a mais (nível ${B.dups[B.recG[i]].niv})`, '', 'APONTADO_PELO_PAINEL_NAO_ANALISADO']));
+    baixaCsv(`comparacao_painel_x_analise_${dia}.csv`, ['NUM_LOG', 'NUM_LIGACAO', 'NOM_CLIENTE', 'SUPERINTENDENCIA', 'CIDADE', 'MES_REF', 'DATA', 'HORA', 'USUARIO', 'DESCONTO', 'VALOR_TOTAL',
+      'TIPO_DESCONTO', 'DECISAO_ANALISE', 'FONTE_DECISAO', 'PAINEL_NIVEIS_1_A_4', 'NIVEL_PAINEL', 'SITUACAO_NO_PAINEL', 'PAINEL_NIVEL_5', 'RESULTADO'], lin);
+  };
+}
+
 /* ---------- Duplicidades, alerta entre meses e a verificar ---------- */
 const nomeDe = i => B.rc[i] >= 0 ? B.c.nomes[B.rc[i]] : '';
 const supDe = i => B.rSup[i] >= 0 ? B.supNomes[B.rSup[i]] : '';
@@ -1524,6 +1691,7 @@ function renderDados(){
       <tbody><tr><td>${esc(d.arquivo)}</td><td>${esc(d.aba)}</td><td class="num">${nf(d.stats.linhas)}</td><td>${localTxt(d.modificado)}</td></tr>
       ${(d.pulados || []).map(p => `<tr><td>${esc(p.nome)}</td><td colspan="2"><span class="neg">não usado: ${esc(p.motivo)}</span></td><td>${localTxt(p.modificado)}</td></tr>`).join('')}</tbody></table>
     <table class="tab-seg"><thead><tr><th>Cadastro</th><th>Superintendência (como vem no arquivo)</th><th class="num">Matrículas</th><th class="num">Com desconto no arquivo</th><th>Modificado em</th></tr></thead><tbody>${cad}</tbody></table>
+    ${R.comp ? `<p class="nota-secao">Comparação (subpasta Comparação, não é base de descontos): ${esc(R.comp.arquivo)}${R.comp.erro ? ` — <span class="neg">${esc(R.comp.erro)}</span>` : `, aba ${esc(R.comp.aba)}, ${nf(R.comp.linhas.length)} lançamentos`}.</p>` : ''}
     ${R.meta.outros && R.meta.outros.length ? `<p class="nota-secao">Arquivos fora das subpastas Descontos e Cadastro, ignorados: ${R.meta.outros.map(esc).join(', ')}.</p>` : ''}
     ${d.stats.semData || d.stats.semRef ? `<p class="nota-secao"><span class="neg">${nf(d.stats.semData)} linhas sem data de acesso e ${nf(d.stats.semRef)} sem referência reconhecida.</span></p>` : ''}
 
@@ -1554,6 +1722,7 @@ function renderDados(){
       ${li('<b>Alerta entre meses:</b> mesma matrícula com o mesmo valor de desconto em dois ou mais meses de referência diferentes, entre os lançamentos que não são lançamento a mais dos níveis 1 a 4 (os casos com tudo idêntico já foram para o nível 4). Fica separado e não soma no valor em duplicidade, a não ser que seja marcado como duplicidade (nível 5).')}
       ${li('<b>A verificar:</b> mesma matrícula e mês de referência que, depois de tirar os lançamentos a mais, ainda tem dois ou mais valores de desconto diferentes, com totais diferentes (por exemplo, um desconto aplicado em cada fatura em vez de um só). Não é duplicidade: só se confirma entrando na matrícula. A lista mostra todos os lançamentos do mês; a coluna “Também em duplicidade” indica se algum deles é desconto repetido.')}
       ${li('<b>Nível 5 – verificado manualmente:</b> na aba Duplicidades, cada caso de Alerta entre meses ou A verificar tem os botões <b>Duplicidade</b> e <b>Válido</b> (clicar de novo desfaz). Marcado como duplicidade, o caso vira um desconto repetido de nível 5: o lançamento mais recente do caso é o válido e os demais são lançamentos a mais, menos os que já são lançamento a mais nos níveis 1 a 4 (cada lançamento conta uma vez). O valor entra no valor registrado em duplicidade. Marcado como válido, o caso sai dos pendentes e não soma. As marcações ficam no arquivo ajustes_arrecadacao.json da pasta principal (valem para todos) e são guardadas pela matrícula + desconto (alerta) ou matrícula + mês (a verificar): continuam valendo quando o arquivo de descontos é atualizado.')}
+      ${li('<b>Comparação:</b> a planilha da análise manual fica na subpasta <b>Duplicidades/Comparação</b> e é lida só para a aba Comparação (nunca como base de descontos). Vale a aba “Resultado Fechado 2026 (2)”: cada linha é um lançamento (NUM_LOG) com Situação = Manter ou Excluir; Decisão (col. E) preenchida = análise manual, senão a regra da aba Ago–Out. O cruzamento é pelo NUM_LOG. Painel: lançamento a mais dos níveis 1 a 4 = Excluir; o resto = Manter (o nível 5 aparece à parte). Acerto = mesma decisão; cobertura = parte dos Excluir que o painel achou; precisão = parte do que o painel aponta que a análise confirmou; falso positivo = o painel excluiria e a análise manteve; falso negativo = a análise excluiu e o painel não pegou. “Apontados e não analisados” = lançamentos a mais do painel fora da planilha, nas mesmas superintendências e meses. Segue os filtros do topo.')}
       ${li('<b>Resultado:</b> o valor recuperado é o valor registrado em duplicidade dos níveis 1 a 5 (os lançamentos a mais), por superintendência (pela matrícula; a seta de cada uma abre as cidades), por nível e por mês de referência (nos níveis 4 e 5, cada lançamento a mais no seu mês). Com uma superintendência só no filtro, o cartão do valor recuperado leva o nome dela e a tabela passa a ser por cidade. Segue os filtros do topo.')}
       ${li('<b>Filtros:</b> Superintendência, Cidade e Zona valem pela matrícula; a lista de cidades mostra só as das superintendências marcadas. Mês de referência vale pela referência do desconto repetido (no alerta entre meses, o desconto entra se algum dos seus meses estiver marcado). Usuário: o desconto repetido entra se tiver pelo menos um lançamento de um usuário marcado, com todos os seus lançamentos; “Lançamentos com desconto analisados” conta só os lançamentos dos usuários marcados.')}
       ${li('<b>Por usuário:</b> lançamentos a mais e valor em duplicidade ficam com o usuário que fez o lançamento a mais; descontos repetidos e matrículas contam onde o usuário fez algum lançamento do desconto repetido (inclusive o válido). A soma da coluna de descontos repetidos pode passar do total porque um desconto pode ter lançamentos de mais de um usuário.')}
@@ -1568,7 +1737,7 @@ function renderDados(){
 function showTab(t){
   st.tab = t;
   document.querySelectorAll('[data-tab]').forEach(b => { const a = b.dataset.tab === t; b.classList.toggle('active', a); b.setAttribute('aria-pressed', String(a)); });
-  $('#view-resultado').hidden = t !== 'resultado'; $('#view-resumo').hidden = t !== 'resumo'; $('#view-dup').hidden = t !== 'dup'; $('#view-dados').hidden = t !== 'dados';
+  $('#view-resultado').hidden = t !== 'resultado'; $('#view-resumo').hidden = t !== 'resumo'; $('#view-dup').hidden = t !== 'dup'; $('#view-comp').hidden = t !== 'comp'; $('#view-dados').hidden = t !== 'dados';
   document.querySelectorAll('[data-lista]').forEach(b => { const a = b.dataset.lista === st.lista; b.classList.toggle('active', a); b.setAttribute('aria-pressed', String(a)); });
   st.pag = 0; refresh();
 }
@@ -1577,6 +1746,7 @@ function refresh(){
   if (st.tab === 'resultado') renderResultado();
   else if (st.tab === 'resumo') renderResumo();
   else if (st.tab === 'dup'){ st.pag = 0; renderLista(); }
+  else if (st.tab === 'comp') renderComp();
   else renderDados();
 }
 function usaBase(d){
