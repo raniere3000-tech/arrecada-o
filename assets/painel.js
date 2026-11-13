@@ -2601,7 +2601,8 @@
     const s = C.serieDoMes(d, mi, mk), sa = miAnt >= 0 ? C.serieDoMes(d, miAnt, mk) : null;
     const parcial = filtroParcial(), orc = parcial || !E.verOrcado ? { valor: null, fonte: "" } : orcadoMensal(E.mes, E.sup), cv = curvaDoMes(E.mes, E.sup);
     const fracCurva = dias.reduce((a, k) => a + (cv.pesos[k] || 0), 0);
-    const mm = C.mesesMesmosUteis(d, E.mes), frT = C.fracaoAteDias(d, mm.meses, mk, sel, () => "T").get("T");
+    // tendência: projeção pelos dias úteis restantes (a mesma que o Diagnóstico por localidade usa por padrão)
+    const mm = C.mesesMesmosUteis(d, E.mes), drT = C.fracaoDiasRestantes(d, E.mes, mk, sel, () => "T"), frT = drT.fr.get("T");
     // mês anterior contra o orçado dele (mesma planilha RF), nos mesmos dias úteis: "Setembro/26: R$ 10,03 Mi (-7,7% vs RF3T25)"
     let orcAntAte = null;
     if (orc.valor != null && orc.fonte && orc.fonte !== DIGITADO && totA) {
@@ -2609,7 +2610,7 @@
       if (oA != null) orcAntAte = oA * C.diasDaMascara(sel).filter((k) => k <= uA).reduce((a, k) => a + (pA[k] || 0), 0);
     }
     return { d, mi, miAnt, mk, sel, cal, U, ant, dias, tot, totA, s, sa, parcial, orc, cv, fracCurva, mm, orcAntAte,
-      orcAte: orc.valor != null ? orc.valor * fracCurva : null, proj: frT > 0 ? tot.valor / frT : null, frT,
+      orcAte: orc.valor != null ? orc.valor * fracCurva : null, proj: frT > 0 ? tot.valor / frT : null, frT, drT,
       ult: d.ultimoCredito[E.mes], N: ultimoDiaComDados(E.mes),
       nUteis: dias.filter((k) => k > 0 && k <= ultimoDiaComDados(E.mes)).length };
   }
@@ -2664,7 +2665,8 @@
         + `${opDelta(opVar(A, D.totA.valor), "realizado vs " + opMes(D.ant))}</div>`);
       if (D.proj != null) quadros.push(`<div class="op-card"><span class="op-rot">Tendência – ${opMes(E.mes)}</span><b>${opRsMi(D.proj)}</b>`
         + (D.miAnt >= 0 ? opDelta(opVar(D.proj, C.totalDoMes(D.d, D.miAnt, D.mk, C.MASCARA_MES).valor), `vs ${opMes(D.ant)} fechado`) : "")
-        + `<small class="op-explica">Projeção pelos meses com os mesmos dias úteis (${D.mm.meses.map(opMes).join(", ") || "—"}): neles, até este dia útil já tinha entrado ${opPct(D.frT)} do mês; ${opRsMi(A)} ÷ ${opPct(D.frT)}.</small></div>`);
+        + (() => { const z = D.drT, k = z.k.get("T"), med = z.n ? A / z.n : null;
+          return `<small class="op-explica">Projeção pelos dias úteis restantes: ${z.n} dias úteis com média de ${med != null ? "R$ " + fmt(med) : "–"} por dia; faltam ${z.falta}, e nos últimos 12 meses cada dia útil do resto do mês rendeu ${k != null ? fmt(k, 2) : "–"}× um do começo (peso 3 nos meses com ${z.uteis} dias úteis). ${opRsMi(A)} + ${z.falta} × ${med != null ? "R$ " + fmt(med) : "–"} × ${k != null ? fmt(k, 2) : "–"}.</small></div>`; })());
     }
     return quadros.length ? `<div class="op-cards">${quadros.join("")}</div>` : "";
   }
