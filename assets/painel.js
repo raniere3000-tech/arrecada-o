@@ -2950,8 +2950,19 @@
     const sc = document.createElement("script"); sc.src = "lib/pptxgen.bundle.js"; sc.onload = ok; sc.onerror = () => erro(new Error("não carregou a biblioteca do PowerPoint")); document.head.append(sc);
   }));
   const nomePrint = (aba) => `Print_${ABAS[aba]}_${filtroTexto("_")}_${E.mes}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9_-]+/g, "_");
-  async function fotoDaAba(aba) {
+  // Cidades: uma imagem por tabela (Valor arrecadado, Clientes pagantes, Contas pagas); as outras abas, uma imagem só
+  const PARTES_PRINT = { cidades: 3 };
+  async function fotosDaAba(aba) {
+    const n = PARTES_PRINT[aba];
+    if (!n) return [await fotoDaAba(aba)];
+    const l = [];
+    for (let i = 0; i < n; i++) l.push(await fotoDaAba(aba, i));
+    return l;
+  }
+  async function fotoDaAba(aba, parte) {
     mostraAba(aba);
+    const cards = [...document.querySelectorAll(`section.painel-aba[data-painel="${aba}"] > .card`)];
+    cards.forEach((c, i) => c.toggleAttribute("data-print-oculto", parte != null && i !== parte));
     const main = document.querySelector("main"), area = $("area"), fundo = document.body.classList.contains("bi") ? "#ffffff" : "#f3f6f9";
     // testa larguras da página: fica a que, encaixada no slide, deixa o conteúdo maior, sem nenhuma tabela passando do seu
     // quadro (tabela mais larga que o cartão desalinha os cartões no print)
@@ -2980,6 +2991,9 @@
     g.fillStyle = fundo; g.fillRect(0, 0, SLIDE_W, SLIDE_H);
     g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
     g.drawImage(cv, (SLIDE_W - dw) / 2, (SLIDE_H - dh) / 2, dw, dh);
+    cards.forEach((c) => c.removeAttribute("data-print-oculto"));
+    sl.recorte = cv;                                    // só o conteúdo, sem o fundo do slide (PowerPoint com várias no slide)
+    sl.titulo = parte != null ? (cards[parte].querySelector("h2")?.firstChild?.textContent || "").trim() : "";
     return sl;
   }
   async function comAbas(fn) {                         // monta a página no modo do PDF, chama fn e volta como estava
@@ -2989,6 +3003,7 @@
     document.body.classList.add("gerando-pdf", "gerando-print");
     try { return await fn(); } finally {
       document.body.classList.remove("gerando-pdf", "gerando-print", "print-2col", "print-conteudo"); main.style.width = "";
+      document.querySelectorAll("[data-print-oculto]").forEach((c) => c.removeAttribute("data-print-oculto"));
       mostraAba(abaAntes); btn.disabled = false; btn.textContent = "🖼 Prints ▾";
     }
   }
@@ -2999,6 +3014,13 @@
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
   async function prints(tipo) {
+    const nomeParte = (aba, cv) => nomePrint(aba) + (cv.titulo ? "_" + cv.titulo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "_") : "");
+    if (PARTES_PRINT[tipo]) {                           // várias imagens: baixa todas (a área de transferência guarda uma só)
+      const fotos = await comAbas(() => fotosDaAba(tipo));
+      for (const cv of fotos) { baixa(await pngDe(cv), nomeParte(tipo, cv) + ".png"); await new Promise((r) => setTimeout(r, 400)); }
+      toast(`${fotos.length} prints de <b>${ABAS[tipo]}</b> baixados em PNG, um por tabela.`);
+      return;
+    }
     if (ABAS_PDF.includes(tipo)) {
       // a promessa vai para a área de transferência na hora do clique: a cópia vale depois do tempo de gerar a imagem
       const imagem = comAbas(async () => pngDe(await fotoDaAba(tipo)));
@@ -3011,16 +3033,28 @@
       return;
     }
     if (tipo === "pptx") await carregaPptx();
-    const fotos = await comAbas(async () => { const l = []; for (const aba of ABAS_PDF) l.push([aba, await fotoDaAba(aba)]); return l; });
+    const fotos = await comAbas(async () => { const l = []; for (const aba of ABAS_PDF) l.push([aba, await fotosDaAba(aba)]); return l; });
     if (tipo === "pngs") {
-      for (const [aba, cv] of fotos) { baixa(await pngDe(cv), nomePrint(aba) + ".png"); await new Promise((r) => setTimeout(r, 400)); }
+      for (const [aba, cvs] of fotos) for (const cv of cvs) { baixa(await pngDe(cv), nomeParte(aba, cv) + ".png"); await new Promise((r) => setTimeout(r, 400)); }
       toast(`${fotos.length} prints baixados em PNG.`);
       return;
     }
     const ppt = new window.PptxGenJS();
     ppt.layout = "LAYOUT_WIDE";                         // 13,33 × 7,5 pol. (16:9)
     ppt.title = `Arrecadação — ${filtroTexto()} — ${C.rotuloMes(E.mes)}`;
-    for (const [, cv] of fotos) ppt.addSlide().addImage({ data: cv.toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5 });
+    for (const [, cvs] of fotos) {
+      const sl = ppt.addSlide();
+      if (cvs.length === 1) { sl.addImage({ data: cvs[0].toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5 }); continue; }
+      // várias tabelas (Cidades) no mesmo slide, uma embaixo da outra, na mesma largura
+      const M = 0.2, GAP = 0.1, util = 7.5 - 2 * M - GAP * (cvs.length - 1);
+      const larg = Math.min(13.333 - 2 * M, util / cvs.reduce((t, cv) => t + cv.recorte.height / cv.recorte.width, 0));
+      let y = M;
+      for (const cv of cvs) {
+        const alt = larg * cv.recorte.height / cv.recorte.width;
+        sl.addImage({ data: cv.recorte.toDataURL("image/png"), x: (13.333 - larg) / 2, y, w: larg, h: alt });
+        y += alt + GAP;
+      }
+    }
     await ppt.writeFile({ fileName: `Apresentacao_Arrecadacao_${filtroTexto("_")}_${E.mes}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9_-]+/g, "_") + ".pptx" });
     toast("PowerPoint baixado: um slide por aba, do Resumo à Escada.");
   }

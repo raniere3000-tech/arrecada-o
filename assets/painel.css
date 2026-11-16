@@ -615,3 +615,4 @@ body.gerando-print td.rot, body.gerando-print td.txt { overflow-wrap: normal; wo
 /* prints de Subcategoria, Perfil e Cidades: só as tabelas, para a letra sair maior no slide */
 body.print-conteudo .cabecalho-pdf, body.print-conteudo #diasCard, body.print-conteudo .painel-aba .legenda { display: none !important; }
 body.print-conteudo .painel-aba:not([hidden]) > .card:first-of-type { margin-top: 0; }
+body.gerando-print [data-print-oculto] { display: none !important; }   /* print de uma tabela só (Cidades) */
