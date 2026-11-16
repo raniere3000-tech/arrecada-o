@@ -3017,7 +3017,8 @@
     const nomeParte = (aba, cv) => nomePrint(aba) + (cv.titulo ? "_" + cv.titulo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "_") : "");
     if (PARTES_PRINT[tipo]) {                           // várias imagens: baixa todas (a área de transferência guarda uma só)
       const fotos = await comAbas(() => fotosDaAba(tipo));
-      for (const cv of fotos) { baixa(await pngDe(cv), nomeParte(tipo, cv) + ".png"); await new Promise((r) => setTimeout(r, 400)); }
+      // cada tabela no tamanho exato dela (sem o fundo do slide), para caberem as 3 juntas num slide
+      for (const cv of fotos) { baixa(await pngDe(cv.recorte), nomeParte(tipo, cv) + ".png"); await new Promise((r) => setTimeout(r, 400)); }
       toast(`${fotos.length} prints de <b>${ABAS[tipo]}</b> baixados em PNG, um por tabela.`);
       return;
     }
@@ -3035,7 +3036,7 @@
     if (tipo === "pptx") await carregaPptx();
     const fotos = await comAbas(async () => { const l = []; for (const aba of ABAS_PDF) l.push([aba, await fotosDaAba(aba)]); return l; });
     if (tipo === "pngs") {
-      for (const [aba, cvs] of fotos) for (const cv of cvs) { baixa(await pngDe(cv), nomeParte(aba, cv) + ".png"); await new Promise((r) => setTimeout(r, 400)); }
+      for (const [aba, cvs] of fotos) for (const cv of cvs) { baixa(await pngDe(cvs.length > 1 ? cv.recorte : cv), nomeParte(aba, cv) + ".png"); await new Promise((r) => setTimeout(r, 400)); }
       toast(`${fotos.length} prints baixados em PNG.`);
       return;
     }
