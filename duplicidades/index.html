@@ -799,32 +799,61 @@ async function lerCadastro(files, chaves, mats){
 }
 
 /* ---------- planilha da análise manual (subpasta Comparação): só para a aba Comparação, nunca como base de descontos ---------- */
-const ABA_COMP = 'Resultado Fechado 2026 (2)';
+// Universo: os lançamentos das abas de análise (ABAS_ANALISE); a coluna W ("Era duplicidade?") diz se era duplicidade.
+// Não = desconto válido (Manter). Sim = a decisão (Manter / Excluir) e os demais dados vêm da aba ABA_COMP, pelo NUM_LOG.
+const ABA_COMP = 'Resultado Fechado 2026 (2)', ABAS_ANALISE = ['2026 - Até Julho', '2026 - Agosto a Outubro'];
+async function lerAba(file, sst, sh, achaCab, linha){
+  let h = null, seen = 0;
+  await streamBlocks(file, sh.entry, '</row>', blk => {
+    seen++;
+    const c = parseCells(blk, sst);
+    if (!h){ h = achaCab(c.map(norm)); if (!h && seen > 30) return false; return; }
+    linha(c, h);
+  }, () => {});
+  return h;
+}
 async function lerComparacao(file){
   const label = 'Comparação: ' + file.name;
   progress(label, 'Abrindo o arquivo…', 0, true);
   const { sst, sheets } = await abreXlsx(file, label);
-  const base = { arquivo: file.name, modificado: file.lastModified, aba: ABA_COMP };
-  const sh = sheets.find(x => String(x.name).trim() === ABA_COMP);
-  if (!sh) return { ...base, erro: `sem a aba “${ABA_COMP}”` };
-  let h = null, seen = 0; const linhas = [];
-  await streamBlocks(file, sh.entry, '</row>', blk => {
-    seen++;
-    const c = parseCells(blk, sst);
-    if (!h){
-      const cols = c.map(norm), ix = n => cols.indexOf(n);
-      if (cols.includes('NUM_LOG') && cols.includes('SITUACAO'))
-        h = { log: ix('NUM_LOG'), sit: ix('SITUACAO'), dec: ix('DECISAO'), mat: ix('MATRICULA'), tipo: ix('TIPO_DE_DESCONTO'), desc: cols.findIndex(x => x.startsWith('DESCONTO')) };
-      else if (seen > 30) return false;
-      return;
-    }
-    if (vazio(c[h.log])) return;                                // linhas em branco, totais e notas
-    const sit = norm(c[h.sit]);
-    linhas.push({ log: Math.round(toNum(c[h.log])), mat: h.mat >= 0 ? Math.round(toNum(c[h.mat])) : 0, sit: sit === 'EXCLUIR' ? 1 : sit === 'MANTER' ? 0 : -1,
-      manual: h.dec >= 0 && !vazio(c[h.dec]) ? 1 : 0, desc: h.desc >= 0 ? toNum(c[h.desc]) : 0, tipo: h.tipo >= 0 ? str(c[h.tipo]) : '' });
-  }, p => progress(label, 'Lendo a análise manual…', p));
-  if (!h) return { ...base, erro: 'a aba não tem as colunas NUM_LOG e Situação' };
-  return { ...base, linhas };
+  const base = { arquivo: file.name, modificado: file.lastModified, aba: ABA_COMP, abas: ABAS_ANALISE };
+  const shR = sheets.find(x => String(x.name).trim() === ABA_COMP), shA = ABAS_ANALISE.map(n => sheets.find(x => String(x.name).trim() === n));
+  const faltam = [...ABAS_ANALISE.filter((n, k) => !shA[k]), ...(shR ? [] : [ABA_COMP])];
+  if (faltam.length) return { ...base, erro: 'sem a(s) aba(s) ' + faltam.map(n => `“${n}”`).join(', ') };
+  // 1) Resultado Fechado: decisão de cada lançamento que era duplicidade
+  const dec = new Map();
+  progress(label, 'Lendo o Resultado Fechado…', 0.2, true);
+  const hR = await lerAba(file, sst, shR, cols => cols.includes('NUM_LOG') && cols.includes('SITUACAO')
+    ? { log: cols.indexOf('NUM_LOG'), sit: cols.indexOf('SITUACAO'), dec: cols.indexOf('DECISAO'), tipo: cols.indexOf('TIPO_DE_DESCONTO'), desc: cols.findIndex(x => x.startsWith('DESCONTO')) } : null,
+    (c, h) => {
+      if (vazio(c[h.log])) return;
+      const sit = norm(c[h.sit]);
+      dec.set(Math.round(toNum(c[h.log])), { sit: sit === 'EXCLUIR' ? 1 : sit === 'MANTER' ? 0 : -1, manual: h.dec >= 0 && !vazio(c[h.dec]) ? 1 : 0,
+        desc: h.desc >= 0 ? toNum(c[h.desc]) : 0, tipo: h.tipo >= 0 ? str(c[h.tipo]) : '' });
+    });
+  if (!hR) return { ...base, erro: `a aba “${ABA_COMP}” não tem as colunas NUM_LOG e Situação` };
+  // 2) abas de análise: todos os lançamentos, com a coluna W
+  const linhas = [], vistos = new Set();
+  for (const [k, sh] of shA.entries()){
+    progress(label, `Lendo ${ABAS_ANALISE[k]}…`, 0.4 + 0.3 * k, true);
+    const hA = await lerAba(file, sst, sh, cols => cols.includes('NUM_LOG') ? { log: cols.indexOf('NUM_LOG'), mat: cols.indexOf('NUM_LIGACAO'), desc: cols.indexOf('DESCONTO'),
+      w: (x => x >= 0 ? x : 22)(cols.findIndex(x => x.startsWith('ERA_DUPLICIDADE'))) } : null,
+      (c, h) => {
+        if (vazio(c[h.log])) return;
+        const log = Math.round(toNum(c[h.log]));
+        if (vistos.has(log)) return;                          // o mesmo lançamento nas duas abas: vale a 1ª
+        vistos.add(log);
+        const era = norm(c[h.w]), dup = era === 'SIM' ? 1 : era === 'NAO' ? 0 : -1, x = dec.get(log);
+        const r = { log, mat: h.mat >= 0 ? Math.round(toNum(c[h.mat])) : 0, aba: ABAS_ANALISE[k], dup, desc: h.desc >= 0 ? toNum(c[h.desc]) : 0, tipo: '' };
+        if (dup === 0){ r.sit = 0; r.fonte = 'NAO_DUP'; }                        // não era duplicidade: desconto válido
+        else if (dup === 1 && x){ r.sit = x.sit; r.fonte = x.manual ? 'MANUAL' : 'REGRA'; r.desc = x.desc || r.desc; r.tipo = x.tipo; }
+        else { r.sit = -1; r.fonte = dup === 1 ? 'SIM_SEM_DECISAO' : 'SEM_RESPOSTA'; }
+        linhas.push(r);
+      });
+    if (!hA) return { ...base, erro: `a aba “${ABAS_ANALISE[k]}” não tem a coluna NUM_LOG` };
+  }
+  const soResultado = [...dec.keys()].filter(l => !vistos.has(l)).length;   // no Resultado mas fora das abas de análise
+  return { ...base, linhas, soResultado };
 }
 
 self.onmessage = async ev => {
@@ -853,7 +882,7 @@ self.onmessage = async ev => {
 </script>
 
 <script>
-const VERSAO_SITE = 'v1.9';
+const VERSAO_SITE = 'v1.10';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = VERSAO_SITE;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1513,6 +1542,8 @@ function tabelaComp(titulo, grupos){
 }
 function agrupaPor(L, chave){ const m = new Map(); for (const r of L){ const k = chave(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); } return m; }
 let compAtual = null;
+const FONTES_COMP = { NAO_DUP: 'Não era duplicidade (col. W = Não)', MANUAL: 'Duplicidade — análise manual (Resultado, col. E)', REGRA: 'Duplicidade — regra da aba Ago–Out (col. T)',
+  SIM_SEM_DECISAO: 'Duplicidade sem decisão no Resultado', SEM_RESPOSTA: 'Sem resposta na col. W' };
 function renderComp(){
   const C_ = R.comp, d = B.d;
   $('#btnCompCsv').hidden = true;
@@ -1522,7 +1553,8 @@ function renderComp(){
   const ok = linhas.filter(r => ['VP', 'VN', 'FP', 'FN'].includes(r.res)), m = metricas(ok);
   const naoEnc = linhas.filter(r => r.res === 'NAO_ENCONTRADO' || r.res === 'FORA'), semDec = linhas.filter(r => r.res === 'SEM_DECISAO');
   $('#btnCompCsv').hidden = false;
-  $('#compNota').textContent = `Análise manual: ${C_.arquivo} (aba ${C_.aba}), ${nf(C_.linhas.length)} lançamentos. Cruzamento pelo NUM_LOG. Painel = premissas automáticas (níveis 1 a 4): lançamento a mais = Excluir; o resto = Manter. O nível 5 (marcação manual no painel) não entra: o que ele marcar conta como Manter; o cartão “Sobraram para o nível 5” mostra quanto do que ficou para verificação manual (Alerta e A verificar) a análise excluiu. Segue os filtros do topo.`;
+  const nSim = C_.linhas.filter(r => r.dup === 1).length, nNao = C_.linhas.filter(r => r.dup === 0).length;
+  $('#compNota').textContent = `Análise manual: ${C_.arquivo}. Universo: ${nf(C_.linhas.length)} lançamentos das abas ${C_.abas.join(' e ')} (col. W “Era duplicidade?”: ${nf(nSim)} Sim, ${nf(nNao)} Não). Não = desconto válido (Manter); Sim = decisão da aba ${C_.aba}. Cruzamento pelo NUM_LOG. Painel = premissas automáticas (níveis 1 a 4): lançamento a mais = Excluir; o resto = Manter. O nível 5 (marcação manual no painel) não entra: o que ele marcar conta como Manter; o cartão “Sobraram para o nível 5” mostra quanto do que ficou para verificação manual (Alerta e A verificar) a análise excluiu. Segue os filtros do topo.`;
   // âmbito: superintendências e meses da planilha (para os apontados pelo painel que não foram analisados)
   const supsC = new Set(ok.map(r => B.rSup[r.i])), refsC = new Set(ok.map(r => d.ref[r.i]));
   const naoAnal = []; for (let i = 0; i < B.n; i++) if (B.recRep[i] && !logs.has(d.log[i]) && supsC.has(B.rSup[i]) && refsC.has(d.ref[i]) && okRec(i)) naoAnal.push(i);
@@ -1532,7 +1564,7 @@ function renderComp(){
   const c5al = c5.filter(r => r.caso === 'Alerta entre meses'), c5ve = c5.filter(r => r.caso === 'A verificar');
   const kpi = (cls, t, v, sub) => `<div class="comp-kpi ${cls}"><span>${t}</span><b>${v}</b><small>${sub}</small></div>`;
   let h = '<div class="comp-kpis">'
-    + kpi('', 'Lançamentos comparados', nf(m.n), `${nf(new Set(ok.map(r => r.mat)).size)} matrículas · ${nf(m.vp + m.fn)} Excluir e ${nf(m.vn + m.fp)} Manter na análise`)
+    + kpi('', 'Lançamentos comparados', nf(m.n), `${nf(new Set(ok.map(r => r.mat)).size)} matrículas · ${nf(ok.filter(r => r.dup === 1).length)} eram duplicidade (${nf(m.vp + m.fn)} Excluir) e ${nf(ok.filter(r => r.dup === 0).length)} não`)
     + kpi('ok', 'Acerto geral', pct1(m.acerto), `${nf(m.vp + m.vn)} de ${nf(m.n)} lançamentos com a mesma decisão`)
     + kpi('ok', 'Cobertura (dos Excluir)', pct1(m.cob), `o painel achou ${nf(m.vp)} de ${nf(m.vp + m.fn)} · em R$: ${pct1(m.vCob)} (${rs0(m.vVp)} de ${rs0(m.vVp + m.vFn)})`)
     + kpi('ok', 'Precisão (do que o painel aponta)', pct1(m.prec), `${nf(m.vp)} de ${nf(m.vp + m.fp)} apontados estavam certos`)
@@ -1552,7 +1584,7 @@ function renderComp(){
     + `</tbody></table><table class="res-tab" style="margin-top:10px"><thead><tr><th>Nível que apontou</th><th class="num">Falsos positivos</th><th class="num">R$</th></tr></thead><tbody>`
     + [...agrupaPor(ok.filter(r => r.res === 'FP'), r => 'Nível ' + r.niv)].sort().map(([k, L]) => `<tr><td>${esc(k)}</td><td class="num">${nf(L.length)}</td><td class="num">${dec2(L.reduce((t, r) => t + r.desc, 0))}</td></tr>`).join('')
     + '</tbody></table></div></div>';
-  h += tabelaComp('Por fonte da decisão', agrupaPor(ok, r => r.manual ? 'Análise manual (col. E)' : 'Regra da aba Ago–Out (col. T)'));
+  h += tabelaComp('Por fonte da decisão', agrupaPor(ok, r => FONTES_COMP[r.fonte] || r.fonte));
   h += tabelaComp('Por nível do painel', agrupaPor(ok, r => r.painel ? `Nível ${r.niv}` : 'Painel: Manter'));
   h += tabelaComp('Por mês de referência', new Map([...agrupaPor(ok, r => d.refs[d.ref[r.i]])].sort().map(([k, L]) => [mesTxt(k), L])));
   h += tabelaComp('Por cidade', agrupaPor(ok, r => cidDe(r.i)));
@@ -1561,21 +1593,21 @@ function renderComp(){
   const div = ok.filter(r => r.res === 'FP' || r.res === 'FN').sort((a, b) => a.mat - b.mat || d.dt[a.i] - d.dt[b.i]);
   h += `<h3 class="comp-h3">Lançamentos em que painel e análise divergem (${nf(div.length)})</h3><div class="tabela-wrap"><table class="res-tab"><thead><tr><th>Resultado</th><th>Matrícula</th><th>Cliente</th><th>Cidade</th><th>Mês ref.</th><th>Data e hora</th><th class="num">NUM_LOG</th><th>Usuário</th><th class="num">Desconto (R$)</th><th class="num">Total (R$)</th><th>Análise</th><th>Painel</th></tr></thead><tbody>`
     + div.map(r => `<tr><td><span class="tag ${r.res === 'FP' ? 'rep' : 'al'}">${r.res === 'FP' ? 'Falso positivo' : 'Falso negativo'}</span></td><td>${r.mat}</td><td>${esc(nomeDe(r.i))}</td><td>${esc(cidDe(r.i))}</td><td>${mesTxt(d.refs[d.ref[r.i]])}</td><td>${dtTxt(d.dt[r.i])}</td><td class="num">${d.log[r.i]}</td><td>${esc(d.usrs[d.usr[r.i]])}</td>`
-      + `<td class="num">${dec2(d.desc[r.i])}</td><td class="num">${dec2(d.tot[r.i])}</td><td>${r.sit ? 'Excluir' : 'Manter'} <span class="mudo">(${r.manual ? 'manual' : 'regra'})</span></td><td>${esc(r.motivo)}</td></tr>`).join('')
+      + `<td class="num">${dec2(d.desc[r.i])}</td><td class="num">${dec2(d.tot[r.i])}</td><td>${r.sit ? 'Excluir' : 'Manter'} <span class="mudo">(${r.fonte === 'NAO_DUP' ? 'não era duplicidade' : r.fonte === 'MANUAL' ? 'manual' : 'regra'})</span></td><td>${esc(r.motivo)}</td></tr>`).join('')
     + '</tbody></table></div>';
-  if (naoEnc.length || semDec.length) h += `<p class="res-nota"><b>Fora da comparação:</b> ${nf(naoEnc.filter(r => r.res === 'NAO_ENCONTRADO').length)} lançamento(s) da planilha sem o NUM_LOG no arquivo de descontos; ${nf(naoEnc.filter(r => r.res === 'FORA').length)} fora da análise do painel; ${nf(semDec.length)} sem Situação Manter/Excluir. Estão na base analítica.</p>`;
+  if (naoEnc.length || semDec.length || C_.soResultado) h += `<p class="res-nota"><b>Fora da comparação:</b> ${nf(semDec.filter(r => r.fonte === 'SIM_SEM_DECISAO').length)} lançamento(s) com “Sim” na col. W e sem decisão no ${esc(C_.aba)}; ${nf(C_.soResultado || 0)} no ${esc(C_.aba)} e fora das abas de análise; ${nf(naoEnc.filter(r => r.res === 'NAO_ENCONTRADO').length)} lançamento(s) da planilha sem o NUM_LOG no arquivo de descontos; ${nf(naoEnc.filter(r => r.res === 'FORA').length)} fora da análise do painel; ${nf(semDec.length)} sem Situação Manter/Excluir. Estão na base analítica.</p>`;
   $('#compCorpo').innerHTML = h;
   $('#btnCompCsv').onclick = () => {
     const hoje = new Date(), dia = `${hoje.getFullYear()}${p2(hoje.getMonth() + 1)}${p2(hoje.getDate())}`;
     const RES = { VP: 'ACERTO_EXCLUIR', VN: 'ACERTO_MANTER', FP: 'FALSO_POSITIVO', FN: 'FALSO_NEGATIVO', NAO_ENCONTRADO: 'NAO_ENCONTRADO_NO_ARQUIVO', FORA: 'FORA_DA_ANALISE_DO_PAINEL', SEM_DECISAO: 'SEM_DECISAO_NA_ANALISE' };
     const lin = linhas.map(r => { const i = r.i, tem = i !== undefined;
       return [r.log, r.mat, tem ? nomeDe(i) : '', tem ? supDe(i) : '', tem ? cidDe(i) : '', tem ? mesTxt(d.refs[d.ref[i]]) : '', tem ? dataTxt(d.dt[i]) : '', tem ? horaTxt(d.dt[i]) : '', tem ? d.usrs[d.usr[i]] : '',
-        +r.desc.toFixed(2), tem ? +d.tot[i].toFixed(2) : '', r.tipo, r.sit === 1 ? 'EXCLUIR' : r.sit === 0 ? 'MANTER' : '', r.manual ? 'MANUAL_COL_E' : 'REGRA_COL_T',
+        +r.desc.toFixed(2), tem ? +d.tot[i].toFixed(2) : '', r.tipo, r.dup === 1 ? 'SIM' : r.dup === 0 ? 'NAO' : '', r.sit === 1 ? 'EXCLUIR' : r.sit === 0 ? 'MANTER' : '', r.fonte || '',
         r.painel == null ? '' : r.painel ? 'EXCLUIR' : 'MANTER', r.niv || '', r.motivo || '', r.caso ? 'SIM' : '', RES[r.res] || r.res]; });
-    naoAnal.forEach(i => lin.push([d.log[i], d.mat[i], nomeDe(i), supDe(i), cidDe(i), mesTxt(d.refs[d.ref[i]]), dataTxt(d.dt[i]), horaTxt(d.dt[i]), d.usrs[d.usr[i]], +d.desc[i].toFixed(2), +d.tot[i].toFixed(2), '', '', '',
+    naoAnal.forEach(i => lin.push([d.log[i], d.mat[i], nomeDe(i), supDe(i), cidDe(i), mesTxt(d.refs[d.ref[i]]), dataTxt(d.dt[i]), horaTxt(d.dt[i]), d.usrs[d.usr[i]], +d.desc[i].toFixed(2), +d.tot[i].toFixed(2), '', '', '', '',
       'EXCLUIR', B.dups[B.recG[i]].niv, `lançamento a mais (nível ${B.dups[B.recG[i]].niv})`, '', 'APONTADO_PELO_PAINEL_NAO_ANALISADO']));
     baixaCsv(`comparacao_painel_x_analise_${dia}.csv`, ['NUM_LOG', 'NUM_LIGACAO', 'NOM_CLIENTE', 'SUPERINTENDENCIA', 'CIDADE', 'MES_REF', 'DATA', 'HORA', 'USUARIO', 'DESCONTO', 'VALOR_TOTAL',
-      'TIPO_DESCONTO', 'DECISAO_ANALISE', 'FONTE_DECISAO', 'PAINEL_NIVEIS_1_A_4', 'NIVEL_PAINEL', 'SITUACAO_NO_PAINEL', 'SOBROU_PARA_NIVEL_5', 'RESULTADO'], lin);
+      'TIPO_DESCONTO', 'ERA_DUPLICIDADE', 'DECISAO_ANALISE', 'FONTE_DECISAO', 'PAINEL_NIVEIS_1_A_4', 'NIVEL_PAINEL', 'SITUACAO_NO_PAINEL', 'SOBROU_PARA_NIVEL_5', 'RESULTADO'], lin);
   };
 }
 
@@ -1692,7 +1724,7 @@ function renderDados(){
       <tbody><tr><td>${esc(d.arquivo)}</td><td>${esc(d.aba)}</td><td class="num">${nf(d.stats.linhas)}</td><td>${localTxt(d.modificado)}</td></tr>
       ${(d.pulados || []).map(p => `<tr><td>${esc(p.nome)}</td><td colspan="2"><span class="neg">não usado: ${esc(p.motivo)}</span></td><td>${localTxt(p.modificado)}</td></tr>`).join('')}</tbody></table>
     <table class="tab-seg"><thead><tr><th>Cadastro</th><th>Superintendência (como vem no arquivo)</th><th class="num">Matrículas</th><th class="num">Com desconto no arquivo</th><th>Modificado em</th></tr></thead><tbody>${cad}</tbody></table>
-    ${R.comp ? `<p class="nota-secao">Comparação (subpasta Comparação, não é base de descontos): ${esc(R.comp.arquivo)}${R.comp.erro ? ` — <span class="neg">${esc(R.comp.erro)}</span>` : `, aba ${esc(R.comp.aba)}, ${nf(R.comp.linhas.length)} lançamentos`}.</p>` : ''}
+    ${R.comp ? `<p class="nota-secao">Comparação (subpasta Comparação, não é base de descontos): ${esc(R.comp.arquivo)}${R.comp.erro ? ` — <span class="neg">${esc(R.comp.erro)}</span>` : `, abas ${esc((R.comp.abas || []).join(' e '))} (${nf(R.comp.linhas.length)} lançamentos) e ${esc(R.comp.aba)}`}.</p>` : ''}
     ${R.meta.outros && R.meta.outros.length ? `<p class="nota-secao">Arquivos fora das subpastas Descontos e Cadastro, ignorados: ${R.meta.outros.map(esc).join(', ')}.</p>` : ''}
     ${d.stats.semData || d.stats.semRef ? `<p class="nota-secao"><span class="neg">${nf(d.stats.semData)} linhas sem data de acesso e ${nf(d.stats.semRef)} sem referência reconhecida.</span></p>` : ''}
 
@@ -1723,7 +1755,7 @@ function renderDados(){
       ${li('<b>Alerta entre meses:</b> mesma matrícula com o mesmo valor de desconto em dois ou mais meses de referência diferentes, entre os lançamentos que não são lançamento a mais dos níveis 1 a 4 (os casos com tudo idêntico já foram para o nível 4). Fica separado e não soma no valor em duplicidade, a não ser que seja marcado como duplicidade (nível 5).')}
       ${li('<b>A verificar:</b> mesma matrícula e mês de referência que, depois de tirar os lançamentos a mais, ainda tem dois ou mais valores de desconto diferentes, com totais diferentes (por exemplo, um desconto aplicado em cada fatura em vez de um só). Não é duplicidade: só se confirma entrando na matrícula. A lista mostra todos os lançamentos do mês; a coluna “Também em duplicidade” indica se algum deles é desconto repetido.')}
       ${li('<b>Nível 5 – verificado manualmente:</b> na aba Duplicidades, cada caso de Alerta entre meses ou A verificar tem os botões <b>Duplicidade</b> e <b>Válido</b> (clicar de novo desfaz). Marcado como duplicidade, o caso vira um desconto repetido de nível 5: o lançamento mais recente do caso é o válido e os demais são lançamentos a mais, menos os que já são lançamento a mais nos níveis 1 a 4 (cada lançamento conta uma vez). O valor entra no valor registrado em duplicidade. Marcado como válido, o caso sai dos pendentes e não soma. As marcações ficam no arquivo ajustes_arrecadacao.json da pasta principal (valem para todos) e são guardadas pela matrícula + desconto (alerta) ou matrícula + mês (a verificar): continuam valendo quando o arquivo de descontos é atualizado.')}
-      ${li('<b>Comparação:</b> a planilha da análise manual fica na subpasta <b>Duplicidades/Comparação</b> e é lida só para a aba Comparação (nunca como base de descontos). Vale a aba “Resultado Fechado 2026 (2)”: cada linha é um lançamento (NUM_LOG) com Situação = Manter ou Excluir; Decisão (col. E) preenchida = análise manual, senão a regra da aba Ago–Out. O cruzamento é pelo NUM_LOG. Painel: lançamento a mais dos níveis 1 a 4 = Excluir; o resto = Manter (o nível 5 não entra: o que ele marcar conta como Manter). “Sobraram para o nível 5” = lançamentos dos casos de Alerta e A verificar, quanto deles a análise excluiu. Acerto = mesma decisão; cobertura = parte dos Excluir que o painel achou; precisão = parte do que o painel aponta que a análise confirmou; falso positivo = o painel excluiria e a análise manteve; falso negativo = a análise excluiu e o painel não pegou. “Apontados e não analisados” = lançamentos a mais do painel fora da planilha, nas mesmas superintendências e meses. Segue os filtros do topo.')}
+      ${li('<b>Comparação:</b> a planilha da análise manual fica na subpasta <b>Duplicidades/Comparação</b> e é lida só para a aba Comparação (nunca como base de descontos). O universo são os lançamentos das abas “2026 - Até Julho” e “2026 - Agosto a Outubro”; a coluna W (“Era duplicidade?”) diz se era duplicidade. Não = desconto válido (Manter). Sim = a decisão (Situação = Manter ou Excluir), os valores e as datas vêm da aba “Resultado Fechado 2026 (2)” (Decisão, col. E, preenchida = análise manual; senão, a regra da aba Ago–Out). “Sim” sem linha no Resultado fica fora das porcentagens. O cruzamento é pelo NUM_LOG. Painel: lançamento a mais dos níveis 1 a 4 = Excluir; o resto = Manter (o nível 5 não entra: o que ele marcar conta como Manter). “Sobraram para o nível 5” = lançamentos dos casos de Alerta e A verificar, quanto deles a análise excluiu. Acerto = mesma decisão; cobertura = parte dos Excluir que o painel achou; precisão = parte do que o painel aponta que a análise confirmou; falso positivo = o painel excluiria e a análise manteve; falso negativo = a análise excluiu e o painel não pegou. “Apontados e não analisados” = lançamentos a mais do painel fora da planilha, nas mesmas superintendências e meses. Segue os filtros do topo.')}
       ${li('<b>Resultado:</b> o valor recuperado é o valor registrado em duplicidade dos níveis 1 a 5 (os lançamentos a mais), por superintendência (pela matrícula; a seta de cada uma abre as cidades), por nível e por mês de referência (nos níveis 4 e 5, cada lançamento a mais no seu mês). Com uma superintendência só no filtro, o cartão do valor recuperado leva o nome dela e a tabela passa a ser por cidade. Segue os filtros do topo.')}
       ${li('<b>Filtros:</b> Superintendência, Cidade e Zona valem pela matrícula; a lista de cidades mostra só as das superintendências marcadas. Mês de referência vale pela referência do desconto repetido (no alerta entre meses, o desconto entra se algum dos seus meses estiver marcado). Usuário: o desconto repetido entra se tiver pelo menos um lançamento de um usuário marcado, com todos os seus lançamentos; “Lançamentos com desconto analisados” conta só os lançamentos dos usuários marcados.')}
       ${li('<b>Por usuário:</b> lançamentos a mais e valor em duplicidade ficam com o usuário que fez o lançamento a mais; descontos repetidos e matrículas contam onde o usuário fez algum lançamento do desconto repetido (inclusive o válido). A soma da coluna de descontos repetidos pode passar do total porque um desconto pode ter lançamentos de mais de um usuário.')}
