@@ -497,8 +497,13 @@ test("tabela do BI por matrícula: valor nos dias marcados com o desconto, dias 
   assert.equal(r[0].sup, "INTERIOR");
   assert.deepEqual(r.map((x) => [x.lig, x.grupo, x.perfil, x.valor, x.dias, x.pagouAnt]),
     [[1, "RESIDENCIAL", "Adimplente", 135, 2, true], [2, "PUBLICO", R.SEM_PERFIL, 200, 1, false]]);
+  assert.deepEqual(r.map((x) => x.contas), [2, 1]);
   // a soma bate com a tabela agregada nos mesmos dias
   perto(r.reduce((s, x) => s + x.valor, 0), C.totalDoMes(d, 1, tudo, C.mascaraAte(2)).valor);
+  // contas pagas e clientes do mês anterior: somando as matrículas, dá a tabela do BI nos mesmos dias
+  const bi = C.tabelaBI(d, tudo, C.mascaraAte(2)).filter((x) => x.mes === "2026-10");
+  assert.equal(r.reduce((s, x) => s + x.contas, 0), bi.reduce((s, x) => s + x.contas, 0));
+  assert.equal(r.filter((x) => x.pagouAnt).length, bi.reduce((s, x) => s + (x.clientesAnt || 0), 0));
   assert.deepEqual(C.porMatricula(d.analise, d.combos, [1], [0], tudo, C.mascaraAte(2), new Set([2])).map((x) => x.lig), [2]);
 });
 

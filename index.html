@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v90-20261116">
+<link rel="stylesheet" href="assets/painel.css?v=v91-20261116">
 </head>
 <body>
 
@@ -397,7 +397,7 @@
           os clientes pagantes da mesma linha no <b>mês anterior</b>, nos mesmos dias, e as <b>contas pagas</b> (última coluna). <b>Os filtros do cabeçalho valem aqui</b>
           (Superintendência, Cidade, Subcategoria e <b>Mês</b>): entram todos os meses marcados no filtro Mês.</p>
         <label class="base-opcao"><input type="checkbox" id="biPorMat"> <span><b>Por matrícula:</b> uma linha por Matrícula × Cidade × Subcategoria × Mês/ano × Classificação
-          (com o nome, a arrecadação nos dias marcados, se pagou no mês anterior e os dias com pagamento), em CSV</span></label>
+          com as mesmas colunas da tabela (clientes pagantes = 1; clientes no mês anterior = 1 se pagou na mesma linha no mês anterior, 0 se não; quem pagou só no mês anterior entra com arrecadação 0 e cliente 0), em CSV: somando as linhas, dá a tabela</span></label>
         <div id="biMatOpcoes" hidden>
           <p class="nota">Só algumas matrículas? Cole a lista abaixo (uma por linha, ou separadas por vírgula ou espaço). Em branco = todas as matrículas dos filtros.</p>
           <textarea id="biLigs" rows="4" class="base-ligs" placeholder="Ex.: 100000001&#10;100000002"></textarea> <span class="salvo" id="biQtdLigs"></span>
@@ -604,9 +604,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v90-20261116"></script>
-<script src="assets/calculos.js?v=v90-20261116"></script>
-<script>const VERSAO_SITE = "v90-20261116"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v90-20261116"></script>
+<script src="assets/regras.js?v=v91-20261116"></script>
+<script src="assets/calculos.js?v=v91-20261116"></script>
+<script>const VERSAO_SITE = "v91-20261116"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v91-20261116"></script>
 </body>
 </html>

@@ -418,7 +418,7 @@ async function leFaturamento(file, aoLer) {
 }
 
 // ---------- cache: o que cada CSV exportou fica no navegador (IndexedDB); arquivo igual não é lido de novo ----------
-const CACHE_VERSAO = 10;                                // 10: a combinação traz também o perfil atualizado
+const CACHE_VERSAO = 11;                                // 11: contas pagas por ligação (base do BI por matrícula); 10: perfil atualizado
 const CACHE_FATURAMENTO = 4;                           // cache do faturamento é separado: muda sem reler a arrecadação
 const banco = () => new Promise((ok, erro) => {
   const r = indexedDB.open("arrecadacao_cache", 1);
@@ -741,17 +741,19 @@ async function respondeOportunidades({ miA, miB, marcas, comFat, comRec, recTipo
 // Tabela do BI por matrícula (aba Dados): CSV em blocos (pode ter centenas de milhares de linhas)
 function respondeBIMatriculas({ mis, misAnt, meses, marcas, sel, ligs, nomesSup }) {
   const quer = ligs ? new Set(ligs.map((l) => C.chaveLig(l))) : null;
-  const txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " "), mesTxt = meses.map((m) => `${m.slice(5, 7)}/${m.slice(0, 4)}`);
+  const mesTxt = meses.map((m) => C.rotuloMes(m));
   const blobs = [], partes = [], vistas = new Set();
   let tam = 0, valor = 0, n = 0;
   C.porMatricula(analise, combosArr, mis, misAnt, marcas, sel, quer, (x) => {
-    vistas.add(x.lig); valor += x.valor; n++;
-    const linha = [ligTxt(x.lig), txt(nomeDe(x.lig)), nomesSup[x.sup] || x.sup || "", x.cidade, x.grupo, mesTxt[x.j], x.perfil, nBR(x.valor), x.pagouAnt == null ? "" : x.pagouAnt ? "Sim" : "Não", x.dias].join(";");
+    if (x.pagou) vistas.add(x.lig); valor += x.valor; n++;
+    // as colunas da tabela do BI, uma linha por matrícula: somando as linhas, dá a tabela (cliente pagante = 1)
+    const linha = [ligTxt(x.lig), x.cidade, x.grupo, mesTxt[x.j], x.perfil, nBR(x.valor), x.pagou ? 1 : 0, x.pagouAnt == null ? "" : x.pagouAnt ? 1 : 0, x.contas].join(";");
     partes.push(linha); tam += linha.length + 2;
     if (tam > 4e6) { blobs.push(new Blob([partes.join("\r\n") + "\r\n"])); partes.length = 0; tam = 0; }
   });
   if (partes.length) blobs.push(new Blob([partes.join("\r\n") + "\r\n"]));
-  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", "Mes/ano", "Classificação", "Arrecadacao_Acumulada", "Pagou_mês_anterior", "Dias_com_pagamento"].join(";");
+  const cab = ["Matrícula", "Cidade", "Subcategoria", "Mes/ano", "Classificação", "Arrecadacao_Acumulada", "Qtd_clientes_pagantes_acumulado",
+    "Qtd_Clientes_pagas_mês_anterior", "Qtd_contas_pagas_acumulado"].join(";");
   const naoEncontradas = ligs ? ligs.filter((l) => !vistas.has(C.chaveLig(l))) : null;
   return { linhas: n, matriculas: vistas.size, valor, naoEncontradas,
     blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };

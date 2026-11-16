@@ -190,7 +190,7 @@
       if (!isFinite(valor)) { this.descartadas.semValor++; return; }
       const mes = credito.slice(0, 7), ordem = calendario(mes).ordem[credito];
       let M = this.meses.get(mes);
-      if (!M) { M = { V: new Map(), L: new Map(), P: new Map(), ultimoCredito: "", linhas: 0 }; this.meses.set(mes, M); }
+      if (!M) { M = { V: new Map(), L: new Map(), N: new Map(), P: new Map(), ultimoCredito: "", linhas: 0 }; this.meses.set(mes, M); }
       M.linhas++;
       if (credito > M.ultimoCredito) M.ultimoCredito = credito;
       const kp = ligacao(r.lig) + "|" + ligacao(r.contrato);
@@ -222,6 +222,7 @@
       // valor de cada ligação × combinação × dia útil (dá os dias em que pagou e os rankings da aba Análise)
       const lig = chaveLig(r.lig), kl = (lig * COMBOS_ARQ + c) * DIAS_L + ordem;
       M.L.set(kl, (M.L.get(kl) || 0) + valor);
+      if (R.TIPOS_CONTA.includes(String(r.tipo || "").trim())) M.N.set(kl, (M.N.get(kl) || 0) + 1);   // contas pagas (base por matrícula)
       if (valor >= VALOR_COM_NOME && r.cliente && !this.nomes.has(lig)) this.nomes.set(lig, String(r.cliente).trim().split("").join(""));   // split/join: cópia solta da linha
       // pagamentos do Interior (onde há faturamento) por ligação + vencimento + tipo: base do cruzamento com a fatura
       if (sup === "INTERIOR") {
@@ -240,9 +241,9 @@
         const n = M.V.size, V = { k: new Float64Array(n), valor: new Float64Array(n), contas: new Uint32Array(n), linhas: new Uint32Array(n) };
         let i = 0;
         for (const [k, a] of M.V) { V.k[i] = k; V.valor[i] = a[0]; V.contas[i] = a[1]; V.linhas[i] = a[2]; i++; }
-        const L = { k: new Float64Array(M.L.size), d: new Uint8Array(M.L.size), v: new Float32Array(M.L.size) };
+        const L = { k: new Float64Array(M.L.size), d: new Uint8Array(M.L.size), v: new Float32Array(M.L.size), n: new Uint16Array(M.L.size) };
         i = 0;
-        for (const [k, v] of M.L) { const d = k % DIAS_L; L.k[i] = (k - d) / DIAS_L; L.d[i] = d; L.v[i] = v; i++; }
+        for (const [k, v] of M.L) { const d = k % DIAS_L; L.k[i] = (k - d) / DIAS_L; L.d[i] = d; L.v[i] = v; L.n[i] = Math.min(65535, M.N.get(k) || 0); i++; }
         const P = { lig: new Float64Array(M.P.size), venc: new Int32Array(M.P.size), tipo: new Uint8Array(M.P.size), v: new Float64Array(M.P.size) };
         i = 0;
         for (const [k, v] of M.P) { const [l, vc, t] = k.split("|"); P.lig[i] = +l; P.venc[i] = +vc; P.tipo[i] = +t; P.v[i] = v; i++; }
@@ -1111,33 +1112,45 @@
   // subcategoria, perfil. Mês anterior fora da pasta: null.
   // Tabela do BI por matrícula: para cada mês mis[j], uma linha por ligação × (cidade, subcategoria, perfil) com o valor nos dias
   // marcados (o desconto da ligação sai da 1ª linha dela no mês, como nas abas), os dias com pagamento e se a ligação pagou no
-  // mês anterior misAnt[j] (nos mesmos dias e filtros). ligs: Set de ligações (null = todas). Ordem: mês, ligação.
+  // mês anterior misAnt[j] na mesma linha (cidade, subcategoria e perfil, nos mesmos dias e filtros, como no BI) e as contas pagas.
+  // ligs: Set de ligações (null = todas). Ordem: mês, ligação.
   // emite(x): recebe cada linha em vez de juntar numa lista (base completa: milhões de linhas sem guardar todas)
   function porMatricula(an, combos, mis, misAnt, marcas, sel, ligs, emite) {
     const S = "\u0001", rot = combos.map((c) => c.cidade + S + c.grupo + S + c.perfil + S + c.sup), out = [];
+    const linhaBI = combos.map((c) => c.cidade + S + c.grupo + S + c.perfil);
     const pagaram = (mi) => {
-      const s = new Set();
+      const s = new Map();                              // "ligação|cidade|subcategoria|perfil" → combinação
       for (const { L, mapa } of (mi >= 0 && an.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
         if (!(sel & (1 << L.d[i]))) continue;
-        const cl = L.k[i] % COMBOS_ARQ;
-        if (marcas[mapa[cl]]) s.add((L.k[i] - cl) / COMBOS_ARQ);
+        const cl = L.k[i] % COMBOS_ARQ, c = mapa[cl];
+        if (marcas[c]) s.set((L.k[i] - cl) / COMBOS_ARQ + S + linhaBI[c], c);
       }
       return s;
     };
     mis.forEach((mi, j) => {
-      const porLig = new Map(), ant = misAnt[j] >= 0 ? pagaram(misAnt[j]) : null;
+      const porLig = new Map(), ant = misAnt[j] >= 0 ? pagaram(misAnt[j]) : null, vistos = new Set(), linhasMes = new Set();
       for (const { L, mapa } of (mi >= 0 && an.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
         if (!(sel & (1 << L.d[i]))) continue;
         const cl = L.k[i] % COMBOS_ARQ, c = mapa[cl];
         if (!marcas[c]) continue;
         const l = (L.k[i] - cl) / COMBOS_ARQ;
+        linhasMes.add(linhaBI[c]); vistos.add(l + S + linhaBI[c]);
         if (ligs && !ligs.has(l)) continue;
         let m = porLig.get(l);
         if (!m) { m = new Map(); porLig.set(l, m); }
         const r = rot[c];
         let x = m.get(r);
-        if (!x) { x = { valor: 0, mask: 0, ordem: m.size }; m.set(r, x); }
-        x.valor += L.v[i]; x.mask |= 1 << L.d[i];
+        if (!x) { x = { valor: 0, mask: 0, contas: 0, ordem: m.size }; m.set(r, x); }
+        x.valor += L.v[i]; x.mask |= 1 << L.d[i]; if (L.n) x.contas += L.n[i];
+      }
+      // pagou no mês anterior numa linha que tem pagamento neste mês, mas não pagou nela neste mês: entra com valor 0 e cliente
+      // 0, só para o "mês anterior" (assim a soma das matrículas dá a tabela do BI, que conta quem pagou no mês anterior)
+      if (ant) for (const [k, c] of ant) {
+        const l = +k.slice(0, k.indexOf(S));
+        if (vistos.has(k) || !linhasMes.has(linhaBI[c]) || (ligs && !ligs.has(l))) continue;
+        let m = porLig.get(l);
+        if (!m) { m = new Map(); porLig.set(l, m); }
+        if (!m.has(rot[c])) m.set(rot[c], { valor: 0, mask: 0, contas: 0, soAnt: true });
       }
       const dm = an.descontos[mi];
       for (const l of [...porLig.keys()].sort((a, b) => a - b)) {
@@ -1146,9 +1159,10 @@
           const [cidade, grupo, perfil, sup] = r.split(S);
           let dias = 0;
           for (let d = 0; d <= MAX_DIA; d++) if (x.mask & (1 << d)) dias++;
-          const desc = prim && dm ? dm.get(l) || 0 : 0;
-          prim = false;
-          const linha = { lig: l, j, sup, cidade, grupo, perfil, valor: x.valor - desc, dias, pagouAnt: ant ? ant.has(l) : null };
+          const desc = prim && !x.soAnt && dm ? dm.get(l) || 0 : 0;
+          if (!x.soAnt) prim = false;
+          const linha = { lig: l, j, sup, cidade, grupo, perfil, valor: x.valor - desc, dias, contas: x.contas, pagou: !x.soAnt,
+            pagouAnt: ant ? ant.has(l + S + cidade + S + grupo + S + perfil) : null };
           if (emite) emite(linha); else out.push(linha);
         }
       }
