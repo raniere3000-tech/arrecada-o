@@ -2955,9 +2955,12 @@
     const main = document.querySelector("main"), area = $("area"), fundo = document.body.classList.contains("bi") ? "#ffffff" : "#f3f6f9";
     // testa larguras da página: fica a que, encaixada no slide, deixa o conteúdo maior, sem nenhuma tabela passando do seu
     // quadro (tabela mais larga que o cartão desalinha os cartões no print)
-    // Subcategoria, Perfil e Cidades: clientes e contas lado a lado (print-2col), para ocupar a largura do slide
+    // Subcategoria, Perfil e Cidades: o print leva só as tabelas (sem título, dias úteis e legenda: print-conteudo) e testa
+    // as tabelas empilhadas e clientes e contas lado a lado (print-2col); fica o arranjo de letra maior
     let melhor = null, melhorEstoura = null;
-    const arranjos = ["subcategoria", "perfil", "cidades"].includes(aba) ? [true] : [false];
+    const soTabelas = ["subcategoria", "perfil", "cidades"].includes(aba);
+    document.body.classList.toggle("print-conteudo", soTabelas);
+    const arranjos = soTabelas ? [false, true] : [false];
     for (const col2 of arranjos) for (let L = 1100; L <= 3200; L += 100) {
       document.body.classList.toggle("print-2col", col2);
       main.style.width = L + "px"; await quadro();
@@ -2985,7 +2988,7 @@
     btn.disabled = true; btn.textContent = "Gerando…";
     document.body.classList.add("gerando-pdf", "gerando-print");
     try { return await fn(); } finally {
-      document.body.classList.remove("gerando-pdf", "gerando-print", "print-2col"); main.style.width = "";
+      document.body.classList.remove("gerando-pdf", "gerando-print", "print-2col", "print-conteudo"); main.style.width = "";
       mostraAba(abaAntes); btn.disabled = false; btn.textContent = "🖼 Prints ▾";
     }
   }

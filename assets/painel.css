@@ -612,3 +612,6 @@ body.print-2col section.painel-aba[data-painel="perfil"] > .card:nth-child(2),
 body.print-2col section.painel-aba[data-painel="perfil"] > .legenda { grid-column: 1 / -1; }
 /* nos prints, o nome da linha não quebra no meio da palavra ("COMERCIA L") */
 body.gerando-print td.rot, body.gerando-print td.txt { overflow-wrap: normal; word-break: normal; }
+/* prints de Subcategoria, Perfil e Cidades: só as tabelas, para a letra sair maior no slide */
+body.print-conteudo .cabecalho-pdf, body.print-conteudo #diasCard, body.print-conteudo .painel-aba .legenda { display: none !important; }
+body.print-conteudo .painel-aba:not([hidden]) > .card:first-of-type { margin-top: 0; }
