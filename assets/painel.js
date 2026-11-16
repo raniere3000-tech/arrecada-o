@@ -2953,13 +2953,21 @@
   async function fotoDaAba(aba) {
     mostraAba(aba);
     const main = document.querySelector("main"), area = $("area"), fundo = document.body.classList.contains("bi") ? "#ffffff" : "#f3f6f9";
-    // testa larguras da página: fica a que, encaixada no slide, deixa o conteúdo maior
-    let melhor = null;
-    for (let L = 1100; L <= 2600; L += 100) {
+    // testa larguras da página: fica a que, encaixada no slide, deixa o conteúdo maior, sem nenhuma tabela passando do seu
+    // quadro (tabela mais larga que o cartão desalinha os cartões no print)
+    // Subcategoria, Perfil e Cidades: clientes e contas lado a lado (print-2col), para ocupar a largura do slide
+    let melhor = null, melhorEstoura = null;
+    const arranjos = ["subcategoria", "perfil", "cidades"].includes(aba) ? [true] : [false];
+    for (const col2 of arranjos) for (let L = 1100; L <= 3200; L += 100) {
+      document.body.classList.toggle("print-2col", col2);
       main.style.width = L + "px"; await quadro();
       const nota = Math.min(1 / area.scrollWidth, (SLIDE_H / SLIDE_W) / area.scrollHeight);
-      if (!melhor || nota > melhor.nota) melhor = { L, nota };
+      const estoura = [...area.querySelectorAll(".painel-aba:not([hidden]) .card table")].some((t) => { const c = t.closest(".card"); return c && t.getBoundingClientRect().right > c.getBoundingClientRect().right + 1; });
+      if (estoura) { if (!melhorEstoura || nota > melhorEstoura.nota) melhorEstoura = { L, nota, col2 }; continue; }
+      if (!melhor || nota > melhor.nota) melhor = { L, nota, col2 };
     }
+    melhor = melhor || melhorEstoura;
+    document.body.classList.toggle("print-2col", melhor.col2);
     main.style.width = melhor.L + "px"; await quadro(); await quadro();
     const w = area.scrollWidth, h = area.scrollHeight;
     const util = 1 - 2 * SLIDE_MARGEM, k = Math.min((SLIDE_W * util) / w, (SLIDE_H * util) / h);
@@ -2975,9 +2983,9 @@
     const abaAntes = E.aba, main = document.querySelector("main"), btn = $("btnPrint");
     if (!window.html2canvas) throw new Error("as bibliotecas de imagem ainda estão carregando; tente de novo");
     btn.disabled = true; btn.textContent = "Gerando…";
-    document.body.classList.add("gerando-pdf");
+    document.body.classList.add("gerando-pdf", "gerando-print");
     try { return await fn(); } finally {
-      document.body.classList.remove("gerando-pdf"); main.style.width = "";
+      document.body.classList.remove("gerando-pdf", "gerando-print", "print-2col"); main.style.width = "";
       mostraAba(abaAntes); btn.disabled = false; btn.textContent = "🖼 Prints ▾";
     }
   }

@@ -600,3 +600,15 @@ td.rot, td.txt { white-space: normal; overflow-wrap: anywhere; }
 #dgTab tr.grupo:not(.dg-sub) td.rot { font-weight: 600; }
 #dgTab tr.dg-sub.grupo td.rot { font-weight: 600; }
 #dgTab tr.dg-sub:not(.grupo) td.rot { font-weight: 600; }
+
+/* Prints (slide 16:9): Subcategoria, Perfil e Cidades com o valor arrecadado em cima e clientes e contas lado a lado,
+   para a aba ocupar a largura do slide em vez de ficar alta e estreita */
+body.print-2col section.painel-aba[data-painel="subcategoria"]:not([hidden]),
+body.print-2col section.painel-aba[data-painel="perfil"]:not([hidden]),
+body.print-2col section.painel-aba[data-painel="cidades"]:not([hidden]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; align-items: start; }
+body.print-2col section.painel-aba[data-painel="subcategoria"] > .card:first-child,
+body.print-2col section.painel-aba[data-painel="cidades"] > .card:first-child,
+body.print-2col section.painel-aba[data-painel="perfil"] > .card:nth-child(2),
+body.print-2col section.painel-aba[data-painel="perfil"] > .legenda { grid-column: 1 / -1; }
+/* nos prints, o nome da linha não quebra no meio da palavra ("COMERCIA L") */
+body.gerando-print td.rot, body.gerando-print td.txt { overflow-wrap: normal; word-break: normal; }
