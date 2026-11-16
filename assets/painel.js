@@ -323,6 +323,8 @@
       else if (m.tipo === "oportunidades") recebeOportunidades(m);
       else if (m.tipo === "negociacao") recebeNegociacao(m);
       else if (m.tipo === "bimatriculas") recebeBIMatriculas(m);
+      else if (m.tipo === "conferir") recebeConferir(m);
+      else if (m.tipo === "conferir-progresso") $("confStatus").textContent = m.texto + "…";
       else if (m.tipo === "comparativo") recebeComparativo(m);
       else if (m.tipo === "extracao-progresso") { if (m.id === idBase) $("baseStatus").textContent = `${m.texto}… ${m.pct}%`; }
       else if (m.tipo === "extracao") recebeBase(m);
@@ -1368,7 +1370,7 @@
     const a = document.createElement("a");
     a.href = URL.createObjectURL(texto instanceof Blob ? texto : new Blob([texto], { type: "text/csv;charset=utf-8" }));
     a.download = nome;
-    a.click();
+    document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);   // arquivos grandes: tempo para o download começar
   }
 
@@ -2558,6 +2560,54 @@
   }
   $("biBaixar").addEventListener("click", () => (biPorMat() ? baixaBIMatriculas() : baixaTabelaBI()));
 
+  // ----- Conferir matrícula na leitura: o worker procura as matrículas em todos os CSV/TXT da pasta -----
+  let idConf = 0;
+  function buscaConferir() {
+    const ligs = ligsDoTexto($("confLigs").value);
+    if (!ligs.length) { toast("Digite pelo menos uma matrícula.", true); return; }
+    if (!worker || !E.res) return;
+    $("confBuscar").disabled = true; $("confResultado").innerHTML = ""; $("confStatus").textContent = "Procurando nos arquivos…";
+    worker.postMessage({ tipo: "conferir", id: ++idConf, ligs, sups: E.sups, cidades: E.cidades, grupos: E.grupos, meses: E.meses, sel: selCalc() });
+  }
+  $("confBuscar").addEventListener("click", buscaConferir);
+  function recebeConferir(m) {
+    if (m.id !== idConf) return;
+    $("confBuscar").disabled = false;
+    if (m.erro) { $("confStatus").textContent = "Erro: " + m.erro; return; }
+    const L = m.linhas, nTela = L.filter((x) => x.contada).length;
+    $("confStatus").textContent = `${fmt(L.length)} linha(s) em ${fmt(new Set(L.map((x) => x.arquivo)).size)} de ${fmt(m.arquivos)} arquivo(s) CSV/TXT · ${fmt(nTela)} contada(s) na tela`;
+    const td = (v, c = "") => `<td${c ? ` class="${c}"` : ""}>${v}</td>`;
+    // resumo: matrícula × mês × arquivo
+    const res = new Map();
+    for (const x of L) {
+      const k = [x.lig, x.mes, x.arquivo].join("\u0001");
+      let r = res.get(k);
+      if (!r) { r = { lig: x.lig, mes: x.mes, arquivo: x.arquivo, n: 0, valor: 0, lida: 0, tela: 0, sit: new Set() }; res.set(k, r); }
+      r.n++; r.valor += x.valor || 0; if (x.lida) r.lida += x.valor || 0; if (x.contada) r.tela += x.valor || 0; r.sit.add(x.situacao);
+    }
+    const rs_ = [...res.values()].sort((a, b) => a.lig.localeCompare(b.lig) || a.mes.localeCompare(b.mes) || a.arquivo.localeCompare(b.arquivo));
+    let h = "";
+    if (m.naoEncontradas.length) h += `<p class="nota"><b>Não encontrada em nenhum CSV/TXT da pasta:</b> ${m.naoEncontradas.map(esc).join(", ")}.`
+      + (m.xlsxIgnorados.length ? ` O painel só lê arrecadação em CSV; planilhas Excel não usadas na pasta: ${m.xlsxIgnorados.slice(0, 8).map(esc).join(", ")}${m.xlsxIgnorados.length > 8 ? "…" : ""}.` : "") + "</p>";
+    if (rs_.length) h += `<h3>Por matrícula, mês e arquivo</h3><div class="wrap"><table class="compacta"><thead><tr><th>Matrícula</th><th>Mês (Data Crédito)</th><th>Arquivo</th><th>Linhas</th><th>Valor no arquivo</th><th>Lido pelo painel</th><th>Contado na tela</th><th>Situação</th></tr></thead><tbody>`
+      + rs_.map((r) => `<tr>${td(esc(r.lig), "rot")}${td(r.mes ? C.rotuloMes(r.mes) : "sem data", "rot")}${td(esc(r.arquivo), "txt")}${td(fmt(r.n))}${td(fmt(r.valor, 2))}${td(fmt(r.lida, 2))}${td(fmt(r.tela, 2))}${td(esc([...r.sit].join(" · ")), "txt")}</tr>`).join("")
+      + "</tbody></table></div>";
+    if (L.length) {
+      const mostra = L.slice(0, 300);
+      h += `<h3>Linha a linha${L.length > 300 ? ` (300 de ${fmt(L.length)}; todas no CSV)` : ""}</h3><div class="base-acoes"><button type="button" class="btn sec" id="confCsv">⬇ Baixar todas as linhas (CSV)</button></div>`
+        + `<div class="wrap"><table class="compacta"><thead><tr><th>Matrícula</th><th>Arquivo</th><th>Data Crédito</th><th>Data Pagto.</th><th>Valor</th><th>Tipo Fatura</th><th>Cidade</th><th>Superintendência</th><th>Subcategoria</th><th>Dia útil</th><th>Situação</th></tr></thead><tbody>`
+        + mostra.map((x) => `<tr>${td(esc(x.lig), "rot")}${td(esc(x.arquivo), "txt")}${td(x.credito ? dataBR(x.credito) : "—", "rot")}${td(esc(x.pagto), "rot")}${td(x.valor == null ? "—" : fmt(x.valor, 2))}${td(esc(x.tipo), "rot")}${td(esc(x.cidade), "rot")}${td(esc(nomeSup(x.sup)), "rot")}${td(esc(x.grupo), "rot")}${td(x.dia == null ? "—" : x.dia || "fds/feriado")}${td(esc(x.situacao), "txt")}</tr>`).join("")
+        + "</tbody></table></div>";
+    }
+    $("confResultado").innerHTML = h;
+    if ($("confCsv")) $("confCsv").onclick = () => {
+      const c = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " ");
+      const cab = ["Matrícula", "Arquivo", "Data Crédito", "Mês", "Data Pagto.", "Vencimento", "Valor", "Tipo Fatura", "Zona", "Utilização", "Cidade", "Superintendência", "Subcategoria", "Dia útil", "Contada na tela", "Situação"];
+      const linhas = L.map((x) => [x.lig, x.arquivo, x.credito ? dataBR(x.credito) : "", x.mes, x.pagto, x.venc, x.valor == null ? "" : fmt(x.valor, 2).replace(/\./g, ""), x.tipo, x.zona, x.util, x.cidade, nomeSup(x.sup), x.grupo, x.dia == null ? "" : x.dia, x.contada ? "Sim" : "Não", x.situacao].map(c).join(";"));
+      baixa(new Blob(["﻿" + cab.join(";") + "\r\n" + linhas.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" }), "Conferencia_matriculas.csv");
+    };
+  }
+
   // ===== One page: acompanhamento da arrecadação numa folha vertical (mesmo modelo do painel de faturamento água e esgoto;
   // lê bem no celular; PDF de uma página). Segue os filtros do cabeçalho e os dias úteis marcados (com o fechamento do mês).
   // Arrecadação = Val. Autenticado com o desconto comercial (como no Resumo); por dia útil, sem o desconto (o total o desconta).
@@ -3008,11 +3058,6 @@
     }
   }
   const pngDe = (cv) => new Promise((ok) => cv.toBlob(ok, "image/png"));
-  function baixa(blob, nome) {
-    const url = URL.createObjectURL(blob), a = document.createElement("a");
-    a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  }
   async function prints(tipo) {
     const nomeParte = (aba, cv) => nomePrint(aba) + (cv.titulo ? "_" + cv.titulo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "_") : "");
     if (PARTES_PRINT[tipo]) {                           // várias imagens: baixa todas (a área de transferência guarda uma só)

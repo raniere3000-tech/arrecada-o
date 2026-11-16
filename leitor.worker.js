@@ -17,6 +17,7 @@ let combosFat = null;                                  // combinações (cidade,
 // contas a receber: duas bases possíveis na pasta, a total e a só de notas fiscais ("NFC" no nome do arquivo);
 // cada uma é um Map matrícula → resumo. As consultas dizem qual usar (recTipo: "nfc" ou "total").
 let receberBases = { total: null, nfc: null };
+let arquivosPasta = [];                                // todos os arquivos da pasta, com o motivo dos ignorados (conferência de matrícula)
 let cadastroSup = null;                                // Map ligação → superintendência do cadastro (null = sem cadastro na pasta)
 const recBase = (tipo) => receberBases[tipo] || null;
 
@@ -25,6 +26,7 @@ self.onmessage = async (ev) => {
   if (ev.data.tipo === "clientes") { responde("clientes", ev.data.id, () => respondeClientes(ev.data)); return; }
   if (ev.data.tipo === "matricula") { responde("matricula", ev.data.id, () => respondeMatricula(ev.data)); return; }
   if (ev.data.tipo === "comparativo") { responde("comparativo", ev.data.id, () => respondeComparativo(ev.data)); return; }
+  if (ev.data.tipo === "conferir") { responde("conferir", ev.data.id, () => conferirMatriculas(ev.data)); return; }
   if (ev.data.tipo === "bimatriculas") { responde("bimatriculas", ev.data.id, () => respondeBIMatriculas(ev.data)); return; }
   if (ev.data.tipo === "negociacao") { responde("negociacao", ev.data.id, () => respondeNegociacao(ev.data)); return; }
   if (ev.data.tipo === "oportunidades") { responde("oportunidades", ev.data.id, () => respondeOportunidades(ev.data)); return; }
@@ -571,12 +573,25 @@ async function processa(itens) {
   // O arquivo diário é o mais novo: os meses que ele traz não são lidos dos arquivos acumulados DA MESMA BASE (a base de cada
   // arquivo é a superintendência, pela cidade, com mais valor nele: Interior/Lagos ou Leste). Assim o diário do Interior não
   // tira do painel o acumulado da Leste do mesmo mês, e vice-versa.
+  // O mês do diário só vale quando ele tem pelo menos tantas linhas desse mês quanto os acumulados da mesma base: um diário
+  // de outubro com umas poucas linhas creditadas em 30/09 não pode tirar do painel o acumulado de setembro inteiro.
   const mesesDiaria = new Set(), diariaDaBase = new Set();       // "SUP|mês"
+  const contaLinhas = (lista) => {
+    const n = new Map();
+    for (const a of lista) {
+      if (!exportados.has(a)) continue;
+      const exp = exportados.get(a), b = C.supPrincipal(exp);
+      for (const [m, X] of Object.entries(exp.meses)) n.set(b + "|" + m, (n.get(b + "|" + m) || 0) + X.linhas);
+    }
+    return n;
+  };
+  const nAcum = contaLinhas(acumuladas), nDiaria = contaLinhas(diarias);
   for (const a of diarias) {
     if (!exportados.has(a)) continue;
-    const exp = exportados.get(a), base = C.supPrincipal(exp), r = agregador.junta(exp);
+    const exp = exportados.get(a), base = C.supPrincipal(exp);
+    const r = agregador.junta(exp, (m) => (nDiaria.get(base + "|" + m) || 0) >= (nAcum.get(base + "|" + m) || 0));
     r.meses.forEach((m) => { mesesDiaria.add(m); diariaDaBase.add(base + "|" + m); });
-    Object.assign(a, { registros: r.linhas, meses: r.meses, base });
+    Object.assign(a, { registros: r.linhas, meses: r.meses, puladas: r.puladas, base });
   }
   for (const a of acumuladas) {
     if (!exportados.has(a)) continue;
@@ -586,6 +601,7 @@ async function processa(itens) {
   }
   // arquivos de cada mês, para a extração da base (aba Base): o mês do arquivo diário sai só dele
   fontes = { diarias: diarias.filter((a) => a.meses), acumuladas: acumuladas.filter((a) => a.meses), mesesDiaria };
+  arquivosPasta = arquivos;
   avisa("progresso", { pct: 99, texto: "Montando as tabelas…" });
   const dados = agregador.resultado(descontos);
   // cruzamento com o faturamento (só somas pequenas vão para a página)
@@ -659,6 +675,63 @@ async function extraiBase({ id, ligs, meses, porMesArquivo }) {
   });
   const naoEncontradas = quer ? [...quer].filter((l) => !achadas.has(l)) : [];
   avisa("extracao", { id, saida, linhas, porMes, naoEncontradas, arquivos: arquivos.length, completa: !quer });
+}
+// Conferência de matrícula (aba Dados): procura as matrículas em TODOS os CSV/TXT da pasta (inclusive os que o painel não
+// usa) e diz, linha a linha, em que arquivo e mês está, o valor e se o painel contou — e, se não, por quê.
+async function conferirMatriculas({ ligs, sups, cidades, grupos, meses, sel }) {
+  const quer = new Set(ligs.map(C.ligacao)), passa = (l, v) => !l || !l.length || l.includes(v), zonas = new Map();
+  const supDe = (zona, lig) => {
+    let z = zonas.get(zona);
+    if (!z) { z = C.zonaInfo(zona); zonas.set(zona, z); }
+    const [cidade, supZona] = z;
+    if (!cadastroSup || R.SUPS_PELA_CIDADE.includes(supZona)) return [cidade, supZona];
+    const s = cadastroSup.get(C.ligacao(lig));
+    return [cidade, !s ? R.SEM_SUP : R.SUPS_PELA_CIDADE.includes(s) ? supZona : s];
+  };
+  const linhas = [], porLig = new Map(), csvs = arquivosPasta.filter((a) => ["csv", "txt"].includes(ext(a.file.name)));
+  let lidosArq = 0;
+  for (const a of csvs) {
+    lidosArq++;
+    const usado = a.tipo === "diaria" || a.tipo === "acumulada";
+    let idx = null, vistas = 0;
+    await linhasDoArquivo(a.file, (linha) => {
+      const p = linha.split(";");
+      if (!idx) {
+        if (++vistas > 30) return;
+        const ch = p.map(C.chave);
+        if (ch.includes("NLIGACAO")) idx = { lig: ch.indexOf("NLIGACAO"), cred: ch.indexOf("DATACREDITO"), pag: ch.indexOf("DATAPAGTO"), val: ch.indexOf("VALAUTENTICADO"),
+          pago: ch.indexOf("VALORPAGO"), util: ch.indexOf("UTILIZACAOSUBCATEG"), zona: ch.indexOf("ZONALOCALIDADE"), tipo: ch.indexOf("TIPOFATURA"), venc: ch.indexOf("VENCIMENTO") };
+        return;
+      }
+      const lig = C.ligacao(p[idx.lig]);
+      if (!quer.has(lig)) return;
+      const g = (j) => (j >= 0 ? String(p[j] || "").trim() : "");
+      const cred = C.dataISO(g(idx.cred)), v = C.numeroBR(g(idx.val) || g(idx.pago)), zona = g(idx.zona), util = g(idx.util);
+      const [cidade, sup] = supDe(zona, lig), grupo = util ? C.subInfo(util)[0] : R.SEM_CLASSIFICACAO, mes = cred ? cred.slice(0, 7) : "";
+      const dia = cred ? C.calendario(mes).ordem[cred] : null;
+      let situacao, contada = false;
+      if (!usado) situacao = "Arquivo não usado pelo painel: " + (a.motivo || a.tipo);
+      else if (!cred) situacao = "Sem Data Crédito: a linha é descartada";
+      else if (!isFinite(v)) situacao = "Val. Autenticado sem número: a linha é descartada";
+      else if (!(a.meses || []).includes(mes)) situacao = `O mês ${C.rotuloMes(mes)} deste arquivo não entra: vem de outro arquivo da mesma base (diário × acumulado)`;
+      else {
+        const fora = [];
+        if (!passa(sups, sup)) fora.push(`Superintendência ${sup}`);
+        if (!passa(cidades, cidade)) fora.push(`Cidade ${cidade}`);
+        if (!passa(grupos, grupo)) fora.push(`Subcategoria ${grupo}`);
+        if (fora.length) situacao = "Lida, mas fora dos filtros do cabeçalho: " + fora.join(", ");
+        else if (meses && meses.length && !meses.includes(mes)) situacao = `Lida; ${C.rotuloMes(mes)} não está marcado no filtro Mês`;
+        else if (!(sel & (1 << dia))) situacao = `Lida; crédito ${dia ? "no dia útil " + dia : "em fim de semana ou feriado"}, fora dos dias úteis marcados`;
+        else { situacao = "Contada na tela"; contada = true; }
+      }
+      linhas.push({ lig: g(idx.lig), arquivo: a.rel, usado, credito: cred, mes, pagto: g(idx.pag), venc: g(idx.venc), valor: isFinite(v) ? v : null,
+        tipo: g(idx.tipo), zona, util, cidade, sup, grupo, dia, situacao, contada, lida: usado && !!cred && isFinite(v) && (a.meses || []).includes(mes) });
+      porLig.set(lig, (porLig.get(lig) || 0) + 1);
+    }, () => avisa("conferir-progresso", { texto: `Procurando em ${a.rel} (${lidosArq} de ${csvs.length})` }));
+  }
+  const naoEncontradas = [...quer].filter((l) => !porLig.has(l));
+  const xlsx = arquivosPasta.filter((a) => !["csv", "txt"].includes(ext(a.file.name)) && a.tipo === "ignorado").map((a) => a.rel);
+  return { linhas, naoEncontradas, arquivos: csvs.length, xlsxIgnorados: xlsx };
 }
 // Relatório mensal (botão "Mensal"): o mês escolhido, dia a dia do calendário (fins de semana e feriados também), lido de
 // novo dos CSVs (o painel guarda os fins de semana juntos no dia útil 0). Por dia: Val. Autenticado (sem o desconto
