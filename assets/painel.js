@@ -2828,8 +2828,8 @@
         return `<div class="op-top-lin" title="${esc(dica.replace(/\n/g, " · "))}"><span class="op-top-nome">${i + 1}. ${esc(x.nome || "Matrícula " + x.lig)}</span>`
           + `<b>R$ ${fmt(x.atual / 1e3, 2)} Mil</b></div>`;
       }).join("") : '<p class="op-vazio">Sem pagantes.</p>') + "</div>";
-    const pr = E.prints.inadimplentes, mAntTit = `${opMesLongo(D.ant)}/${D.ant.slice(2, 4)}`.toUpperCase();
-    const ina = `<div class="op-top op-top-neg"><div class="op-top-tit">Maiores inadimplentes – ${mAntTit}</div>`
+    const pr = E.prints.inadimplentes;                 // o print do BI é do mês do One Page (vencimentos do mês)
+    const ina = `<div class="op-top op-top-neg"><div class="op-top-tit">Maiores inadimplentes – ${mesTit}</div>`
       + (pr ? `<div class="op-print-caixa">${opImagens(pr, "Maiores inadimplentes (print do BI)")}</div>`
         : '<p class="op-vazio">Vem do BI: coloque o print na pasta <i>One Page</i> (imagem ou Excel com o nome “Inadimplentes”).</p>') + "</div>";
     return `<div class="op-tops">${pag}${ina}</div>`;
