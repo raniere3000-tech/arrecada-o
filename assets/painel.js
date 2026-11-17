@@ -2727,6 +2727,9 @@
       if (oA != null) orcAntAte = oA * C.diasDaMascara(sel).filter((k) => k <= uA).reduce((a, k) => a + (pA[k] || 0), 0);
     }
     let tot_ = tot, s_ = s, ult = d.ultimoCredito[E.mes], N = ultimoDiaComDados(E.mes), doPrint = false;
+    // "realizado até": o último dia útil marcado com dados (o último crédito da pasta pode ser uma data adiante, ex.: 30/11)
+    const kUlt = Math.max(0, ...dias.filter((k) => k > 0 && k <= N));
+    if (kUlt && cal.dataDoDia[kUlt]) ult = cal.dataDoDia[kUlt];
     const pv = opPrevia();
     if (E.opFonte === "prints" && pv) {
       // só os prints: o mês atual vem da prévia (realizado por dia e acumulados); mês anterior, orçado e curva continuam do painel
@@ -2891,26 +2894,19 @@
   }
   const opImagens = (lista, alt) => lista.map((p) => `<img class="op-print" src="${p.url}" alt="${esc(alt)}" title="${esc(p.origem)}">`).join("");
 
-  // ---- Top 5: maiores pagantes do mês (o worker calcula) e maiores inadimplentes (print do BI) ----
-  function opBlocoTop(D) {
-    const combos = E.res.dados.combos, mesTit = `${opMesLongo(E.mes)}/${E.mes.slice(2, 4)}`.toUpperCase();
-    const bi = opBI(), biPag = E.opFonte === "prints" && bi && bi.pagantes.length;
-    const itens = biPag ? null : opTop ? opTop.maiores.slice(0, 5) : null;
-    const pag = biPag ? `<div class="op-top op-top-pos"><div class="op-top-tit">Maiores pagantes – ${mesTit}</div>`
-      + bi.pagantes.slice(0, 5).map((x, i) => `<div class="op-top-lin" title="${esc(`Matrícula ${x.lig} · do print do BI`)}"><span class="op-top-nome">${i + 1}. ${esc(x.nome || "Matrícula " + x.lig)}</span>`
-        + `<b>${x.valor == null ? "–" : `R$ ${fmt(x.valor / 1e3, 2)} Mil`}</b></div>`).join("") + "</div>" : `<div class="op-top op-top-pos"><div class="op-top-tit">Maiores pagantes – ${mesTit}</div>`
-      + (itens == null ? '<p class="op-vazio">Calculando…</p>' : itens.length ? itens.map((x, i) => {
-        const c = combos[x.c] || {}, dica = linhaDica(x.nome || `Matrícula ${x.lig}`, `Matrícula: ${x.lig}`, `${opMes(E.mes)}: ${rs(x.atual)}`, `${opMes(D.ant)}: ${rs(x.anterior)}`,
-          `Cidade: ${c.cidade || "—"}`, `Subcategoria: ${c.grupo || "—"}`, "Nos dias úteis marcados, com o desconto comercial");
-        return `<div class="op-top-lin" title="${esc(dica.replace(/\n/g, " · "))}"><span class="op-top-nome">${i + 1}. ${esc(x.nome || "Matrícula " + x.lig)}</span>`
-          + `<b>R$ ${fmt(x.atual / 1e3, 2)} Mil</b></div>`;
-      }).join("") : '<p class="op-vazio">Sem pagantes.</p>') + "</div>";
-    const pr = E.prints.inadimplentes;                 // o print do BI é do mês do One Page (vencimentos do mês)
+  // ---- Top 5: maiores pagantes e maiores inadimplentes do mês — sempre do print do BI, nos dois modelos (pedido do usuário) ----
+  function opBlocoTop() {
+    const mesTit = `${opMesLongo(E.mes)}/${E.mes.slice(2, 4)}`.toUpperCase(), bi = opBI(), o = E.ocr.bi;
+    const aviso = !E.prints.bi ? 'Vem do BI: coloque o print na pasta <i>One Page</i> com “BI” no nome (ex.: BI.png).'
+      : !o || o.estado === "lendo" ? "Lendo o print do BI…" : o.estado === "erro" ? `Não consegui ler o print do BI (${esc(o.erro)}).` : "Nada lido no print do BI.";
+    const lista = (l) => l.slice(0, 5).map((x, i) => `<div class="op-top-lin" title="${esc(`Matrícula ${x.lig}${x.venc ? " · vencimento " + dataBR(x.venc) : ""} · do print do BI`)}">`
+      + `<span class="op-top-nome">${i + 1}. ${esc(x.nome || "Matrícula " + x.lig)}</span><b>${x.valor == null ? "–" : `R$ ${fmt(x.valor / 1e3, 2)} Mil`}</b></div>`).join("");
+    const pag = `<div class="op-top op-top-pos"><div class="op-top-tit">Maiores pagantes – ${mesTit}</div>`
+      + (bi && bi.pagantes.length ? lista(bi.pagantes) : `<p class="op-vazio">${aviso}</p>`) + "</div>";
+    const pr = E.prints.inadimplentes;                 // print antigo "Inadimplentes" (só a imagem), quando não há o do BI
     const ina = `<div class="op-top op-top-neg"><div class="op-top-tit">Maiores inadimplentes – ${mesTit}</div>`
-      + (bi && bi.naoPagou.length ? bi.naoPagou.slice(0, 5).map((x, i) => `<div class="op-top-lin" title="${esc(`Matrícula ${x.lig}${x.venc ? " · vencimento " + dataBR(x.venc) : ""} · do print do BI`)}"><span class="op-top-nome">${i + 1}. ${esc(x.nome || "Matrícula " + x.lig)}</span>`
-        + `<b>${x.valor == null ? "–" : `R$ ${fmt(x.valor / 1e3, 2)} Mil`}</b></div>`).join("")
-      : pr ? `<div class="op-print-caixa">${opImagens(pr, "Maiores inadimplentes (print do BI)")}</div>`
-        : '<p class="op-vazio">Vem do BI: coloque o print na pasta <i>One Page</i> (imagem ou Excel com o nome “Inadimplentes”).</p>') + "</div>";
+      + (bi && bi.naoPagou.length ? lista(bi.naoPagou)
+        : pr && !E.prints.bi ? `<div class="op-print-caixa">${opImagens(pr, "Maiores inadimplentes (print do BI)")}</div>` : `<p class="op-vazio">${aviso}</p>`) + "</div>";
     return `<div class="op-tops">${pag}${ina}</div>`;
   }
 
@@ -2919,7 +2915,7 @@
   }
   function desenhaOnePage() {
     const D = opDados(), filtro = filtroTexto(" · ", "Todas as superintendências");
-    const dataCab = D.ult ? dataBR(D.ult).slice(0, 6) + D.ult.slice(2, 4) : opMes(E.mes);
+    const hoje = new Date(), dataCab = `${String(hoje.getDate()).padStart(2, "0")}/${String(hoje.getMonth() + 1).padStart(2, "0")}/${String(hoje.getFullYear()).slice(2)}`;   // título: sempre a data de hoje
     const dest = opBlocoDestaque(D), S = opSemanas(D), temOrc = D.orc.valor != null;
     const fonte = D.orc.fonte === DIGITADO ? "orçado digitado" : D.orc.fonte;
     const faixa = (l, quais) => (l.length ? `${l.length > 1 ? "semanas" : "semana"} ${l.length > 1 ? `${l.slice(0, -1).join(", ")} e ${l[l.length - 1]}` : l[0]} ${quais}` : "");
@@ -2936,7 +2932,7 @@
     h += opSecao("Top 5 pagantes e inadimplentes", "", "op-secao-top") + `<div id="opTopos">${opBlocoTop(D)}</div></section>`;
     h += `<footer class="op-rodape"><span>Fonte: painel de arrecadação · ${esc(filtro)}. Corte: ${D.ult ? dataBR(D.ult).slice(0, 6) + D.ult.slice(2, 4) : "—"} (${D.nUteis} d.úteis).`
       + ` Comparação: ${opMesLongo(D.ant)}/${D.ant.slice(2, 4)} (${D.nUteis} d.úteis)${temOrc ? ` · orçado ${esc(fonte)}` : ""}`
-      + `${D.doPrint ? " · mês atual: prévia da arrecadação (print)" : ""}${opPrevia() || opBI() || E.prints.economias || E.prints.inadimplentes ? " · economias e inadimplentes: prints da pasta One Page" : ""}`
+      + `${D.doPrint ? " · mês atual: prévia da arrecadação (print)" : ""}${opPrevia() || E.prints.economias ? " · economias: prints da pasta One Page" : ""}${opBI() || E.prints.inadimplentes ? " · maiores pagantes e inadimplentes: print do BI" : ""}`
       + ` · gerado em ${new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span><b class="op-marca">Águas do Rio</b></footer>`;
     $("opFolha").innerHTML = h;
     $("opPrints").innerHTML = opStatusPrints();
