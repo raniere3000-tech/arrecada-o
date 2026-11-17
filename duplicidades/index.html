@@ -812,11 +812,40 @@ async function lerAba(file, sst, sh, achaCab, linha){
   }, () => {});
   return h;
 }
+// Formato novo (v1.11, planilha unificada): uma aba com todos os lançamentos (NUM_LOG) e a coluna DECISÃO MANUAL
+// (EXCLUIR / MANTER; em branco = a analisar, fica fora das porcentagens) e FONTE DA DECISÃO. As demais colunas são fórmulas
+// e não são usadas (o painel refaz as premissas sozinho).
+async function lerComparacaoUnificada(file, sst, sh, base, label){
+  progress(label, `Lendo ${sh.name}…`, 0.3, true);
+  const linhas = [], vistos = new Set();
+  const h = await lerAba(file, sst, sh, cols => cols.includes('NUM_LOG') && cols.includes('DECISAO_MANUAL')
+    ? { log: cols.indexOf('NUM_LOG'), mat: cols.indexOf('NUM_LIGACAO'), desc: cols.indexOf('DESCONTO'), dec: cols.indexOf('DECISAO_MANUAL'), fonte: cols.indexOf('FONTE_DA_DECISAO') } : null,
+    (c, h) => {
+      if (vazio(c[h.log])) return;
+      const log = Math.round(toNum(c[h.log]));
+      if (!log || vistos.has(log)) return;
+      vistos.add(log);
+      const dec = norm(c[h.dec]), sit = dec === 'EXCLUIR' ? 1 : dec === 'MANTER' ? 0 : -1, fonte = h.fonte >= 0 ? str(c[h.fonte]) : '';
+      // era duplicidade = estava no Resultado Fechado ou a decisão é Excluir; sem decisão = não se sabe
+      const dup = sit < 0 ? -1 : (/^RESULTADO/.test(norm(fonte)) || sit === 1) ? 1 : 0;
+      linhas.push({ log, mat: h.mat >= 0 ? Math.round(toNum(c[h.mat])) : 0, aba: sh.name, dup, desc: h.desc >= 0 ? toNum(c[h.desc]) : 0, tipo: '', sit,
+        fonte: fonte || (sit < 0 ? 'Sem decisão manual' : 'Decisão manual') });
+    });
+  if (!h) return null;
+  return { ...base, formato: 'unificado', aba: sh.name, abas: [sh.name], linhas, soResultado: 0 };
+}
 async function lerComparacao(file){
   const label = 'Comparação: ' + file.name;
   progress(label, 'Abrindo o arquivo…', 0, true);
   const { sst, sheets } = await abreXlsx(file, label);
   const base = { arquivo: file.name, modificado: file.lastModified, aba: ABA_COMP, abas: ABAS_ANALISE };
+  // formato novo: a aba com DECISÃO MANUAL (de preferência a que tem "Descontos" no nome; nunca a de Resultado)
+  const cand = sheets.filter(x => !/^RESULTADO/.test(norm(x.name))).sort((a, b) => (/DESCONTOS/.test(norm(b.name)) ? 1 : 0) - (/DESCONTOS/.test(norm(a.name)) ? 1 : 0));
+  for (const sh of cand.slice(0, 4)){
+    if (ABAS_ANALISE.includes(String(sh.name).trim())) continue;
+    const u = await lerComparacaoUnificada(file, sst, sh, base, label);
+    if (u) return u;
+  }
   const shR = sheets.find(x => String(x.name).trim() === ABA_COMP), shA = ABAS_ANALISE.map(n => sheets.find(x => String(x.name).trim() === n));
   const faltam = [...ABAS_ANALISE.filter((n, k) => !shA[k]), ...(shR ? [] : [ABA_COMP])];
   if (faltam.length) return { ...base, erro: 'sem a(s) aba(s) ' + faltam.map(n => `“${n}”`).join(', ') };
@@ -882,7 +911,7 @@ self.onmessage = async ev => {
 </script>
 
 <script>
-const VERSAO_SITE = 'v1.10';
+const VERSAO_SITE = 'v1.11';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = VERSAO_SITE;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1547,14 +1576,17 @@ const FONTES_COMP = { NAO_DUP: 'Não era duplicidade (col. W = Não)', MANUAL: '
 function renderComp(){
   const C_ = R.comp, d = B.d;
   $('#btnCompCsv').hidden = true;
-  if (!C_){ $('#compNota').textContent = ''; $('#compCorpo').innerHTML = '<p class="semdados">Coloque a planilha da análise manual na subpasta <b>Duplicidades/Comparação</b> (aba “Resultado Fechado 2026 (2)”, com NUM_LOG e Situação = Manter / Excluir) e clique em ↻ Atualizar.</p>'; return; }
+  if (!C_){ $('#compNota').textContent = ''; $('#compCorpo').innerHTML = '<p class="semdados">Coloque a planilha da análise manual na subpasta <b>Duplicidades/Comparação</b> (aba “2026 - Descontos”, com NUM_LOG e DECISÃO MANUAL = Excluir / Manter) e clique em ↻ Atualizar.</p>'; return; }
   if (C_.erro){ $('#compNota').textContent = ''; $('#compCorpo').innerHTML = `<p class="semdados">${esc(C_.arquivo)}: ${esc(C_.erro)}.</p>`; return; }
   const { linhas, logs } = comparaLinhas(); compAtual = linhas;
   const ok = linhas.filter(r => ['VP', 'VN', 'FP', 'FN'].includes(r.res)), m = metricas(ok);
   const naoEnc = linhas.filter(r => r.res === 'NAO_ENCONTRADO' || r.res === 'FORA'), semDec = linhas.filter(r => r.res === 'SEM_DECISAO');
   $('#btnCompCsv').hidden = false;
   const nSim = C_.linhas.filter(r => r.dup === 1).length, nNao = C_.linhas.filter(r => r.dup === 0).length;
-  $('#compNota').textContent = `Análise manual: ${C_.arquivo}. Universo: ${nf(C_.linhas.length)} lançamentos das abas ${C_.abas.join(' e ')} (col. W “Era duplicidade?”: ${nf(nSim)} Sim, ${nf(nNao)} Não). Não = desconto válido (Manter); Sim = decisão da aba ${C_.aba}. Cruzamento pelo NUM_LOG. Painel = premissas automáticas (níveis 1 a 4): lançamento a mais = Excluir; o resto = Manter. O nível 5 (marcação manual no painel) não entra: o que ele marcar conta como Manter; o cartão “Sobraram para o nível 5” mostra quanto do que ficou para verificação manual (Alerta e A verificar) a análise excluiu. Segue os filtros do topo.`;
+  const nAnal = C_.linhas.filter(r => r.sit < 0).length;
+  $('#compNota').textContent = (C_.formato === 'unificado'
+    ? `Análise manual: ${C_.arquivo}, aba ${C_.aba}: ${nf(C_.linhas.length)} lançamentos; a decisão é a coluna DECISÃO MANUAL (Excluir / Manter; ${nf(nAnal)} em branco, a analisar, ficam fora das porcentagens). Cruzamento pelo NUM_LOG.`
+    : `Análise manual: ${C_.arquivo}. Universo: ${nf(C_.linhas.length)} lançamentos das abas ${C_.abas.join(' e ')} (col. W “Era duplicidade?”: ${nf(nSim)} Sim, ${nf(nNao)} Não). Não = desconto válido (Manter); Sim = decisão da aba ${C_.aba}. Cruzamento pelo NUM_LOG.`) + ` Painel = premissas automáticas (níveis 1 a 4): lançamento a mais = Excluir; o resto = Manter. O nível 5 (marcação manual no painel) não entra: o que ele marcar conta como Manter; o cartão “Sobraram para o nível 5” mostra quanto do que ficou para verificação manual (Alerta e A verificar) a análise excluiu. Segue os filtros do topo.`;
   // âmbito: superintendências e meses da planilha (para os apontados pelo painel que não foram analisados)
   const supsC = new Set(ok.map(r => B.rSup[r.i])), refsC = new Set(ok.map(r => d.ref[r.i]));
   const naoAnal = []; for (let i = 0; i < B.n; i++) if (B.recRep[i] && !logs.has(d.log[i]) && supsC.has(B.rSup[i]) && refsC.has(d.ref[i]) && okRec(i)) naoAnal.push(i);
@@ -1593,9 +1625,9 @@ function renderComp(){
   const div = ok.filter(r => r.res === 'FP' || r.res === 'FN').sort((a, b) => a.mat - b.mat || d.dt[a.i] - d.dt[b.i]);
   h += `<h3 class="comp-h3">Lançamentos em que painel e análise divergem (${nf(div.length)})</h3><div class="tabela-wrap"><table class="res-tab"><thead><tr><th>Resultado</th><th>Matrícula</th><th>Cliente</th><th>Cidade</th><th>Mês ref.</th><th>Data e hora</th><th class="num">NUM_LOG</th><th>Usuário</th><th class="num">Desconto (R$)</th><th class="num">Total (R$)</th><th>Análise</th><th>Painel</th></tr></thead><tbody>`
     + div.map(r => `<tr><td><span class="tag ${r.res === 'FP' ? 'rep' : 'al'}">${r.res === 'FP' ? 'Falso positivo' : 'Falso negativo'}</span></td><td>${r.mat}</td><td>${esc(nomeDe(r.i))}</td><td>${esc(cidDe(r.i))}</td><td>${mesTxt(d.refs[d.ref[r.i]])}</td><td>${dtTxt(d.dt[r.i])}</td><td class="num">${d.log[r.i]}</td><td>${esc(d.usrs[d.usr[r.i]])}</td>`
-      + `<td class="num">${dec2(d.desc[r.i])}</td><td class="num">${dec2(d.tot[r.i])}</td><td>${r.sit ? 'Excluir' : 'Manter'} <span class="mudo">(${r.fonte === 'NAO_DUP' ? 'não era duplicidade' : r.fonte === 'MANUAL' ? 'manual' : 'regra'})</span></td><td>${esc(r.motivo)}</td></tr>`).join('')
+      + `<td class="num">${dec2(d.desc[r.i])}</td><td class="num">${dec2(d.tot[r.i])}</td><td>${r.sit ? 'Excluir' : 'Manter'} <span class="mudo">(${esc(r.fonte === 'NAO_DUP' ? 'não era duplicidade' : r.fonte === 'MANUAL' ? 'manual' : r.fonte === 'REGRA' ? 'regra' : r.fonte)})</span></td><td>${esc(r.motivo)}</td></tr>`).join('')
     + '</tbody></table></div>';
-  if (naoEnc.length || semDec.length || C_.soResultado) h += `<p class="res-nota"><b>Fora da comparação:</b> ${nf(semDec.filter(r => r.fonte === 'SIM_SEM_DECISAO').length)} lançamento(s) com “Sim” na col. W e sem decisão no ${esc(C_.aba)}; ${nf(C_.soResultado || 0)} no ${esc(C_.aba)} e fora das abas de análise; ${nf(naoEnc.filter(r => r.res === 'NAO_ENCONTRADO').length)} lançamento(s) da planilha sem o NUM_LOG no arquivo de descontos; ${nf(naoEnc.filter(r => r.res === 'FORA').length)} fora da análise do painel; ${nf(semDec.length)} sem Situação Manter/Excluir. Estão na base analítica.</p>`;
+  if (naoEnc.length || semDec.length || C_.soResultado) h += `<p class="res-nota"><b>Fora da comparação:</b> ${C_.formato === 'unificado' ? `${nf(semDec.length)} lançamento(s) sem DECISÃO MANUAL (a analisar)` : `${nf(semDec.filter(r => r.fonte === 'SIM_SEM_DECISAO').length)} lançamento(s) com “Sim” na col. W e sem decisão no ${esc(C_.aba)}; ${nf(C_.soResultado || 0)} no ${esc(C_.aba)} e fora das abas de análise`}; ${nf(naoEnc.filter(r => r.res === 'NAO_ENCONTRADO').length)} lançamento(s) da planilha sem o NUM_LOG no arquivo de descontos; ${nf(naoEnc.filter(r => r.res === 'FORA').length)} fora da análise do painel; ${nf(semDec.length)} sem Situação Manter/Excluir. Estão na base analítica.</p>`;
   $('#compCorpo').innerHTML = h;
   $('#btnCompCsv').onclick = () => {
     const hoje = new Date(), dia = `${hoje.getFullYear()}${p2(hoje.getMonth() + 1)}${p2(hoje.getDate())}`;
@@ -1724,7 +1756,7 @@ function renderDados(){
       <tbody><tr><td>${esc(d.arquivo)}</td><td>${esc(d.aba)}</td><td class="num">${nf(d.stats.linhas)}</td><td>${localTxt(d.modificado)}</td></tr>
       ${(d.pulados || []).map(p => `<tr><td>${esc(p.nome)}</td><td colspan="2"><span class="neg">não usado: ${esc(p.motivo)}</span></td><td>${localTxt(p.modificado)}</td></tr>`).join('')}</tbody></table>
     <table class="tab-seg"><thead><tr><th>Cadastro</th><th>Superintendência (como vem no arquivo)</th><th class="num">Matrículas</th><th class="num">Com desconto no arquivo</th><th>Modificado em</th></tr></thead><tbody>${cad}</tbody></table>
-    ${R.comp ? `<p class="nota-secao">Comparação (subpasta Comparação, não é base de descontos): ${esc(R.comp.arquivo)}${R.comp.erro ? ` — <span class="neg">${esc(R.comp.erro)}</span>` : `, abas ${esc((R.comp.abas || []).join(' e '))} (${nf(R.comp.linhas.length)} lançamentos) e ${esc(R.comp.aba)}`}.</p>` : ''}
+    ${R.comp ? `<p class="nota-secao">Comparação (subpasta Comparação, não é base de descontos): ${esc(R.comp.arquivo)}${R.comp.erro ? ` — <span class="neg">${esc(R.comp.erro)}</span>` : R.comp.formato === 'unificado' ? `, aba ${esc(R.comp.aba)} (${nf(R.comp.linhas.length)} lançamentos; decisão na coluna DECISÃO MANUAL)` : `, abas ${esc((R.comp.abas || []).join(' e '))} (${nf(R.comp.linhas.length)} lançamentos) e ${esc(R.comp.aba)}`}.</p>` : ''}
     ${R.meta.outros && R.meta.outros.length ? `<p class="nota-secao">Arquivos fora das subpastas Descontos e Cadastro, ignorados: ${R.meta.outros.map(esc).join(', ')}.</p>` : ''}
     ${d.stats.semData || d.stats.semRef ? `<p class="nota-secao"><span class="neg">${nf(d.stats.semData)} linhas sem data de acesso e ${nf(d.stats.semRef)} sem referência reconhecida.</span></p>` : ''}
 
@@ -1755,7 +1787,7 @@ function renderDados(){
       ${li('<b>Alerta entre meses:</b> mesma matrícula com o mesmo valor de desconto em dois ou mais meses de referência diferentes, entre os lançamentos que não são lançamento a mais dos níveis 1 a 4 (os casos com tudo idêntico já foram para o nível 4). Fica separado e não soma no valor em duplicidade, a não ser que seja marcado como duplicidade (nível 5).')}
       ${li('<b>A verificar:</b> mesma matrícula e mês de referência que, depois de tirar os lançamentos a mais, ainda tem dois ou mais valores de desconto diferentes, com totais diferentes (por exemplo, um desconto aplicado em cada fatura em vez de um só). Não é duplicidade: só se confirma entrando na matrícula. A lista mostra todos os lançamentos do mês; a coluna “Também em duplicidade” indica se algum deles é desconto repetido.')}
       ${li('<b>Nível 5 – verificado manualmente:</b> na aba Duplicidades, cada caso de Alerta entre meses ou A verificar tem os botões <b>Duplicidade</b> e <b>Válido</b> (clicar de novo desfaz). Marcado como duplicidade, o caso vira um desconto repetido de nível 5: o lançamento mais recente do caso é o válido e os demais são lançamentos a mais, menos os que já são lançamento a mais nos níveis 1 a 4 (cada lançamento conta uma vez). O valor entra no valor registrado em duplicidade. Marcado como válido, o caso sai dos pendentes e não soma. As marcações ficam no arquivo ajustes_arrecadacao.json da pasta principal (valem para todos) e são guardadas pela matrícula + desconto (alerta) ou matrícula + mês (a verificar): continuam valendo quando o arquivo de descontos é atualizado.')}
-      ${li('<b>Comparação:</b> a planilha da análise manual fica na subpasta <b>Duplicidades/Comparação</b> e é lida só para a aba Comparação (nunca como base de descontos). O universo são os lançamentos das abas “2026 - Até Julho” e “2026 - Agosto a Outubro”; a coluna W (“Era duplicidade?”) diz se era duplicidade. Não = desconto válido (Manter). Sim = a decisão (Situação = Manter ou Excluir), os valores e as datas vêm da aba “Resultado Fechado 2026 (2)” (Decisão, col. E, preenchida = análise manual; senão, a regra da aba Ago–Out). “Sim” sem linha no Resultado fica fora das porcentagens. O cruzamento é pelo NUM_LOG. Painel: lançamento a mais dos níveis 1 a 4 = Excluir; o resto = Manter (o nível 5 não entra: o que ele marcar conta como Manter). “Sobraram para o nível 5” = lançamentos dos casos de Alerta e A verificar, quanto deles a análise excluiu. Acerto = mesma decisão; cobertura = parte dos Excluir que o painel achou; precisão = parte do que o painel aponta que a análise confirmou; falso positivo = o painel excluiria e a análise manteve; falso negativo = a análise excluiu e o painel não pegou. “Apontados e não analisados” = lançamentos a mais do painel fora da planilha, nas mesmas superintendências e meses. Segue os filtros do topo.')}
+      ${li('<b>Comparação:</b> a planilha da análise manual fica na subpasta <b>Duplicidades/Comparação</b> e é lida só para a aba Comparação (nunca como base de descontos). <b>Formato atual (planilha unificada):</b> a aba com as colunas NUM_LOG e <b>DECISÃO MANUAL</b> (ex.: “2026 - Descontos”); cada linha é um lançamento, Excluir / Manter é a decisão, em branco = a analisar (fica fora das porcentagens); a FONTE DA DECISÃO vira o recorte “Por fonte da decisão”; as colunas de fórmula da planilha não são usadas (o painel refaz as premissas). <b>Formato antigo</b> (ainda aceito, quando não há a coluna DECISÃO MANUAL): o universo são os lançamentos das abas “2026 - Até Julho” e “2026 - Agosto a Outubro”; a coluna W (“Era duplicidade?”) diz se era duplicidade. Não = desconto válido (Manter). Sim = a decisão (Situação = Manter ou Excluir), os valores e as datas vêm da aba “Resultado Fechado 2026 (2)” (Decisão, col. E, preenchida = análise manual; senão, a regra da aba Ago–Out). “Sim” sem linha no Resultado fica fora das porcentagens. O cruzamento é pelo NUM_LOG. Painel: lançamento a mais dos níveis 1 a 4 = Excluir; o resto = Manter (o nível 5 não entra: o que ele marcar conta como Manter). “Sobraram para o nível 5” = lançamentos dos casos de Alerta e A verificar, quanto deles a análise excluiu. Acerto = mesma decisão; cobertura = parte dos Excluir que o painel achou; precisão = parte do que o painel aponta que a análise confirmou; falso positivo = o painel excluiria e a análise manteve; falso negativo = a análise excluiu e o painel não pegou. “Apontados e não analisados” = lançamentos a mais do painel fora da planilha, nas mesmas superintendências e meses. Segue os filtros do topo.')}
       ${li('<b>Resultado:</b> o valor recuperado é o valor registrado em duplicidade dos níveis 1 a 5 (os lançamentos a mais), por superintendência (pela matrícula; a seta de cada uma abre as cidades), por nível e por mês de referência (nos níveis 4 e 5, cada lançamento a mais no seu mês). Com uma superintendência só no filtro, o cartão do valor recuperado leva o nome dela e a tabela passa a ser por cidade. Segue os filtros do topo.')}
       ${li('<b>Filtros:</b> Superintendência, Cidade e Zona valem pela matrícula; a lista de cidades mostra só as das superintendências marcadas. Mês de referência vale pela referência do desconto repetido (no alerta entre meses, o desconto entra se algum dos seus meses estiver marcado). Usuário: o desconto repetido entra se tiver pelo menos um lançamento de um usuário marcado, com todos os seus lançamentos; “Lançamentos com desconto analisados” conta só os lançamentos dos usuários marcados.')}
       ${li('<b>Por usuário:</b> lançamentos a mais e valor em duplicidade ficam com o usuário que fez o lançamento a mais; descontos repetidos e matrículas contam onde o usuário fez algum lançamento do desconto repetido (inclusive o válido). A soma da coluna de descontos repetidos pode passar do total porque um desconto pode ter lançamentos de mais de um usuário.')}
