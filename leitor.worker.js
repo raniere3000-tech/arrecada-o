@@ -801,15 +801,15 @@ async function respondeComparativo({ mis, rotulos, marcas, nomesSup, comFat, com
   const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...ex.cabFat, ...rotulos.map((m) => `Arrecadado ${m}`), ...ex.cabRec].join(";");
   return { linhas: ordem.length, porMes, ...ex.info(), blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
 }
-// Base de oportunidades: pagaram no mês A e não pagaram no mês B (nas combinações marcadas pelos filtros do cabeçalho)
-async function respondeOportunidades({ miA, miB, marcas, comFat, comRec, recTipo }) {
-  const lista = C.pagaramNaoPagaram(analise, miA, miB, marcas), ex = await colunasExtras(comFat, comRec, recTipo);
+// Base de oportunidades: pagaram em pelo menos um dos meses A e deixaram de pagar em pelo menos um dos meses B (nas combinações marcadas pelos filtros do cabeçalho)
+async function respondeOportunidades({ misA, misB, mesesA, mesesB, marcas, comFat, comRec, recTipo }) {
+  const lista = C.pagaramNaoPagaramMeses(analise, misA, misB, marcas), ex = await colunasExtras(comFat, comRec, recTipo);
   for (const x of lista) {
     const e = ex.de(x.lig);
     x.fat = e.fat; x.rec = e.rec;
     x.nome = nomeDe(x.lig); x.lig = ligTxt(x.lig);
   }
-  return { lista, cabFat: ex.cabFat, cabRec: ex.cabRec, ...ex.info() };
+  return { lista, mesesA, mesesB, cabFat: ex.cabFat, cabRec: ex.cabRec, ...ex.info() };
 }
 // Tabela do BI por matrícula (aba Dados): CSV em blocos (pode ter centenas de milhares de linhas)
 function respondeBIMatriculas({ mis, misAnt, meses, marcas, sel, ligs, nomesSup }) {

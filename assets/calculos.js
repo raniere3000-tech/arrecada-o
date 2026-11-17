@@ -870,6 +870,42 @@
   }
   // Base de oportunidades: matrículas (nas combinações marcadas) com pagamento no mês miA e nenhum pagamento no mês miB.
   // Devolve, por matrícula, o valor pago em miA (Val. Autenticado), em quantos dias e a combinação do maior pagamento.
+  // Vários meses: pagaram em PELO MENOS UM dos meses misA e deixaram de pagar em PELO MENOS UM dos meses misB (decisão do
+  // usuário). Por matrícula: valor pago em cada mês de misA (vals), total, dias com pagamento (somados nos meses de misA),
+  // a combinação do maior pagamento e se pagou em cada mês de misB (pagouB). Mês sem dados na pasta (índice < 0) = não pagou.
+  function pagaramNaoPagaramMeses(an, misA, misB, marcas) {
+    const kA = misA.length, kB = misB.length, pagB = misB.map(() => new Set()), porLig = new Map();
+    misB.forEach((mi, j) => {
+      for (const { L, mapa } of (mi >= 0 && an.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
+        const cl = L.k[i] % COMBOS_ARQ;
+        if (!marcas || marcas[mapa[cl]]) pagB[j].add((L.k[i] - cl) / COMBOS_ARQ);
+      }
+    });
+    misA.forEach((mi, j) => {
+      for (const { L, mapa } of (mi >= 0 && an.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
+        const cl = L.k[i] % COMBOS_ARQ, c = mapa[cl], l = (L.k[i] - cl) / COMBOS_ARQ;
+        if (marcas && !marcas[c]) continue;
+        let x = porLig.get(l);
+        if (x === null) continue;
+        if (!x) {
+          const pagouB = pagB.map((s) => s.has(l));
+          if (pagouB.every(Boolean)) { porLig.set(l, null); continue; }   // pagou em todos os meses de B: fica de fora
+          x = { lig: l, c, vals: new Array(kA).fill(0), masks: new Array(kA).fill(0), maior: -Infinity, pagouB };
+          porLig.set(l, x);
+        }
+        x.vals[j] += L.v[i]; x.masks[j] |= 1 << L.d[i];
+        if (L.v[i] > x.maior) { x.maior = L.v[i]; x.c = c; }
+      }
+    });
+    const out = [];
+    for (const x of porLig.values()) {
+      if (!x) continue;
+      let dias = 0;
+      for (const m of x.masks) for (let k = 0; k <= MAX_DIA; k++) if (m & (1 << k)) dias++;
+      out.push({ lig: x.lig, c: x.c, vals: x.vals, valor: x.vals.reduce((a, v) => a + v, 0), dias, pagouB: x.pagouB });
+    }
+    return out.sort((a, b) => b.valor - a.valor);
+  }
   function pagaramNaoPagaram(an, miA, miB, marcas) {
     const pagouB = new Set(), porLig = new Map();
     for (const { L, mapa } of an.entradas[miB] || []) for (let i = 0; i < L.k.length; i++) {
@@ -1189,7 +1225,7 @@
     zonaInfo, supPrincipal, subInfo, chaveLig, mascaraAte, diasDaMascara, estendeSel, vencIdx, mesDoVenc, LeituraArquivo, Agregador, buffers, marcaCombos, serieDoMes, porGrupo, totalDoMes,
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
-    clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, valoresPorMes, negociacao, faixaNum, montaReceber, analisaReceber, situacaoPadrao, colunasReceber,
+    clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, pagaramNaoPagaramMeses, valoresPorMes, negociacao, faixaNum, montaReceber, analisaReceber, situacaoPadrao, colunasReceber,
     MASCARA_MES, comparaGrupos, tabelaBI, porMatricula, mesesMesmosUteis, fracaoAteDias, fracaoDiasRestantes, pareto,
   };
 });
