@@ -1143,6 +1143,158 @@
     return { itens: out, total: tot, n80: out.length ? n80 : 0 };
   }
 
+  // ---------- leitura dos prints do One page por OCR ----------
+  // As palavras vêm do Tesseract: { t: texto, x0, y0, x1, y1 } na imagem (qualquer escala). Nada aqui depende do navegador.
+  const OCR_MESES = { jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12 };
+  const ocrCx = (w) => (w.x0 + w.x1) / 2, ocrCy = (w) => (w.y0 + w.y1) / 2;
+  const ocrNorm = (t) => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  // número do print: "1.085.817", "-7.442", "4,391" (vírgula lida no lugar do ponto), "O5" (letra O no lugar do zero),
+  // "o" / "-" sozinhos = 0; "-29,8%" e "R$" não são números da tabela. Devolve null quando não é número.
+  function ocrNumero(t) {
+    let s = String(t || "").trim().replace(/^[–—]/, "-");
+    if (/^[-–—'.]+$/.test(s)) return null;
+    if (/^[oO0]$/.test(s)) return 0;
+    if (/%|R\$|[a-np-zA-NP-Z]/.test(s)) return null;
+    s = s.replace(/[oO]/g, "0").replace(/[^0-9,.\-]/g, "");
+    if (!/\d/.test(s)) return null;
+    const neg = s.startsWith("-"), d = s.replace(/-/g, "");
+    let v;
+    if (/^\d{1,3}([.,]\d{3})+$/.test(d)) v = +d.replace(/[.,]/g, "");             // milhar com ponto (ou vírgula lida errado)
+    else if (/^\d+,\d{1,2}$/.test(d)) v = +d.replace(",", ".");                     // decimal com vírgula
+    else if (/^\d+$/.test(d)) v = +d;
+    else return null;
+    return neg ? -v : v;
+  }
+  // valor em reais do BI: "23.276,31", "4,852,89" (vírgula no lugar do ponto) → 23276.31
+  function ocrReais(t) {
+    const s = String(t || "").replace(/^R\$/, "").replace(/[^0-9,.]/g, "");
+    const m = /^(.*)[.,](\d{2})$/.exec(s);
+    if (!m) return /^\d+$/.test(s) ? +s : null;
+    const inteiro = m[1].replace(/[.,]/g, "");
+    return /^\d+$/.test(inteiro) ? +(inteiro + "." + m[2]) : null;
+  }
+  // Prévia da arrecadação financeira: tabela por dia (Dia, …, Realizado, Repasse, Desconto, Pagantes, Faturas, Economias, …)
+  // e o "Acumulado até dd/mmm". As colunas saem pela posição do cabeçalho (cada número vai para o cabeçalho mais perto) e o dia
+  // de cada linha pela posição vertical (reta ajustada nos dias que o OCR leu: acerta também as linhas sem o dia legível).
+  // ano: o ano do mês (o print só tem dd/mmm). Devolve { mes, ate, dias: {iso: {realizado, desconto, pagantes, faturas,
+  // economias}}, acum: {realizado, pagantes, faturas, economias, desconto}, conferencia: [...] } ou { erro }.
+  function lePrintPrevia(words, ano) {
+    const W = words.filter((w) => w.t && String(w.t).trim());
+    const achaTodos = (re) => W.filter((w) => re.test(ocrNorm(w.t))).sort((a, b) => a.y0 - b.y0);
+    const real = achaTodos(/^realizado$/)[0];
+    if (!real) return { erro: "não achei o cabeçalho da tabela (coluna Realizado)" };
+    const hY = ocrCy(real), alt = real.y1 - real.y0;
+    const cab = W.filter((w) => Math.abs(ocrCy(w) - hY) < alt * 1.2 && /[a-z]/i.test(w.t));
+    const COLS = { realizado: /^realizado$/, desconto: /^desconto$/, pagantes: /^pagantes$/, faturas: /^faturas$/, economias: /^economias$/, repasse: /^repasse$/ };
+    const colunas = cab.map((w) => ({ cx: ocrCx(w), nome: Object.keys(COLS).find((k) => COLS[k].test(ocrNorm(w.t))) || "" }));
+    const falta = ["realizado", "pagantes", "faturas", "economias"].filter((k) => !colunas.some((c) => c.nome === k));
+    if (falta.length) return { erro: "não achei as colunas " + falta.join(", ") };
+    const colDe = (w) => { let b = null, d = Infinity; for (const c of colunas) { const x = Math.abs(ocrCx(w) - c.cx); if (x < d) { d = x; b = c; } } return b.nome; };
+    // início do bloco de acumulados
+    const acums = achaTodos(/^acumulado$/).filter((w) => w.y0 > hY);
+    const yAcum = acums.length ? acums[0].y0 : Infinity, yAcum2 = acums.length > 1 ? acums[1].y0 : Infinity;
+    // dias: "03/nov", "O5/nov"; reta y → dia
+    const pts = [];
+    let mesN = 0;
+    for (const w of W) {
+      const m = /^([0-9oO]{1,2})\/([a-z]{3})$/i.exec(String(w.t).trim());
+      if (!m || ocrCy(w) > yAcum - alt || w.y0 < hY) continue;
+      const dia = +m[1].replace(/[oO]/g, "0"), mm = OCR_MESES[m[2].toLowerCase()];
+      if (!mm || !dia || dia > 31) continue;
+      mesN = mesN || mm;
+      if (mm === mesN) pts.push([ocrCy(w), dia]);
+    }
+    if (pts.length < 3 || !mesN) return { erro: "não achei os dias da tabela (ex.: 03/nov)" };
+    const ajusta = (P) => {
+      const n = P.length, sx = P.reduce((a, p) => a + p[0], 0), sy = P.reduce((a, p) => a + p[1], 0);
+      const sxx = P.reduce((a, p) => a + p[0] * p[0], 0), sxy = P.reduce((a, p) => a + p[0] * p[1], 0);
+      const i = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+      return [i, (sy - i * sx) / n];
+    };
+    let [inc, lin] = ajusta(pts);
+    const bons = pts.filter((p) => Math.abs(inc * p[0] + lin - p[1]) < 0.5);   // tira dia lido errado e refaz a reta
+    if (bons.length >= 3 && bons.length < pts.length) [inc, lin] = ajusta(bons);
+    const mes = `${ano}-${String(mesN).padStart(2, "0")}`, ultimo = new Date(Date.UTC(ano, mesN, 0)).getUTCDate();
+    const dias = {}, iso = (d) => `${mes}-${String(d).padStart(2, "0")}`;
+    for (const w of W) {
+      if (w.y0 <= hY + alt || ocrCy(w) >= yAcum - alt / 2) continue;
+      if (/\//.test(w.t)) continue;
+      const v = ocrNumero(w.t), nome = colDe(w);
+      if (v == null || !nome) continue;
+      const d = Math.round(inc * ocrCy(w) + lin);
+      if (d < 1 || d > ultimo) continue;
+      const o = (dias[iso(d)] = dias[iso(d)] || {});
+      if (o[nome] == null) o[nome] = v;
+    }
+    // acumulado até: a 1ª linha de números de cada coluna dentro do bloco (antes do 2º "Acumulado")
+    const acum = {};
+    let ate = "";
+    if (acums.length) {
+      const pos = W.filter((w) => w.y0 >= yAcum - alt && w.y0 < yAcum2 - alt / 2).sort((a, b) => a.y0 - b.y0);
+      const at = pos.find((w) => /^\d{1,2}\/[a-z]{3}$/i.test(String(w.t).trim().replace(/^[oO]/, "0")));
+      if (at) { const m = /^(\d{1,2})\/([a-z]{3})$/i.exec(String(at.t).trim().replace(/^[oO]/, "0")); if (OCR_MESES[m[2].toLowerCase()] === mesN) ate = iso(+m[1]); }
+      for (const w of pos) {
+        if (/[%/]/.test(w.t)) continue;
+        const v = ocrNumero(w.t), nome = colDe(w);
+        if (v == null || !nome || acum[nome] != null) continue;
+        if (nome === "realizado" && Math.abs(ocrCy(w) - ocrCy(acums[0])) > alt * 1.5) continue;   // a linha do Δ não é o acumulado
+        acum[nome] = v;
+      }
+    }
+    if (!ate) { const ds = Object.keys(dias).filter((k) => dias[k].realizado); ate = ds.sort().pop() || ""; }
+    // confere a soma dos dias com o acumulado
+    const conferencia = [];
+    for (const k of ["realizado", "pagantes", "faturas", "economias"]) {
+      const soma = Object.entries(dias).filter(([dd]) => !ate || dd <= ate).reduce((a, [, o]) => a + (o[k] || 0), 0);
+      if (acum[k] == null) acum[k] = soma;
+      else conferencia.push({ col: k, soma, acum: acum[k], ok: Math.abs(soma - acum[k]) <= Object.keys(dias).length });   // tolera o arredondamento de cada dia
+    }
+    acum.desconto = Object.entries(dias).filter(([dd]) => !ate || dd <= ate).reduce((a, [, o]) => a + (o.desconto || 0), 0);
+    return { mes, ate, dias, acum, conferencia };
+  }
+  // Print do BI: "TOP10 - PAGANTES" (cliente, Fat. Líquido, Faturas PG., Arrecadação f.) e "TOP10 - NÃO PAGOU" (cliente, Fat
+  // Diretas Total, DT. VENC.). Cada linha começa pela matrícula (9 dígitos); as palavras vão para a matrícula mais perto na
+  // vertical (o OCR às vezes quebra a linha em duas). Valores de Arrecadação em mil ("R$24,77 Mil"); o "R$" às vezes vira
+  // "R$5": como a lista vem do maior para o menor, o 5 a mais é tirado quando quebra a ordem.
+  function lePrintBI(words) {
+    const W = words.filter((w) => w.t && String(w.t).trim());
+    const y = (re) => { const w = W.filter((x) => re.test(ocrNorm(x.t))).sort((a, b) => a.y0 - b.y0)[0]; return w ? ocrCy(w) : null; };
+    const yPag = y(/^pagantes$/), yNao = y(/^pagou$/);
+    if (yPag == null && yNao == null) return { erro: "não achei as tabelas TOP10 - PAGANTES e TOP10 - NÃO PAGOU" };
+    const mats = W.filter((w) => /^1\d{8}$/.test(String(w.t).replace(/[_\W].*$/, ""))).map((w) => ({ w, lig: String(w.t).replace(/[_\W].*$/, ""), cy: ocrCy(w), itens: [] }));
+    if (!mats.length) return { erro: "não achei as matrículas" };
+    const gap = mats.length > 1 ? Math.min(...mats.slice(1).map((m, i) => Math.abs(m.cy - mats[i].cy)).filter((g) => g > 1)) : 30;
+    for (const w of W) {
+      let b = null, d = Infinity;
+      for (const m of mats) { const x = Math.abs(ocrCy(w) - m.cy); if (x < d) { d = x; b = m; } }
+      if (b && d < gap * 0.6 && w !== b.w) b.itens.push(w);
+    }
+    const nomeDe = (m) => [String(m.w.t).replace(/^1\d{8}_?/, ""), ...m.itens.filter((w) => w.x0 > m.w.x0 && !/\d/.test(w.t) && !/^(R\$|Mil|Mi|-|=|\|)$/i.test(w.t)).sort((a, b) => a.x0 - b.x0).map((w) => w.t)]
+      .filter(Boolean).join(" ").replace(/\s+-\s+/g, " - ").replace(/(\s+(M|l+|I|\|))+$/, "").trim();   // "M" / "ll" soltos: resto do "Mil" ou da borda
+    const pagantes = [], naoPagou = [];
+    for (const m of mats.sort((a, b) => a.cy - b.cy)) {
+      const naNao = yNao != null && m.cy > yNao, ord = m.itens.slice().sort((a, b) => a.x0 - b.x0);
+      if (naNao) {
+        const venc = ord.find((w) => /^\d{2}\/\d{2}\/\d{4}$/.test(w.t));
+        const val = ord.filter((w) => w !== venc && /\d[.,]\d{2}$/.test(w.t)).map((w) => ocrReais(w.t)).filter((v) => v != null).pop();
+        naoPagou.push({ lig: m.lig, nome: nomeDe(m), valor: val == null ? null : val, venc: venc ? venc.t.split("/").reverse().join("-") : "" });
+      } else if (yPag != null && m.cy > yPag) {
+        const din = ord.filter((w) => /^R\$\s?\d/.test(w.t) || (/^\d+,\d{2}$/.test(w.t) && ord[ord.indexOf(w) - 1] && /^R\$$/.test(ord[ord.indexOf(w) - 1].t)));
+        const ult = din.pop(), txt = ult ? String(ult.t).replace(/^R\$\s?/, "") : null;
+        pagantes.push({ lig: m.lig, nome: nomeDe(m), valor: txt == null ? null : ocrReais(txt) * 1e3, txt });
+      }
+    }
+    // "R$5" no lugar de "R$": tira o 5 quando o valor quebra a ordem decrescente e sem ele a ordem fica certa
+    for (let i = 0; i < pagantes.length; i++) {
+      const p = pagantes[i], ant = i > 0 ? pagantes[i - 1].valor : Infinity, prox = pagantes.slice(i + 1).map((x) => x.valor).find((v) => v != null);
+      if (p.valor == null || !p.txt || !/^5\d/.test(p.txt)) continue;
+      const sem = ocrReais(p.txt.slice(1)) * 1e3, quebra = p.valor > ant || (i === 0 && prox != null && p.valor > prox * 3);
+      if (quebra && sem <= ant) p.valor = sem;
+    }
+    pagantes.forEach((p) => { delete p.txt; });
+    return { pagantes, naoPagou };
+  }
+
   // Tabela no formato do BI (Cidade × Subcategoria × Mês/ano × Classificação = perfil): arrecadação e clientes pagantes
   // distintos nos dias marcados de cada mês, e os clientes da mesma linha no mês anterior (mesmos dias). Ordem: mês, cidade,
   // subcategoria, perfil. Mês anterior fora da pasta: null.
@@ -1226,6 +1378,7 @@
     descontoPorMes, escada, rankings,
     participacoes, mesesDaCurva, curvaMedia, distribuiCurva,
     clientesOportunidades, historicoMatricula, diasEntre, pagaramNaoPagaram, pagaramNaoPagaramMeses, valoresPorMes, negociacao, faixaNum, montaReceber, analisaReceber, situacaoPadrao, colunasReceber,
+    ocrNumero, ocrReais, lePrintPrevia, lePrintBI,
     MASCARA_MES, comparaGrupos, tabelaBI, porMatricula, mesesMesmosUteis, fracaoAteDias, fracaoDiasRestantes, pareto,
   };
 });

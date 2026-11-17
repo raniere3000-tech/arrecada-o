@@ -203,12 +203,44 @@
   // Aceita imagens (PNG, JPG…) ou um Excel com as imagens coladas (Inserir > Imagem, ou Ctrl+V sobre as células). Cada print
   // vai para o seu lugar pelo nome: da aba do Excel, ou do arquivo — "Inadimplentes" (maiores inadimplentes) e "Economias"
   // (cartão Economias dos volumes acumulados). Os arquivos dessa pasta não vão para a leitura da arrecadação.
-  const PRINTS = [["inadimplentes", /inadimpl/], ["economias", /econom/]];
+  // "Previa" (tabela da prévia da arrecadação financeira) e "BI" (TOP10 pagantes e não pagou) são lidos por OCR (Tesseract,
+  // em lib/tesseract, carregado só quando há esses prints); "Inadimplentes" e "Economias" são só mostrados como imagem.
+  const PRINTS = [["previa", /previa|financeir/], ["bi", /(^|[^a-z])bi([^a-z]|$)|top ?10/], ["inadimplentes", /inadimpl/], ["economias", /econom/]];
   const IMG_TIPOS = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", webp: "image/webp" };
   const semAcento = (t) => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const naPastaOnePage = (rel) => rel.split("/").slice(0, -1).some((p) => semAcento(p).replace(/[\s_-]+/g, "") === "onepage");
   const qualPrint = (nome) => (PRINTS.find(([, re]) => re.test(semAcento(nome))) || [])[0];
-  E.prints = {}; E.printsAvisos = [];
+  E.prints = {}; E.printsAvisos = []; E.ocr = {};
+  try { E.opFonte = localStorage.getItem("arrecadacao.opFonte") === "prints" ? "prints" : "painel"; } catch (e) { E.opFonte = "painel"; }
+  // ----- OCR dos prints "Previa" e "BI" -----
+  let tesseract = null;
+  const carregaTesseract = () => tesseract || (tesseract = new Promise((ok, erro) => {
+    const sc = document.createElement("script"); sc.src = "lib/tesseract/tesseract.min.js";
+    sc.onload = () => window.Tesseract.createWorker("por", 1, { workerPath: "lib/tesseract/worker.min.js", corePath: "lib/tesseract/", langPath: "lib/tesseract", gzip: true })
+      .then(async (w) => { await w.setParameters({ tessedit_pageseg_mode: "11", preserve_interword_spaces: "1" }); ok(w); }, erro);
+    sc.onerror = () => erro(new Error("não carregou a biblioteca de OCR")); document.head.append(sc);
+  }));
+  async function ocrPalavras(blob) {                   // amplia 3× em tons de cinza (a letra do print é pequena) e lê as palavras
+    const bmp = await createImageBitmap(blob), k = bmp.width < 2600 ? 3 : 1, cv = document.createElement("canvas");
+    cv.width = bmp.width * k; cv.height = bmp.height * k;
+    const g = cv.getContext("2d"); g.imageSmoothingQuality = "high"; g.filter = "grayscale(1)"; g.drawImage(bmp, 0, 0, cv.width, cv.height);
+    const w = await carregaTesseract(), { data } = await w.recognize(cv);
+    return (data.words || []).map((x) => ({ t: x.text, x0: x.bbox.x0, y0: x.bbox.y0, x1: x.bbox.x1, y1: x.bbox.y1 }));
+  }
+  async function leOcrPrints() {
+    const ano = +(E.mes || new Date().toISOString()).slice(0, 4);
+    for (const [k, le] of [["previa", (w) => C.lePrintPrevia(w, ano)], ["bi", (w) => C.lePrintBI(w)]]) {
+      const p = E.prints[k] && E.prints[k][0];
+      if (!p) { delete E.ocr[k]; continue; }
+      E.ocr[k] = { estado: "lendo", origem: p.origem };
+      if (E.res && E.aba === "onepage") $("opPrints").innerHTML = opStatusPrints();
+      try {
+        const r = le(await ocrPalavras(await (await fetch(p.url)).blob()));
+        E.ocr[k] = r.erro ? { estado: "erro", origem: p.origem, erro: r.erro } : { estado: "ok", origem: p.origem, r };
+      } catch (e) { E.ocr[k] = { estado: "erro", origem: p.origem, erro: String((e && e.message) || e) }; }
+    }
+    if (E.res && E.aba === "onepage") desenhaOnePage();
+  }
 
   // Leitor mínimo de .zip (o .xlsx é um zip): índice central + DecompressionStream ("deflate-raw")
   async function lerZip(buf) {
@@ -291,12 +323,30 @@
         avisos.push(`${it.rel}: não foi possível ler (${e.message || e}).`);
       }
     }
-    E.prints = prints; E.printsAvisos = avisos;
+    E.prints = prints; E.printsAvisos = avisos; E.ocr = {};
     if (E.res && E.aba === "onepage") desenhaOnePage();
+    if (prints.previa || prints.bi) leOcrPrints().catch((e) => console.error(e));
   }
   function opStatusPrints() {
     const item = (k, rot) => (E.prints[k] ? `✓ ${rot}: ${E.prints[k].map((p) => esc(p.origem)).join(", ")}` : `✗ ${rot}: falta o print`);
-    return `<b>Prints do BI (pasta One Page):</b> ${item("economias", "Economias")} · ${item("inadimplentes", "Maiores inadimplentes")}`
+    const ocr = (k, rot) => {
+      const o = E.ocr[k];
+      if (!E.prints[k]) return `✗ ${rot}: falta o print`;
+      if (!o || o.estado === "lendo") return `⏳ ${rot}: lendo o print (${esc(E.prints[k][0].origem)})…`;
+      if (o.estado === "erro") return `⚠ ${rot}: não consegui ler o print (${esc(o.erro)})`;
+      if (k === "previa") {
+        const r = o.r, conf = r.conferencia.filter((c) => !c.ok);
+        return `✓ ${rot} (${esc(o.origem)}): ${C.rotuloMes(r.mes)} até ${r.ate ? dataBR(r.ate).slice(0, 5) : "—"} · realizado ${rs(r.acum.realizado)} · pagantes ${fmt(r.acum.pagantes)} · faturas ${fmt(r.acum.faturas)} · economias ${fmt(r.acum.economias)}`
+          + (conf.length ? ` · <span class="neg">confira: a soma dos dias não bate com o acumulado em ${conf.map((c) => `${c.col} (${fmt(c.soma)} × ${fmt(c.acum)})`).join(", ")}</span>` : " · soma dos dias confere com o acumulado")
+          + (r.mes !== E.mes ? ` · <span class="neg">o print é de ${C.rotuloMes(r.mes)} e o One page é de ${C.rotuloMes(E.mes)}: não é usado</span>` : "");
+      }
+      return `✓ ${rot} (${esc(o.origem)}): ${fmt(o.r.pagantes.length)} pagantes e ${fmt(o.r.naoPagou.length)} sem pagamento lidos`;
+    };
+    const temOcr = E.prints.previa || E.prints.bi;
+    return `<label class="opcao">Dados do One page <select id="opFonteDados"><option value="painel"${E.opFonte === "painel" ? " selected" : ""}>Painel + prints (o painel e, do print, só o que ele não tem)</option>`
+      + `<option value="prints"${E.opFonte === "prints" ? " selected" : ""}>Só os prints (prévia e BI)</option></select></label><br>`
+      + `<b>Prints (pasta One Page):</b> ${ocr("previa", "Prévia")} · ${ocr("bi", "BI (TOP10)")}`
+      + (!temOcr || E.prints.economias || E.prints.inadimplentes ? ` · ${item("economias", "Economias")} · ${item("inadimplentes", "Maiores inadimplentes")}` : "")
       + (E.printsAvisos.length ? `<br>${E.printsAvisos.map(esc).join("<br>")}` : "");
   }
   function analisa(itens, nomePasta) {
@@ -2652,6 +2702,15 @@
     return { n, rot: `${p2(ini)} a ${p2(fim)}/${iso.slice(5, 7)}` };
   }
 
+  // prévia lida do print (só quando é do mês do One page)
+  $("opPrints").addEventListener("change", (e) => {
+    if (e.target.id !== "opFonteDados") return;
+    E.opFonte = e.target.value;
+    try { localStorage.setItem("arrecadacao.opFonte", E.opFonte); } catch (x) { /* navegador sem armazenamento */ }
+    desenhaOnePage();
+  });
+  const opPrevia = () => (E.ocr.previa && E.ocr.previa.estado === "ok" && E.ocr.previa.r.mes === E.mes ? E.ocr.previa.r : null);
+  const opBI = () => (E.ocr.bi && E.ocr.bi.estado === "ok" ? E.ocr.bi.r : null);
   function opDados() {
     const d = E.res.dados, mi = idxMes(E.mes), mk = marcas(), sel = selCalc(), cal = C.calendario(E.mes), U = cal.uteis;
     const ant = C.mesAnterior(E.mes), miAnt = idxMes(ant), dias = C.diasDaMascara(sel).filter((k) => k <= U);
@@ -2667,10 +2726,23 @@
       const oA = orcadoDaFonte(ant, E.sup, orc.fonte), pA = curvaDoMes(ant, E.sup).pesos, uA = C.calendario(ant).uteis;
       if (oA != null) orcAntAte = oA * C.diasDaMascara(sel).filter((k) => k <= uA).reduce((a, k) => a + (pA[k] || 0), 0);
     }
-    return { d, mi, miAnt, mk, sel, cal, U, ant, dias, tot, totA, s, sa, parcial, orc, cv, fracCurva, mm, orcAntAte,
-      orcAte: orc.valor != null ? orc.valor * fracCurva : null, proj: frT > 0 ? tot.valor / frT : null, frT, drT,
-      ult: d.ultimoCredito[E.mes], N: ultimoDiaComDados(E.mes),
-      nUteis: dias.filter((k) => k > 0 && k <= ultimoDiaComDados(E.mes)).length };
+    let tot_ = tot, s_ = s, ult = d.ultimoCredito[E.mes], N = ultimoDiaComDados(E.mes), doPrint = false;
+    const pv = opPrevia();
+    if (E.opFonte === "prints" && pv) {
+      // só os prints: o mês atual vem da prévia (realizado por dia e acumulados); mês anterior, orçado e curva continuam do painel
+      doPrint = true;
+      s_ = { valor: new Float64Array(C.MAX_DIA + 1), contas: new Float64Array(C.MAX_DIA + 1), clientes: new Float64Array(C.MAX_DIA + 1) };
+      for (const [iso, o] of Object.entries(pv.dias)) {
+        const k = cal.ordem[iso];
+        if (k == null || (pv.ate && iso > pv.ate)) continue;
+        s_.valor[k] += o.realizado || 0; s_.contas[k] += o.faturas || 0; s_.clientes[k] += o.pagantes || 0;
+      }
+      tot_ = { valor: pv.acum.realizado, desconto: pv.acum.desconto || 0, contas: pv.acum.faturas, clientes: pv.acum.pagantes };
+      if (pv.ate) { ult = pv.ate; N = cal.ordem[pv.ate] || Object.keys(pv.dias).filter((x) => x <= pv.ate).map((x) => cal.ordem[x]).reduce((a, b) => Math.max(a, b || 0), 0); }
+    }
+    return { d, mi, miAnt, mk, sel, cal, U, ant, dias, tot: tot_, totA, s: s_, sa, parcial, orc, cv, fracCurva, mm, orcAntAte, doPrint,
+      orcAte: orc.valor != null ? orc.valor * fracCurva : null, proj: frT > 0 ? tot_.valor / frT : null, frT, drT,
+      ult, N, nUteis: dias.filter((k) => k > 0 && k <= N).length };
   }
 
   // Modelo do One page (o mesmo feito hoje no PowerPoint): título "INTERIOR: ACOMPANHAMENTO DIÁRIO – 30/10/26", arrecadação
@@ -2805,8 +2877,10 @@
     const t = D.tot, a = D.totA, mA = opMesLongo(D.ant), dd = `${mA} (${D.nUteis} d.úteis)`;
     const card = (tit, val, atual, anterior, fmtA) => `<div class="op-vol"><span class="op-rot">${tit}</span><b>${val}</b>`
       + (a ? `<small>${dd}: ${fmtA(anterior)}</small>${opDelta(opVar(atual, anterior), "vs " + mA)}` : "<small>sem mês anterior</small>") + "</div>";
-    const pr = E.prints.economias;
-    const eco = `<div class="op-vol op-vol-print"><span class="op-rot">Economias</span>${pr ? opImagens(pr, "Economias (print do BI)")
+    const pr = E.prints.economias, pv = opPrevia();
+    const eco = pv && pv.acum.economias != null
+      ? `<div class="op-vol"><span class="op-rot">Economias</span><b>${fmt(pv.acum.economias)}</b><small>da prévia da arrecadação${pv.ate ? `, até ${dataBR(pv.ate).slice(0, 5)}` : ""}</small></div>`
+      : `<div class="op-vol op-vol-print"><span class="op-rot">Economias</span>${pr ? opImagens(pr, "Economias (print do BI)")
       : '<b>–</b><small>do BI: coloque o print na pasta <i>One Page</i></small>'}</div>`;
     return '<div class="op-vols">' + [
       card("Arrecadação", opRsMi(t.valor), t.valor, a && a.valor, opRsMi),
@@ -2820,8 +2894,11 @@
   // ---- Top 5: maiores pagantes do mês (o worker calcula) e maiores inadimplentes (print do BI) ----
   function opBlocoTop(D) {
     const combos = E.res.dados.combos, mesTit = `${opMesLongo(E.mes)}/${E.mes.slice(2, 4)}`.toUpperCase();
-    const itens = opTop ? opTop.maiores.slice(0, 5) : null;
-    const pag = `<div class="op-top op-top-pos"><div class="op-top-tit">Maiores pagantes – ${mesTit}</div>`
+    const bi = opBI(), biPag = E.opFonte === "prints" && bi && bi.pagantes.length;
+    const itens = biPag ? null : opTop ? opTop.maiores.slice(0, 5) : null;
+    const pag = biPag ? `<div class="op-top op-top-pos"><div class="op-top-tit">Maiores pagantes – ${mesTit}</div>`
+      + bi.pagantes.slice(0, 5).map((x, i) => `<div class="op-top-lin" title="${esc(`Matrícula ${x.lig} · do print do BI`)}"><span class="op-top-nome">${i + 1}. ${esc(x.nome || "Matrícula " + x.lig)}</span>`
+        + `<b>${x.valor == null ? "–" : `R$ ${fmt(x.valor / 1e3, 2)} Mil`}</b></div>`).join("") + "</div>" : `<div class="op-top op-top-pos"><div class="op-top-tit">Maiores pagantes – ${mesTit}</div>`
       + (itens == null ? '<p class="op-vazio">Calculando…</p>' : itens.length ? itens.map((x, i) => {
         const c = combos[x.c] || {}, dica = linhaDica(x.nome || `Matrícula ${x.lig}`, `Matrícula: ${x.lig}`, `${opMes(E.mes)}: ${rs(x.atual)}`, `${opMes(D.ant)}: ${rs(x.anterior)}`,
           `Cidade: ${c.cidade || "—"}`, `Subcategoria: ${c.grupo || "—"}`, "Nos dias úteis marcados, com o desconto comercial");
@@ -2830,7 +2907,9 @@
       }).join("") : '<p class="op-vazio">Sem pagantes.</p>') + "</div>";
     const pr = E.prints.inadimplentes;                 // o print do BI é do mês do One Page (vencimentos do mês)
     const ina = `<div class="op-top op-top-neg"><div class="op-top-tit">Maiores inadimplentes – ${mesTit}</div>`
-      + (pr ? `<div class="op-print-caixa">${opImagens(pr, "Maiores inadimplentes (print do BI)")}</div>`
+      + (bi && bi.naoPagou.length ? bi.naoPagou.slice(0, 5).map((x, i) => `<div class="op-top-lin" title="${esc(`Matrícula ${x.lig}${x.venc ? " · vencimento " + dataBR(x.venc) : ""} · do print do BI`)}"><span class="op-top-nome">${i + 1}. ${esc(x.nome || "Matrícula " + x.lig)}</span>`
+        + `<b>${x.valor == null ? "–" : `R$ ${fmt(x.valor / 1e3, 2)} Mil`}</b></div>`).join("")
+      : pr ? `<div class="op-print-caixa">${opImagens(pr, "Maiores inadimplentes (print do BI)")}</div>`
         : '<p class="op-vazio">Vem do BI: coloque o print na pasta <i>One Page</i> (imagem ou Excel com o nome “Inadimplentes”).</p>') + "</div>";
     return `<div class="op-tops">${pag}${ina}</div>`;
   }
@@ -2857,7 +2936,7 @@
     h += opSecao("Top 5 pagantes e inadimplentes", "", "op-secao-top") + `<div id="opTopos">${opBlocoTop(D)}</div></section>`;
     h += `<footer class="op-rodape"><span>Fonte: painel de arrecadação · ${esc(filtro)}. Corte: ${D.ult ? dataBR(D.ult).slice(0, 6) + D.ult.slice(2, 4) : "—"} (${D.nUteis} d.úteis).`
       + ` Comparação: ${opMesLongo(D.ant)}/${D.ant.slice(2, 4)} (${D.nUteis} d.úteis)${temOrc ? ` · orçado ${esc(fonte)}` : ""}`
-      + `${E.prints.economias || E.prints.inadimplentes ? " · economias e inadimplentes: BI (pasta One Page)" : ""}`
+      + `${D.doPrint ? " · mês atual: prévia da arrecadação (print)" : ""}${opPrevia() || opBI() || E.prints.economias || E.prints.inadimplentes ? " · economias e inadimplentes: prints da pasta One Page" : ""}`
       + ` · gerado em ${new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span><b class="op-marca">Águas do Rio</b></footer>`;
     $("opFolha").innerHTML = h;
     $("opPrints").innerHTML = opStatusPrints();

@@ -683,3 +683,29 @@ test("perfil congelado e atualizado: a combinação guarda os dois, e a matrícu
   const sem = new C.LeituraArquivo(cong); sem.adiciona(linha(1, "01/10/2026", "10,00"));
   const b = new C.Agregador(); b.junta(sem.exporta()); assert.equal(b.resultado(new Map()).combos[0].perfilAtu, null);   // sem arquivo atualizado
 });
+
+test("prints do One page por OCR: números, prévia e BI", () => {
+  assert.equal(C.ocrNumero("1.085.817"), 1085817); assert.equal(C.ocrNumero("-7.442"), -7442); assert.equal(C.ocrNumero("4,391"), 4391);
+  assert.equal(C.ocrNumero("O5"), 5); assert.equal(C.ocrNumero("o"), 0); assert.equal(C.ocrNumero("-29,8%"), null);
+  assert.equal(C.ocrReais("4,852,89"), 4852.89); assert.equal(C.ocrReais("23.276,31"), 23276.31);
+  const w = (t, x, y) => ({ t, x0: x - 20, x1: x + 20, y0: y - 5, y1: y + 5 });
+  // prévia: cabeçalho, 3 dias (o do meio sem a data legível) e o acumulado
+  const P = C.lePrintPrevia([
+    w("Dia", 50, 10), w("Realizado", 300, 10), w("Desconto", 400, 10), w("Pagantes", 500, 10), w("Faturas", 600, 10), w("Economias", 700, 10),
+    w("03/nov", 50, 50), w("100.000", 300, 50), w("-10", 400, 50), w("10", 500, 50), w("12", 600, 50), w("11", 700, 50),
+    w("200.000", 300, 70), w("20", 500, 70), w("24", 600, 70), w("22", 700, 70),
+    w("O5/nov", 50, 90), w("o", 300, 90), w("06/nov", 50, 110),
+    w("Acumulado", 50, 200), w("até", 100, 200), w("04/nov", 150, 200), w("300.000", 300, 200), w("30", 500, 215), w("36", 600, 215), w("33", 700, 215),
+  ], 2026);
+  assert.equal(P.mes, "2026-11"); assert.equal(P.ate, "2026-11-04");
+  assert.deepEqual(P.dias["2026-11-04"], { realizado: 200000, pagantes: 20, faturas: 24, economias: 22 });
+  assert.deepEqual([P.acum.realizado, P.acum.pagantes, P.acum.faturas, P.acum.economias, P.acum.desconto], [300000, 30, 36, 33, -10]);
+  assert.ok(P.conferencia.every((c) => c.ok));
+  // BI: o "R$5" a mais (R$524,77 no lugar de R$24,77) sai pela ordem decrescente
+  const B = C.lePrintBI([
+    w("PAGANTES", 100, 10), w("100000001_A", 40, 50), w("R$34,87", 500, 50), w("Mil", 560, 50), w("100000002_B", 40, 80), w("R$524,77", 500, 80), w("Mil", 560, 80),
+    w("PAGOU", 100, 150), w("100000003", 40, 200), w("HOSPITAL", 120, 200), w("R$", 450, 200), w("23.276,31", 500, 200), w("16/11/2026", 600, 200),
+  ]);
+  assert.deepEqual(B.pagantes.map((x) => [x.lig, x.valor]), [["100000001", 34870], ["100000002", 24770]]);
+  assert.deepEqual(B.naoPagou.map((x) => [x.lig, x.nome, x.valor, x.venc]), [["100000003", "HOSPITAL", 23276.31, "2026-11-16"]]);
+});
