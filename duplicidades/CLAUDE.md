@@ -77,7 +77,7 @@ Pasta **Duplicidades** (dentro da pasta principal da arrecadação), com as subp
 
 - **Resumo:** 9 indicadores em duas linhas (4 de visão geral + nível 1, nível 2, nível 3, alerta, a verificar); gráfico por mês de referência com nível 1 (marinho `#102840`), nível 2 (azul `#176b9c`) e nível 3 (azul-claro `#9cc3dc`, texto marinho) empilhados, seletor Lançamentos / Matrículas / Valor, valores exatos em cima, tabela alinhada embaixo com a coluna de rótulos fixa e rolagem que abre nos meses mais recentes; tabela por usuário (pedido do usuário), ordenável, com o número de repetições levando para a lista filtrada.
 - **Duplicidades:** seletor Duplicidades / Alerta entre meses / A verificar; busca, nível, ordenação; uma linha por grupo, que abre os lançamentos; 100 por página; CSV com uma linha por lançamento.
-- **Dados:** arquivos lidos, lançamentos considerados e as regras numeradas.
+- **Dados (v1.12):** no topo, as **Premissas** enumeradas em linguagem de negócio (para o usuário explicar o material: o que é analisado, o que é duplicidade, níveis 1 a 5, cálculo, comparação, limites), com números da base atual; depois arquivos lidos e lançamentos considerados; as regras técnicas ficam num quadro recolhido ("Detalhe técnico"). Mudou regra? Atualize as duas.
 
 ## Valores de referência (arquivos reais de 09/11/2026, regra da v1.2)
 

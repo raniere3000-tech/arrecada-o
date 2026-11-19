@@ -166,6 +166,11 @@ th,td{padding:4px 7px;text-align:center;white-space:nowrap}
 .dados ol{margin:6px 0 4px;padding-left:24px;line-height:1.5;font-size:13.5px;color:#1e293b}
 .dados ol li{margin:7px 0}.dados ol li b{color:var(--marinho)}
 .dados ul{margin:4px 0;padding-left:20px}
+.dados .premissas h3{margin:16px 0 2px;font-size:14px;color:var(--marinho);border-bottom:1px solid var(--linha);padding-bottom:3px}
+.dados .premissas p.intro{font-size:13.5px;color:#1e293b;line-height:1.5;margin:4px 0 6px;max-width:900px}
+.dados .premissas ol{max-width:900px}
+.dados details.tecnico{margin-top:18px;border-top:1px solid var(--linha);padding-top:8px}
+.dados details.tecnico>summary{cursor:pointer;font-weight:700;color:var(--marinho);font-size:15px}
 .dados .ex{color:var(--azul-claro);font-size:12.5px}
 .dados table{max-width:760px;margin:6px 0 10px}
 .dados p.nota-secao{max-width:none}
@@ -911,7 +916,7 @@ self.onmessage = async ev => {
 </script>
 
 <script>
-const VERSAO_SITE = 'v1.11';
+const VERSAO_SITE = 'v1.12';
 const $ = s => document.querySelector(s);
 $('#versao').textContent = VERSAO_SITE;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1749,7 +1754,50 @@ function renderDados(){
   const tr = (k, v, x = '') => `<tr><td>${k}</td><td class="num">${v}</td><td class="num">${x}</td></tr>`;
   const cad = R.cad.arquivos.map(a => `<tr><td>${esc(a.nome)}</td><td>${a.motivo ? `<span class="neg">${esc(a.motivo)}</span>` : Object.entries(a.sups).map(([s, n]) => `${esc(supNome(s))} (${esc(s)}): ${nf(n)}`).join('<br>')}</td>
     <td class="num">${nf(a.linhas)}</td><td class="num">${nf(a.cruzadas)}</td><td>${localTxt(a.modificado)}</td></tr>`).join('');
-  $('#dados').innerHTML = `
+  const sups = B.supNomes.length > 1 ? B.supNomes.slice(0, -1).join(', ') + ' e ' + B.supNomes[B.supNomes.length - 1] : B.supNomes.join(''), ex = t => ` <span class="ex">Exemplo: ${t}</span>`;
+  const bloco = (titulo, ini, itens) => `<h3>${titulo}</h3><ol start="${ini}">${itens.map(li).join('')}</ol>`;
+  let n = 1; const P = (titulo, itens) => { const h = bloco(titulo, n, itens); n += itens.length; return h; };
+  const premissas = `<div class="premissas">
+    <h2>Premissas: como o resultado é feito</h2>
+    <p class="intro">Resumo, em linguagem simples, do que o painel considera para apontar descontos lançados em duplicidade. A numeração serve para citar a premissa ao explicar o material. O detalhe técnico (nomes de colunas e arquivos) está no fim desta aba.</p>
+    ${P('O que é analisado', [
+      `<b>Cada lançamento de desconto é analisado individualmente.</b> Um lançamento é um registro de negociação/desconto feito no sistema comercial para uma matrícula, com o mês de referência da conta, a data e a hora do lançamento, o usuário que lançou, o valor à vista, o valor do desconto e o valor total do débito.`,
+      `<b>A base é o relatório de descontos mais recente</b> colocado na pasta do painel (hoje: ${esc(d.arquivo)}, de ${localTxt(d.modificado)}), com ${nf(c.total)} lançamentos de todas as superintendências.`,
+      `<b>Entram as superintendências ${esc(sups)}</b>, identificadas pelo cadastro de matrículas (a Superintendência Lagos é tratada como Interior). Hoje são ${nf(c.base)} lançamentos analisados, somando ${rs(c.baseValor)} em descontos.`,
+      `<b>Ficam fora da análise:</b> lançamentos de matrículas de outras superintendências (${nf(c.fora)}, guardados para uma análise futura), lançamentos sem valor de desconto ou de total, sem mês de referência, sem matrícula ou com desconto igual a zero.`,
+    ])}
+    ${P('O que é considerado duplicidade', [
+      `<b>Duplicidade é o mesmo desconto lançado mais de uma vez para a mesma matrícula</b>, quando os lançamentos se referem ao mesmo débito. Há casos de dezenas de lançamentos iguais feitos em poucos minutos.`,
+      `<b>Em cada caso, permanece só o lançamento mais recente</b> (pela data e hora do lançamento; se empatar, o de número de registro maior). Os anteriores são <b>lançamentos a mais</b> e são os que devem ser excluídos.`,
+      `<b>Nível 1 – lançamentos idênticos:</b> mesma matrícula, mesmo mês de referência, mesmo valor total e mesmo valor de desconto.${ex('um desconto de R$ 500,00 sobre um débito de R$ 1.000,00 lançado 3 vezes em 10 minutos: fica o último lançamento e os 2 anteriores são lançamentos a mais.')}`,
+      `<b>Nível 2 – mesmo desconto, total diferente:</b> mesma matrícula e mesmo mês, com o mesmo valor de desconto, mas o valor total do débito mudou entre um lançamento e outro (por exemplo, o débito foi atualizado com juros).`,
+      `<b>Nível 3 – mesmo débito, desconto diferente:</b> mesma matrícula, mesmo mês e mesmo valor total, mas com valores de desconto diferentes: o mesmo débito foi renegociado com outro percentual. Fica o mais recente.`,
+      `<b>Nível 4 – idêntico em meses diferentes:</b> mesma matrícula, mesmo desconto e mesmo valor total, lançados em meses de referência diferentes. Fica o mais recente e os outros contam cada um no seu mês.`,
+      `<b>Um lançamento é contado no máximo uma vez.</b> Os níveis são aplicados em sequência (primeiro o mesmo débito, níveis 1 e 3; depois o nível 2; por fim o nível 4), sempre sobre o que sobrou do passo anterior.`,
+    ])}
+    ${P('O que precisa de análise humana', [
+      `<b>Alguns casos não são decididos automaticamente</b>, porque podem ser descontos válidos:
+        <ul><li><b>Alerta entre meses:</b> a mesma matrícula com o mesmo valor de desconto em meses diferentes, mas com total diferente.</li>
+        <li><b>A verificar:</b> a mesma matrícula e o mesmo mês com valores de desconto diferentes (por exemplo, um desconto para cada fatura).</li></ul>`,
+      `<b>Nível 5 – verificado manualmente:</b> nesses casos, quem analisa marca no painel <b>Duplicidade</b> ou <b>Válido</b>. Só o que for marcado como Duplicidade entra no resultado; sem marcação, o caso fica pendente e não soma.`,
+    ])}
+    ${P('Como o resultado é calculado', [
+      `<b>Valor em duplicidade (valor recuperado)</b> = soma dos descontos dos lançamentos a mais, dos níveis 1 a 5. O lançamento que permanece nunca entra nessa soma.`,
+      `<b>Cada lançamento a mais conta no seu próprio mês de referência</b>, na superintendência e na cidade da matrícula, e para o usuário que fez esse lançamento a mais.`,
+      `<b>Os filtros do topo</b> (superintendência, cidade, zona, usuário e mês) valem para todas as abas, inclusive a Comparação.`,
+    ])}
+    ${P('Comparação com a análise manual', [
+      `<b>A aba Comparação confere as regras automáticas contra a análise feita manualmente</b>, lançamento por lançamento${R.comp && !R.comp.erro ? ` (planilha atual: ${esc(R.comp.arquivo)}, ${nf(R.comp.linhas.length)} lançamentos)` : ''}. Para cada lançamento, a análise manual diz Excluir ou Manter; o painel diz Excluir quando o lançamento é um lançamento a mais dos níveis 1 a 4 e Manter nos demais casos.`,
+      `<b>O nível 5 não entra na comparação</b>, porque depende da marcação manual no próprio painel; lançamentos sem decisão na planilha também ficam de fora das porcentagens.`,
+      `<b>Como ler os indicadores:</b> <b>acerto</b> = lançamentos em que o painel e a análise manual tomaram a mesma decisão; <b>cobertura</b> = quanto do que a análise manual excluiu o painel também apontou; <b>precisão</b> = quanto do que o painel aponta a análise manual confirmou; <b>falso positivo</b> = o painel excluiria e a análise manteve; <b>falso negativo</b> = a análise excluiu e o painel não apontou.`,
+    ])}
+    ${P('Cuidados e limites', [
+      `<b>As datas e horas são usadas exatamente como vêm do sistema</b>, sem ajuste de fuso.`,
+      `<b>O painel aponta; quem decide é a análise.</b> Os níveis 1 a 4 seguem regras objetivas sobre os valores lançados; casos especiais (por exemplo, acordos com setores internos) podem justificar manter um lançamento que a regra apontaria.`,
+      `<b>Privacidade:</b> os arquivos são lidos só no computador de quem usa o painel; nada é enviado para a internet.`,
+    ])}
+  </div>`;
+  $('#dados').innerHTML = premissas + `
     <h2>Arquivos lidos</h2>
     <p class="nota-secao">Lidos em ${localTxt(R.meta.lidoEm)}, da ${esc(R.meta.origem || 'pasta')}.</p>
     <table class="tab-seg"><thead><tr><th>Descontos (usado)</th><th>Aba</th><th class="num">Linhas</th><th>Modificado em</th></tr></thead>
@@ -1771,7 +1819,7 @@ function renderDados(){
     </tbody></table>
     <p class="nota-secao">Nas matrículas ignoradas (${nf(f.mats)} matrículas), as mesmas regras dariam ${nf(f.grupos)} descontos repetidos em ${nf(f.matsDup)} matrículas, com ${nf(f.rep)} lançamentos a mais e ${rs(f.val)} em duplicidade, além de ${nf(f.al)} alertas entre meses e ${nf(f.ver)} casos a verificar. Esses números não entram em nenhuma tela.</p>
 
-    <h2>Regras</h2>
+    <details class="tecnico"><summary>Detalhe técnico das regras (nomes de colunas, arquivos e cálculos)</summary>
     <ol>
       ${li('<b>Arquivo de descontos:</b> da subpasta Descontos, vale só o .xlsx mais recente pela data de modificação que tenha as colunas EMP_CODIGO, DAT_ACESSO, REFERENCIA, NUM_LOG, NUM_LIGACAO, COD_USUARIO, VALOR_A_VISTA, DESCONTO e VALOR_TOTAL (DAT_ACESSO_HORA, ANO_LOG, ZONA_LIGACAO e PCT_DESCONTO são lidas quando existem). Um arquivo mais recente sem esse layout é pulado e aparece acima. Arquivos começados por ~$ (temporários do Excel) são ignorados.')}
       ${li('<b>Lançamento:</b> cada linha do arquivo é um registro de negociação/desconto (um NUM_LOG). O painel mostra o que foi registrado mais de uma vez mas se refere ao mesmo desconto.')}
@@ -1795,7 +1843,7 @@ function renderDados(){
       ${li('<b>Datas e horários:</b> exatamente como vêm no arquivo, sem conversão de fuso.')}
       ${li('<b>Downloads:</b> CSV com separador ponto e vírgula, vírgula decimal e acentos (abre direto no Excel), uma linha por lançamento da lista mostrada, respeitando filtros, busca e nível. No arquivo de descontos repetidos, cada desconto tem um ID_DESCONTO_REPETIDO, e a soma de VALOR_EM_DUPLICIDADE é o valor em duplicidade da lista.')}
       ${li('<b>Privacidade:</b> os arquivos são lidos só no seu computador; a base processada fica guardada neste navegador até você atualizar ou apagar. Nada vai para a internet nem para o repositório.')}
-    </ol>`;
+    </ol></details>`;
 }
 
 /* ---------- navegação ---------- */
