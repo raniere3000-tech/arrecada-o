@@ -227,6 +227,17 @@ async function classifica(item) {
   if (!["xlsx", "xlsm", "xls", "xlsb"].includes(e)) return { tipo: "ignorado", motivo: "formato não usado" };
   // planilhas grandes conhecidas pelo nome (desconto, cluster): lidas inteiras uma vez só; as outras, só o começo
   const n = C.chave(file.name), inteira = ["DESCONTO", "CLUSTER", "PERFIL"].some((x) => n.includes(x));
+  if (!inteira && file.size > XLSX_GRANDE && e === "xlsx") {          // grande (ex.: cadastro): reconhece só pelo começo, em fluxo
+    const { out } = await fxPrimeiras(file);
+    for (const { aba, linhas } of out) {
+      if (achaCabecalho(linhas, COLS_DESCONTO)) return { tipo: "desconto", aba };
+      if (achaCabecalho(linhas, COLS_PERFIL)) return { tipo: "perfil", aba };
+      if (achaCabecalho(linhas, COLS_RECEBER)) return { tipo: "receber", aba };
+      if (achaCabecalho(linhas, COLS_CAD_SUP)) return { tipo: "cadastro", aba, fluxo: true };
+      if (achaCabecalho(linhas, COLS_ORCADO)) return { tipo: "orcado", aba };
+    }
+    return { tipo: "ignorado", motivo: "planilha não usada pelo painel (não é desconto, perfil do cliente, orçado, contas a receber nem cadastro com a superintendência)" };
+  }
   const livro = leLivro(await file.arrayBuffer(), inteira ? 0 : 16);
   for (const aba of livro.SheetNames) {
     const linhas = linhasDaAba(livro, aba);
@@ -301,6 +312,24 @@ async function leCadastro(arq, mapa) {
       const p = linha.split(sep);
       guarda(String(p[idx.lig] || "").replace(/"/g, "").trim(), String(p[idx.sup] || "").replace(/"/g, ""));
     }, () => {});
+  } else if (arq.fluxo || arq.file.size > XLSX_GRANDE) {
+    // planilha grande: linha a linha, sem montar a planilha na memória
+    const { sst, abas } = await fxAbre(arq.file), aba = abas.find((x) => x.nome === arq.aba) || abas[0];
+    if (!aba) throw new Error("planilha sem abas");
+    const primeiras = [];
+    let cab = null, vistas = 0;
+    await fxBlocos(arq.file, aba.e, "</row>", (b) => {
+      const l = fxCelulas(b.slice(b.lastIndexOf("<row")), sst);
+      if (!cab) {
+        primeiras.push(l); vistas++;
+        cab = achaCabecalho(primeiras, COLS_CAD_SUP);
+        if (!cab && vistas > 15) return false;
+        return;
+      }
+      const { NUMLIGACAO: a, SUPERINTENDENCIA: s } = cab.idx;
+      if (l[a] != null) guarda(l[a], l[s]);
+    }, (f) => avisa("progresso", { pct: 13, texto: `Lendo cadastro (superintendência): ${arq.rel} (${Math.round(f * 100)}%)` }));
+    if (!cab) throw new Error("não achei as colunas NUM_LIGACAO e SUPERINTENDENCIA");
   } else {
     const linhas = linhasDaAba(leLivro(await arq.file.arrayBuffer()), arq.aba);
     const cab = achaCabecalho(linhas, COLS_CAD_SUP), { NUMLIGACAO: a, SUPERINTENDENCIA: b } = cab.idx;
@@ -367,6 +396,121 @@ async function leOrcado(file) {
   }
   out.abas = abas;
   return out;
+}
+
+
+// ---------- .xlsx grande, lido em fluxo (linha a linha) ----------
+// O SheetJS monta a planilha inteira na memória: um cadastro de centenas de milhares de linhas passa do limite do navegador
+// (o XML da aba vira um texto grande demais) e a leitura falha. Acima de XLSX_GRANDE, o arquivo é lido por partes: o zip
+// pelo índice central (com zip64), cada aba descompactada em fluxo (DecompressionStream) e cortada em </row>.
+const XLSX_GRANDE = 25 * 1048576;
+function fxDec(s) {
+  if (s.indexOf("&") < 0) return s;
+  return s.replace(/&(amp|lt|gt|quot|apos|#x[0-9a-fA-F]+|#\d+);/g, (x, e) =>
+    e === "amp" ? "&" : e === "lt" ? "<" : e === "gt" ? ">" : e === "quot" ? '"' : e === "apos" ? "'" : e[1] === "x" ? String.fromCodePoint(parseInt(e.slice(2), 16)) : String.fromCodePoint(+e.slice(1)));
+}
+function fxTextos(xml) {
+  xml = xml.replace(/<rPh\b[\s\S]*?<\/rPh>/g, "");
+  let out = "", m; const re = /<t\b[^>]*>([\s\S]*?)<\/t>/g;
+  while ((m = re.exec(xml))) out += m[1];
+  return fxDec(out);
+}
+const fxCol = (letras) => { let n = 0; for (let i = 0; i < letras.length; i++) n = n * 26 + (letras.charCodeAt(i) - 64); return n - 1; };
+async function fxZip(file) {
+  const tailLen = Math.min(file.size, 65557 + 22), tail = new DataView(await file.slice(file.size - tailLen).arrayBuffer());
+  let eocd = -1;
+  for (let i = tailLen - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("não parece ser um .xlsx válido");
+  let n = tail.getUint16(eocd + 10, true), cdSize = tail.getUint32(eocd + 12, true), cdOff = tail.getUint32(eocd + 16, true);
+  if ((cdOff === 0xFFFFFFFF || n === 0xFFFF) && eocd >= 20 && tail.getUint32(eocd - 20, true) === 0x07064b50) {
+    const z64 = Number(tail.getBigUint64(eocd - 12, true)), z = new DataView(await file.slice(z64, z64 + 56).arrayBuffer());
+    n = Number(z.getBigUint64(32, true)); cdSize = Number(z.getBigUint64(40, true)); cdOff = Number(z.getBigUint64(48, true));
+  }
+  const cd = new DataView(await file.slice(cdOff, cdOff + cdSize).arrayBuffer()), td = new TextDecoder(), ents = new Map();
+  let p = 0;
+  while (p + 46 <= cd.byteLength && cd.getUint32(p, true) === 0x02014b50) {
+    const metodo = cd.getUint16(p + 10, true), nl = cd.getUint16(p + 28, true), xl = cd.getUint16(p + 30, true), cl = cd.getUint16(p + 32, true);
+    let csize = cd.getUint32(p + 20, true), usize = cd.getUint32(p + 24, true), off = cd.getUint32(p + 42, true);
+    const nome = td.decode(new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nl));
+    let q = p + 46 + nl; const fim = q + xl;
+    while (q + 4 <= fim) {
+      const id = cd.getUint16(q, true), sz = cd.getUint16(q + 2, true); let r = q + 4;
+      if (id === 0x0001) {
+        if (usize === 0xFFFFFFFF) { usize = Number(cd.getBigUint64(r, true)); r += 8; }
+        if (csize === 0xFFFFFFFF) { csize = Number(cd.getBigUint64(r, true)); r += 8; }
+        if (off === 0xFFFFFFFF) { off = Number(cd.getBigUint64(r, true)); r += 8; }
+      }
+      q += 4 + sz;
+    }
+    ents.set(nome, { nome, metodo, csize, usize, off });
+    p = fim + cl;
+  }
+  return ents;
+}
+async function fxFluxo(file, e) {
+  const lh = new DataView(await file.slice(e.off, e.off + 30).arrayBuffer()), ini = e.off + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+  let st = file.slice(ini, ini + e.csize).stream();
+  if (e.metodo === 8) st = st.pipeThrough(new DecompressionStream("deflate-raw"));
+  else if (e.metodo !== 0) throw new Error("compressão não suportada em " + e.nome);
+  return st.pipeThrough(new TextDecoderStream());
+}
+async function fxTexto(file, e) { const r = (await fxFluxo(file, e)).getReader(); let o = ""; for (;;) { const { value, done } = await r.read(); if (done) break; o += value; } return o; }
+async function fxBlocos(file, e, fecho, aoBloco, aoLer) {
+  const r = (await fxFluxo(file, e)).getReader();
+  let buf = "", lidos = 0;
+  for (;;) {
+    const { value, done } = await r.read();
+    if (done) break;
+    lidos += value.length; buf += value;
+    let pos = 0, i;
+    while ((i = buf.indexOf(fecho, pos)) !== -1) {
+      const blk = buf.slice(pos, i); pos = i + fecho.length;
+      if (aoBloco(blk) === false) { try { await r.cancel(); } catch (x) { /* já fechado */ } return; }
+    }
+    buf = buf.slice(pos);
+    if (aoLer) aoLer(Math.min(1, lidos / Math.max(1, e.usize)));
+  }
+}
+const FX_C = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g, FX_R = /\br="([A-Z]+)/, FX_T = /\bt="([^"]+)"/, FX_V = /<v>([\s\S]*?)<\/v>/;
+function fxCelulas(blk, sst) {
+  const out = []; let m, seq = 0; FX_C.lastIndex = 0;
+  while ((m = FX_C.exec(blk))) {
+    const a = m[1], dentro = m[2], rm = FX_R.exec(a), col = rm ? fxCol(rm[1]) : seq; seq = col + 1;
+    if (dentro === undefined) continue;
+    const tm = FX_T.exec(a), t = tm ? tm[1] : "n";
+    if (t === "inlineStr") { out[col] = fxTextos(dentro); continue; }
+    const vm = FX_V.exec(dentro); if (!vm) continue;
+    out[col] = t === "s" ? sst[+vm[1]] : t === "str" || t === "e" ? fxDec(vm[1]) : t === "b" ? vm[1] === "1" : +vm[1];
+  }
+  for (let j = 0; j < out.length; j++) if (out[j] === undefined) out[j] = null;
+  return out;
+}
+// abre o .xlsx: textos compartilhados (sst) e as abas na ordem do arquivo
+async function fxAbre(file) {
+  const ents = await fxZip(file), sst = [], se = ents.get("xl/sharedStrings.xml");
+  if (se) await fxBlocos(file, se, "</si>", (b) => { sst.push(fxTextos(b.slice(b.indexOf("<si")))); });
+  const abas = [], wb = ents.get("xl/workbook.xml"), rel = ents.get("xl/_rels/workbook.xml.rels");
+  if (wb && rel) {
+    const wx = await fxTexto(file, wb), rx = await fxTexto(file, rel), alvo = {};
+    for (const m of rx.matchAll(/<Relationship\b[^>]*>/g)) { const id = /\bId="([^"]+)"/.exec(m[0]), tg = /\bTarget="([^"]+)"/.exec(m[0]); if (id && tg) alvo[id[1]] = tg[1]; }
+    for (const m of wx.matchAll(/<sheet\b[^>]*>/g)) {
+      const nm = /\bname="([^"]*)"/.exec(m[0]), id = /\br:id="([^"]+)"/.exec(m[0]);
+      if (!nm || !id || !alvo[id[1]]) continue;
+      let t = alvo[id[1]]; t = t.startsWith("/") ? t.slice(1) : "xl/" + t.replace(/^\.\//, "");
+      if (ents.has(t)) abas.push({ nome: fxDec(nm[1]), e: ents.get(t) });
+    }
+  }
+  return { sst, abas };
+}
+// as primeiras n linhas de cada aba (para reconhecer o tipo da planilha pelo cabeçalho)
+async function fxPrimeiras(file, n = 16) {
+  const { sst, abas } = await fxAbre(file), out = [];
+  for (const a of abas) {
+    const linhas = [];
+    await fxBlocos(file, a.e, "</row>", (b) => { linhas.push(fxCelulas(b.slice(b.lastIndexOf("<row")), sst)); return linhas.length < n; });
+    out.push({ aba: a.nome, linhas });
+  }
+  return { sst, abas, out };
 }
 
 // ---------- CSV de arrecadação ----------
