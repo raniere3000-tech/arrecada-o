@@ -459,6 +459,10 @@
           + (sp ? `; mais ${rs(-sp)} de ligações sem pagamento no mês, fora do total` : "");
       }).join(" · ") + ".");
     }
+    // orçado: de cada planilha RF, as abas lidas e a superintendência de cada uma (ex.: aba Interior e aba Leste)
+    const arqOrc = res.arquivos.filter((a) => a.tipo === "orcado");
+    if (arqOrc.length) avisos.push("Orçado (linha da arrecadação): " + arqOrc.map((a) => `${esc(a.rel)} — ${[...new Set(res.orcados.filter((o) => o.arquivo === a.rel)
+      .map((o) => `aba ${o.aba}: ${nomeSup(o.sup)}`))].map(esc).join(", ")}`).join("; ") + ".");
     const arqDesc = res.arquivos.filter((a) => a.tipo === "desconto");
     if (arqDesc.length) avisos.push(`Planilhas de desconto lidas: ${arqDesc.map((a) => `${esc(a.rel)} (${fmt(a.registros || 0)} linhas)`).join("; ")}.`);
     const fatArqs = res.arquivos.filter((a) => a.tipo === "faturamento");

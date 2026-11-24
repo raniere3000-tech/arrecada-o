@@ -342,22 +342,30 @@ function refDaCelula(v) {                              // data (Date, serial do 
   return "";
 }
 // Orçado (RF): colunas Sup, Rubrica e um mês por coluna; usa a linha da arrecadação ("(+) Arrecadação", "05.01. Arrecadação"…)
-async function leOrcado(file, aba) {
-  const linhas = linhasDaAba(leLivro(await file.arrayBuffer()), aba);
-  const cab = achaCabecalho(linhas, COLS_ORCADO), { SUP: s, RUBRICA: r } = cab.idx;
-  const colMes = [];
-  linhas[cab.i].forEach((v, j) => { const ref = refDaCelula(v); if (ref && j !== s && j !== r) colMes.push([j, ref]); });
-  const out = [];
-  for (let i = cab.i + 1; i < linhas.length; i++) {
-    const l = linhas[i];
-    if (!l || !C.ehLinhaArrecadacao(l[r])) continue;
-    let sup = C.chave(l[s]);
-    if (sup === "LAGOS") sup = "INTERIOR";
-    for (const [j, ref] of colMes) {
-      const v = C.numeroBR(l[j] == null ? "" : l[j]);
-      if (isFinite(v)) out.push({ sup, mes: ref, valor: v });
+// Planilha de orçado (RF): TODAS as abas com as colunas SUP e RUBRICA (ex.: uma aba Interior e outra Leste, no mesmo
+// formato). A superintendência vem da coluna SUP (LAGOS = Interior); se ela não for uma superintendência do painel, vale o
+// nome da aba (ex.: aba "Leste"). Devolve também as abas lidas (aba Dados).
+async function leOrcado(file) {
+  const livro = leLivro(await file.arrayBuffer()), out = [], abas = [];
+  const supDe = (t) => { const k = C.chave(t); return k === "LAGOS" ? "INTERIOR" : R.SUPS.find((x) => k === x || k.includes(x)) || (k.includes("LAGOS") ? "INTERIOR" : ""); };
+  for (const aba of livro.SheetNames) {
+    const linhas = linhasDaAba(livro, aba), cab = achaCabecalho(linhas, COLS_ORCADO);
+    if (!cab) continue;
+    const { SUP: s, RUBRICA: r } = cab.idx, colMes = [];
+    linhas[cab.i].forEach((v, j) => { const ref = refDaCelula(v); if (ref && j !== s && j !== r) colMes.push([j, ref]); });
+    let n = 0;
+    for (let i = cab.i + 1; i < linhas.length; i++) {
+      const l = linhas[i];
+      if (!l || !C.ehLinhaArrecadacao(l[r])) continue;
+      const sup = supDe(l[s]) || supDe(aba) || C.chave(l[s]);
+      for (const [j, ref] of colMes) {
+        const v = C.numeroBR(l[j] == null ? "" : l[j]);
+        if (isFinite(v)) { out.push({ sup, mes: ref, valor: v, aba }); n++; }
+      }
     }
+    if (n) abas.push(aba);
   }
+  out.abas = abas;
   return out;
 }
 
@@ -482,7 +490,8 @@ async function processa(itens) {
       }
       if (a.tipo === "desconto") { avisa("progresso", { pct: 14, texto: `Lendo descontos: ${a.rel}` }); a.registros = await leDesconto(a, descontos); a.livro = null; }
       if (a.tipo === "orcado") {
-        const o = await leOrcado(a.file, a.aba);
+        const o = await leOrcado(a.file);
+        a.abas = o.abas;
         const fonte = a.rel.split("/").pop().replace(/\.[^.]+$/, "");
         o.forEach((x) => { x.arquivo = a.rel; x.fonte = fonte; });
         orcados.push(...o);
