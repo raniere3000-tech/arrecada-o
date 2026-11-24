@@ -2202,10 +2202,16 @@
           + "Se a arrecadação seguir a curva, fecha em:" + conta(`${rs(A)} ÷ ${pct(frC)}`) : "Sem curva do orçado para este mês."],
       ["restantes", "Projeção pelos dias úteis restantes", projR,
         k != null && drT.n ? (drT.falta > 0
-          ? `Até agora: <strong>${fmt(drT.n)}</strong> dias úteis, média de <strong>${rs(media)}</strong> por dia útil. Faltam <strong>${fmt(drT.falta)}</strong> dias úteis. `
-            + `Nos últimos 12 meses, cada dia útil do resto do mês rendeu <strong>${fmt(k, 2)}×</strong> um dia útil do começo `
-            + `(peso 3 para os meses com ${cal.uteis} dias úteis, como este${iguais.length ? `: ${listaMeses(iguais)}` : ": nenhum na pasta"}; peso 1 para ${outros.length ? listaMeses(outros) : "os outros"}). Fecha em:`
-            + conta(`${rs(A)} + ${fmt(drT.falta)} dias × ${rs(media)} × ${fmt(k, 2)}`)
+          ? (() => {
+            const mr = media * k, falta = drT.falta * mr;      // média esperada por dia útil restante e o que falta entrar
+            return `<strong class="proj-passo">1. Até agora:</strong> entraram <strong>${rs(A)}</strong> em <strong>${fmt(drT.n)}</strong> dias úteis, média de <strong>${rs(media)}</strong> por dia útil.<br>`
+              + `<strong class="proj-passo">2. Ritmo do resto do mês:</strong> nos últimos 12 meses, um dia útil depois dos dias marcados rendeu <strong>${fmt(k, 2)}×</strong> um dia útil do começo do mês `
+              + `(${k < 1 ? "o fim do mês costuma render menos" : "o fim do mês costuma render mais"}; peso 3 para os meses com ${cal.uteis} dias úteis, como este${iguais.length ? `: ${listaMeses(iguais)}` : ": nenhum na pasta"}; peso 1 para ${outros.length ? listaMeses(outros) : "os outros"}).<br>`
+              + `<strong class="proj-passo">3. Média dos dias restantes:</strong> ${rs(media)} × ${fmt(k, 2)} = <strong>${rs(mr)}</strong> por dia útil, em cada um dos <strong>${fmt(drT.falta)}</strong> dias úteis que faltam: ${fmt(drT.falta)} × ${rs(mr)} = <strong>${rs(falta)}</strong> a entrar.<br>`
+              + `<strong class="proj-passo">4. Fechamento:</strong> o que já entrou mais o que falta entrar:`
+              + conta(`${rs(A)} + ${fmt(drT.falta)} × ${rs(mr)} = ${rs(A + falta)}`)
+              + `<em class="proj-nota">Média dos dias restantes: ${rs(mr)} por dia útil. Valores arredondados em reais: a conta à mão pode diferir em poucos reais.</em>`;
+          })()
           : "Todos os dias úteis do mês já estão marcados: a projeção é o próprio arrecadado.")
           : "Sem meses anteriores suficientes na pasta para medir o ritmo dos dias restantes."],
     ];
@@ -2799,7 +2805,10 @@
       if (D.proj != null) quadros.push(`<div class="op-card"><span class="op-rot">Tendência – ${opMes(E.mes)}</span><b>${opRsMi(D.proj)}</b>`
         + (D.miAnt >= 0 ? opDelta(opVar(D.proj, C.totalDoMes(D.d, D.miAnt, D.mk, C.MASCARA_MES).valor), `vs ${opMes(D.ant)} fechado`) : "")
         + (() => { const z = D.drT, k = z.k.get("T"), med = z.n ? A / z.n : null;
-          return `<small class="op-explica">Projeção pelos dias úteis restantes: ${z.n} dias úteis com média de ${med != null ? "R$ " + fmt(med) : "–"} por dia; faltam ${z.falta}, e nos últimos 12 meses cada dia útil do resto do mês rendeu ${k != null ? fmt(k, 2) : "–"}× um do começo (peso 3 nos meses com ${z.uteis} dias úteis). ${opRsMi(A)} + ${z.falta} × ${med != null ? "R$ " + fmt(med) : "–"} × ${k != null ? fmt(k, 2) : "–"}.</small></div>`; })());
+          const mr = med != null && k != null ? med * k : null, r = (v) => (v != null ? "R$ " + fmt(v) : "–");
+          return `<small class="op-explica">Projeção pelos dias úteis restantes: até agora ${opRsMi(A)} em ${z.n} dias úteis (média de ${r(med)} por dia). `
+            + `Para os ${z.falta} dias úteis que faltam, média esperada de ${r(mr)} por dia (${r(med)} × ${k != null ? fmt(k, 2) : "–"}, o ritmo do resto do mês nos últimos 12 meses). `
+            + `${opRsMi(A)} + ${z.falta} × ${r(mr)} = ${opRsMi(mr != null ? A + z.falta * mr : null)}.</small></div>`; })());
     }
     return quadros.length ? `<div class="op-cards">${quadros.join("")}</div>` : "";
   }
