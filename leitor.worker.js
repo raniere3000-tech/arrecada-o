@@ -27,6 +27,7 @@ self.onmessage = async (ev) => {
   if (ev.data.tipo === "matricula") { responde("matricula", ev.data.id, () => respondeMatricula(ev.data)); return; }
   if (ev.data.tipo === "comparativo") { responde("comparativo", ev.data.id, () => respondeComparativo(ev.data)); return; }
   if (ev.data.tipo === "conferir") { responde("conferir", ev.data.id, () => conferirMatriculas(ev.data)); return; }
+  if (ev.data.tipo === "cadastro") { responde("cadastro", ev.data.id, () => respondeCadastro(ev.data)); return; }
   if (ev.data.tipo === "semclass") { responde("semclass", ev.data.id, () => respondeSemClass(ev.data)); return; }
   if (ev.data.tipo === "bimatriculas") { responde("bimatriculas", ev.data.id, () => respondeBIMatriculas(ev.data)); return; }
   if (ev.data.tipo === "negociacao") { responde("negociacao", ev.data.id, () => respondeNegociacao(ev.data)); return; }
@@ -506,7 +507,7 @@ async function fxLinhas(arq, colunas, aoLinha, texto) {
   await fxBlocos(arq.file, aba.e, "</row>", (b) => {
     const l = fxCelulas(b.slice(b.lastIndexOf("<row")), sst);
     if (!cab) { primeiras.push(l); cab = achaCabecalho(primeiras, colunas); return cab || primeiras.length <= 15 ? undefined : false; }
-    aoLinha(l, cab.idx);
+    aoLinha(l, cab.idx, primeiras[cab.i]);
   }, (f) => avisa("progresso", { pct: 13, texto: `${texto}: ${arq.rel} (${Math.round(f * 100)}%)` }));
   if (!cab) throw new Error("não achei as colunas " + colunas.join(", "));
 }
@@ -790,6 +791,7 @@ async function processa(itens) {
 async function extraiBase({ id, ligs, meses, porMesArquivo }) {
   if (!fontes) throw new Error("dados ainda não lidos");
   const quer = ligs ? new Set(ligs.map(C.ligacao)) : null, mesesQ = new Set(meses);
+  const cc = quer ? cadColunas(await cadastroDe(quer), false) : null;   // lista de matrículas: os dados do cadastro no fim de cada linha
   // a.meses do acumulado = só os meses usados dele (os que o diário da mesma base não substituiu)
   const arquivos = [
     ...fontes.diarias.filter((a) => a.meses.some((m) => mesesQ.has(m))).map((a) => ({ a, aceita: (m) => mesesQ.has(m) })),
@@ -826,13 +828,14 @@ async function extraiBase({ id, ligs, meses, porMesArquivo }) {
       }
       porMes[mes] = (porMes[mes] || 0) + 1;
       linhas++;
-      escreve(porMesArquivo ? mes : "", ordem ? ordem.map((j) => (j >= 0 ? p[j] : "")).join(";") : linha);
+      const extra = cc ? ";" + cc.de(C.ligacao(p[idx.lig])).join(";") : "";
+      escreve(porMesArquivo ? mes : "", (ordem ? ordem.map((j) => (j >= 0 ? p[j] : "")).join(";") : linha) + extra);
     }, (lidos) => avisa("extracao-progresso", { id, pct: Math.round(((base + lidos) / total) * 100), texto: `Lendo ${a.rel}` }));
     base += a.tamanho;
   }
   const saida = [...saidas.entries()].sort(([x], [y]) => x.localeCompare(y)).map(([mes, o]) => {
     fecha(o);
-    return { mes, linhas: o.linhas, blob: new Blob(["\ufeff" + cab + "\r\n", ...o.blobs], { type: "text/csv;charset=utf-8" }) };
+    return { mes, linhas: o.linhas, blob: new Blob(["\ufeff" + cab + (cc ? ";" + cc.cab.join(";") : "") + "\r\n", ...o.blobs], { type: "text/csv;charset=utf-8" }) };
   });
   const naoEncontradas = quer ? [...quer].filter((l) => !achadas.has(l)) : [];
   avisa("extracao", { id, saida, linhas, porMes, naoEncontradas, arquivos: arquivos.length, completa: !quer });
@@ -942,39 +945,39 @@ async function extraiMensal({ mes, sups, cidades, grupos }) {
 // Comparativo por mês: uma linha por matrícula e uma coluna de valor por mês (em branco = sem pagamento no mês).
 // O CSV é montado aqui, em blocos, porque pode ter centenas de milhares de linhas.
 async function respondeComparativo({ mis, rotulos, marcas, nomesSup, comFat, comRec, recTipo }) {
-  const r = C.valoresPorMes(analise, mis, marcas), k = r.k, ex = await colunasExtras(comFat, comRec, recTipo);
+  const r = C.valoresPorMes(analise, mis, marcas), k = r.k, ex = await colunasExtras(comFat, comRec, recTipo, r.ligs);
   const txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " ");
   const ordem = r.ligs.map((_, p) => p).sort((a, b) => r.ligs[a] - r.ligs[b]);
   const blobs = [], partes = [], porMes = rotulos.map(() => ({ matriculas: 0, valor: 0 }));
   let tam = 0;
   for (const p of ordem) {
     const c = combosArr[r.comb[p]] || {}, e = ex.de(r.ligs[p]);
-    const cols = [ligTxt(r.ligs[p]), txt(nomeDe(r.ligs[p])), nomesSup[c.sup] || c.sup || "", c.cidade || "", c.grupo || "", ...e.fat.map(txt)];
+    const cols = [ligTxt(r.ligs[p]), txt(ex.nome(r.ligs[p])), nomesSup[c.sup] || c.sup || "", c.cidade || "", c.grupo || "", ...e.fat.map(txt)];
     for (let j = 0; j < k; j++) {
       if (r.pagou[p * k + j]) { cols.push(nBR(r.vals[p * k + j])); porMes[j].matriculas++; porMes[j].valor += r.vals[p * k + j]; } else cols.push("");
     }
-    cols.push(...e.rec.map(txt));
+    cols.push(...e.rec.map(txt), ...e.cad);
     const linha = cols.join(";");
     partes.push(linha); tam += linha.length + 2;
     if (tam > 4e6) { blobs.push(new Blob([partes.join("\r\n") + "\r\n"])); partes.length = 0; tam = 0; }
   }
   if (partes.length) blobs.push(new Blob([partes.join("\r\n") + "\r\n"]));
-  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...ex.cabFat, ...rotulos.map((m) => `Arrecadado ${m}`), ...ex.cabRec].join(";");
+  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...ex.cabFat, ...rotulos.map((m) => `Arrecadado ${m}`), ...ex.cabRec, ...ex.cabCad].join(";");
   return { linhas: ordem.length, porMes, ...ex.info(), blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
 }
 // Base de oportunidades: pagaram em pelo menos um dos meses A e deixaram de pagar em pelo menos um dos meses B (nas combinações marcadas pelos filtros do cabeçalho)
 async function respondeOportunidades({ misA, misB, mesesA, mesesB, marcas, comFat, comRec, recTipo }) {
-  const lista = C.pagaramNaoPagaramMeses(analise, misA, misB, marcas), ex = await colunasExtras(comFat, comRec, recTipo);
+  const lista = C.pagaramNaoPagaramMeses(analise, misA, misB, marcas), ex = await colunasExtras(comFat, comRec, recTipo, lista.map((x) => x.lig));
   for (const x of lista) {
     const e = ex.de(x.lig);
-    x.fat = e.fat; x.rec = e.rec;
-    x.nome = nomeDe(x.lig); x.lig = ligTxt(x.lig);
+    x.fat = e.fat; x.rec = e.rec; x.cad = e.cad;
+    x.nome = ex.nome(x.lig); x.lig = ligTxt(x.lig);
   }
-  return { lista, mesesA, mesesB, cabFat: ex.cabFat, cabRec: ex.cabRec, ...ex.info() };
+  return { lista, mesesA, mesesB, cabFat: ex.cabFat, cabRec: ex.cabRec, cabCad: ex.cabCad, ...ex.info() };
 }
 // Matrículas em "Sem classificação" (aba Subcategoria): por matrícula × mês × utilização, com o motivo. Nos meses mis, nas
 // combinações marcadas e nos dias úteis sel (como as tabelas da aba). CSV montado aqui.
-function respondeSemClass({ mis, meses, marcas, sel, nomesSup }) {
+async function respondeSemClass({ mis, meses, marcas, sel, nomesSup }) {
   const txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " "), por = new Map(), CO = 16384;
   mis.forEach((mi, j) => {
     for (const { L, mapa } of (mi >= 0 && analise.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
@@ -988,34 +991,43 @@ function respondeSemClass({ mis, meses, marcas, sel, nomesSup }) {
     }
   });
   const lista = [...por.values()].sort((a, b) => a.l - b.l || a.j - b.j), ligs = new Set(lista.map((x) => x.l));
+  const cc = cadColunas(await cadastroDe(ligs), false);
   const linhas = lista.map((x) => {
     const cb = combosArr[x.c], util = String(cb.util || "").trim();
     let dias = 0; for (let d = 0; d < 32; d++) if (x.mask & (1 << d)) dias++;
     const motivo = !util ? "Utilização (Sub. Categ.) em branco no arquivo" : "Código de utilização fora da relação de subcategorias do painel";
-    return [ligTxt(x.l), txt(nomeDe(x.l)), nomesSup[cb.sup] || cb.sup || "", cb.cidade || "", txt(cb.zona), txt(util || "(em branco)"), motivo, txt(cb.perfil),
-      C.rotuloMes(meses[x.j]), nBR(x.valor), x.contas, dias].join(";");
+    return [ligTxt(x.l), txt(nomeDe(x.l) || cc.nome(x.l)), nomesSup[cb.sup] || cb.sup || "", cb.cidade || "", txt(cb.zona), txt(util || "(em branco)"), motivo, txt(cb.perfil),
+      C.rotuloMes(meses[x.j]), nBR(x.valor), x.contas, dias, ...cc.de(x.l)].join(";");
   });
-  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Zona (Localidade)", "Utilização (Sub. Categ.) no arquivo", "Motivo", "Perfil", "Mês", "Valor pago", "Contas pagas", "Dias com pagamento"].join(";");
+  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Zona (Localidade)", "Utilização (Sub. Categ.) no arquivo", "Motivo", "Perfil", "Mês", "Valor pago", "Contas pagas", "Dias com pagamento", ...cc.cab].join(";");
   const porUtil = {};
   for (const x of lista) { const u = String(combosArr[x.c].util || "").trim() || "(em branco)"; porUtil[u] = (porUtil[u] || 0) + x.valor; }
   return { linhas: lista.length, matriculas: ligs.size, porUtil, blob: new Blob(["\ufeff" + cab + "\r\n" + linhas.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" }) };
 }
 // Tabela do BI por matrícula (aba Dados): CSV em blocos (pode ter centenas de milhares de linhas)
-function respondeBIMatriculas({ mis, misAnt, meses, marcas, sel, ligs, nomesSup }) {
+async function respondeBIMatriculas({ mis, misAnt, meses, marcas, sel, ligs, nomesSup, completa }) {
   const quer = ligs ? new Set(ligs.map((l) => C.chaveLig(l))) : null;
+  // dados do cadastro (nome e as demais colunas) no fim de cada linha; na base completa (milhões de linhas) não entram
+  let cc = null;
+  if (!completa) {
+    const todas = new Set();
+    C.porMatricula(analise, combosArr, mis, misAnt, marcas, sel, quer, (x) => { todas.add(x.lig); });
+    cc = cadColunas(await cadastroDe(todas), false);
+  }
   const mesTxt = meses.map((m) => C.rotuloMes(m));
   const blobs = [], partes = [], vistas = new Set();
   let tam = 0, valor = 0, n = 0;
   C.porMatricula(analise, combosArr, mis, misAnt, marcas, sel, quer, (x) => {
     if (x.pagou) vistas.add(x.lig); valor += x.valor; n++;
     // as colunas da tabela do BI, uma linha por matrícula: somando as linhas, dá a tabela (cliente pagante = 1)
-    const linha = [ligTxt(x.lig), x.cidade, x.grupo, mesTxt[x.j], x.perfil, nBR(x.valor), x.pagou ? 1 : 0, x.pagouAnt == null ? "" : x.pagouAnt ? 1 : 0, x.contas].join(";");
+    const linha = [ligTxt(x.lig), x.cidade, x.grupo, mesTxt[x.j], x.perfil, nBR(x.valor), x.pagou ? 1 : 0, x.pagouAnt == null ? "" : x.pagouAnt ? 1 : 0, x.contas,
+      ...(cc ? [String(nomeDe(x.lig) || cc.nome(x.lig)).replace(/[;\r\n]/g, " "), ...cc.de(x.lig)] : [])].join(";");
     partes.push(linha); tam += linha.length + 2;
     if (tam > 4e6) { blobs.push(new Blob([partes.join("\r\n") + "\r\n"])); partes.length = 0; tam = 0; }
   });
   if (partes.length) blobs.push(new Blob([partes.join("\r\n") + "\r\n"]));
   const cab = ["Matrícula", "Cidade", "Subcategoria", "Mes/ano", "Classificação", "Arrecadacao_Acumulada", "Qtd_clientes_pagantes_acumulado",
-    "Qtd_Clientes_pagas_mês_anterior", "Qtd_contas_pagas_acumulado"].join(";");
+    "Qtd_Clientes_pagas_mês_anterior", "Qtd_contas_pagas_acumulado", ...(cc ? ["Nome", ...cc.cab] : [])].join(";");
   const naoEncontradas = ligs ? ligs.filter((l) => !vistas.has(C.chaveLig(l))) : null;
   return { linhas: n, matriculas: vistas.size, valor, naoEncontradas,
     blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
@@ -1023,7 +1035,7 @@ function respondeBIMatriculas({ mis, misAnt, meses, marcas, sel, ligs, nomesSup 
 // Negociação (área Análises): pagaram em todos os meses misPagou e não pagaram no mês de referência miRef. Devolve o resumo por
 // cidade e subcategoria, as 100 maiores matrículas (para a tela) e o CSV completo, montado aqui em blocos.
 async function respondeNegociacao({ misPagou, miRef, rotulos, rotRef, incluiPagantes, marcas, nomesSup, comFat, comRec, recTipo, sel }) {
-  const lista = C.negociacao(analise, misPagou, miRef, marcas, incluiPagantes, sel == null ? null : sel), n = misPagou.length, ex = await colunasExtras(comFat, comRec, recTipo);
+  const lista = C.negociacao(analise, misPagou, miRef, marcas, incluiPagantes, sel == null ? null : sel), n = misPagou.length, ex = await colunasExtras(comFat, comRec, recTipo, lista.map((x) => x.lig));
   const txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " ");
   const porCidade = new Map(), porSub = new Map(), top = [], blobs = [], partes = [];
   const soma = (mapa, k, x) => { let o = mapa.get(k); if (!o) { o = { rot: k, n: 0, nNao: 0, vals: new Array(n).fill(0) }; mapa.set(k, o); } o.n++; if (!x.pagouRef) o.nNao++; x.vals.forEach((v, j) => { o.vals[j] += v; }); };
@@ -1031,14 +1043,14 @@ async function respondeNegociacao({ misPagou, miRef, rotulos, rotRef, incluiPaga
   for (const x of lista) {
     const c = combosArr[x.c] || {}, e = ex.de(x.lig);
     soma(porCidade, c.cidade || "—", x); soma(porSub, c.grupo || "—", x);
-    if (top.length < 100) top.push({ lig: ligTxt(x.lig), nome: nomeDe(x.lig), sup: c.sup || "", cidade: c.cidade || "", grupo: c.grupo || "", vals: x.vals, pagouRef: x.pagouRef, valRef: x.valRef });
-    const linha = [ligTxt(x.lig), txt(nomeDe(x.lig)), nomesSup[c.sup] || c.sup || "", c.cidade || "", c.grupo || "", ...e.fat.map(txt),
-      ...x.vals.map(nBR), nBR(x.total), x.pagouRef ? "Pagou" : "Não pagou", x.pagouRef ? nBR(x.valRef) : "", ...e.rec.map(txt)].join(";");
+    if (top.length < 100) top.push({ lig: ligTxt(x.lig), nome: ex.nome(x.lig), sup: c.sup || "", cidade: c.cidade || "", grupo: c.grupo || "", vals: x.vals, pagouRef: x.pagouRef, valRef: x.valRef });
+    const linha = [ligTxt(x.lig), txt(ex.nome(x.lig)), nomesSup[c.sup] || c.sup || "", c.cidade || "", c.grupo || "", ...e.fat.map(txt),
+      ...x.vals.map(nBR), nBR(x.total), x.pagouRef ? "Pagou" : "Não pagou", x.pagouRef ? nBR(x.valRef) : "", ...e.rec.map(txt), ...e.cad].join(";");
     partes.push(linha); tam += linha.length + 2;
     if (tam > 4e6) { blobs.push(new Blob([partes.join("\r\n") + "\r\n"])); partes.length = 0; tam = 0; }
   }
   if (partes.length) blobs.push(new Blob([partes.join("\r\n") + "\r\n"]));
-  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...ex.cabFat, ...rotulos.map((m) => `Arrecadado ${m}`), "Total pago nos meses", `Indicativo ${rotRef}`, `Arrecadado ${rotRef}`, ...ex.cabRec].join(";");
+  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...ex.cabFat, ...rotulos.map((m) => `Arrecadado ${m}`), "Total pago nos meses", `Indicativo ${rotRef}`, `Arrecadado ${rotRef}`, ...ex.cabRec, ...ex.cabCad].join(";");
   const ordena = (m) => [...m.values()].sort((a, b) => b.vals.reduce((s, v) => s + v, 0) - a.vals.reduce((s, v) => s + v, 0));
   return { n: lista.length, nNao: lista.filter((x) => !x.pagouRef).length, porCidade: ordena(porCidade), porSub: ordena(porSub), top, ...ex.info(),
     blob: new Blob(["\ufeff" + cab + "\r\n", ...blobs], { type: "text/csv;charset=utf-8" }) };
@@ -1047,8 +1059,9 @@ async function respondeNegociacao({ misPagou, miRef, rotulos, rotRef, incluiPaga
 //  fat: Endereço da ligação, Grupo, Rota (e Situação da ligação, só quando a base de contas a receber não entra)
 //  rec: Saldo total vencido (sem o a vencer) e SIT_LIG, no fim do arquivo. SIT_LIG é uma coluna só: a da base de contas a
 //       receber; sem a matrícula nela, a do faturamento escrita no mesmo padrão.
-async function colunasExtras(comFat, comRec, recTipo) {
+async function colunasExtras(comFat, comRec, recTipo, ligs) {
   const receber = recBase(recTipo), rec = !!(comRec && receber), todo = comFat || rec ? await leCadastroFat() : null, cad = comFat ? todo : null;
+  const cc = cadColunas(await cadastroDe(ligs || []), !!cad);
   const cabFat = cad ? ["Endereço da ligação", "Grupo", "Rota", ...(rec ? [] : ["Situação da ligação"])] : [];
   const cabRec = rec ? ["Saldo total vencido", "SIT_LIG"] : [];
   let nCad = 0, nRec = 0;
@@ -1062,9 +1075,84 @@ async function colunasExtras(comFat, comRec, recTipo) {
       if (x) nRec++;
       r = [c.saldo == null ? "" : nBR(c.saldo), c.sit];
     }
-    return { fat, rec: r };
+    return { fat, rec: r, cad: cc.de(l) };
   };
-  return { cabFat, cabRec, de, info: () => ({ cadastro: cad && { ref: cad.ref, arquivos: cad.arquivos, comCadastro: nCad }, comReceber: rec ? nRec : null }) };
+  return { cabFat, cabRec, cabCad: cc.cab, de, nome: (l) => nomeDe(l) || cc.nome(l),
+    info: () => ({ cadastro: cad && { ref: cad.ref, arquivos: cad.arquivos, comCadastro: nCad }, comReceber: rec ? nRec : null, comCadastroPasta: cc.achadas() }) };
+}
+
+// ---------- dados do cadastro nos analíticos (buscados só na hora do download) ----------
+// Para não pesar a abertura do painel, o cadastro guarda na leitura só a superintendência. Quando um analítico é baixado, as
+// matrículas dele são procuradas nos arquivos de cadastro da pasta (todas as colunas) e ficam guardadas aqui enquanto a pasta
+// estiver aberta: o próximo download com as mesmas matrículas não relê nada.
+let cadDados = null;                                   // { cols: nomes, chaves, mapa: matrícula → {chave: valor}, procuradas: Set }
+const CAD_FORA = ["NUMLIGACAO", "NOMCLIENTE", "NOMECLIENTE", "SUPERINTENDENCIA", "CIDADE"];   // já estão no analítico (o nome vai na coluna Nome)
+const ligStr = (l) => (typeof l === "number" ? (l < 1e10 ? String(l) : "") : C.ligacao(l));
+function cadValor(v) {
+  if (v == null) return "";
+  if (v instanceof Date) return isNaN(v) ? "" : C.dataISO(v).split("-").reverse().join("/");
+  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(v).replace(".", ",");
+  return String(v).replace(/[;\r\n]+/g, " ").trim();
+}
+async function cadastroDe(ligs) {
+  if (!cadDados) cadDados = { cols: [], chaves: [], mapa: new Map(), procuradas: new Set() };
+  const D = cadDados, falta = new Set();
+  for (const l of ligs) { const k = ligStr(l); if (k && !D.procuradas.has(k)) falta.add(k); }
+  if (!falta.size) return D;
+  for (const a of arquivosPasta.filter((x) => x.tipo === "cadastro")) {
+    let mapaCols = null, iLig = -1;
+    const linha = (l, cab) => {
+      if (!mapaCols) {
+        mapaCols = cab.map((nome) => {
+          const k = C.chave(nome == null ? "" : nome);
+          if (!k) return "";
+          if (!D.chaves.includes(k)) { D.chaves.push(k); D.cols.push(String(nome).trim()); }
+          return k;
+        });
+        iLig = mapaCols.indexOf("NUMLIGACAO");
+      }
+      const k = ligStr(l[iLig]);
+      if (!falta.has(k) || D.mapa.has(k)) return;
+      const o = {};
+      mapaCols.forEach((c, j) => { if (c) o[c] = cadValor(l[j]); });
+      D.mapa.set(k, o);
+    };
+    try {
+      if (a.csv) {
+        let cab = null, sep = ";";
+        await linhasDoArquivo(a.file, (t) => {
+          if (!cab) { sep = [";", "\t", ","].find((x) => t.includes(x)) || ";"; const c = t.split(sep); if (COLS_CAD_SUP.every((x) => c.map(C.chave).includes(x))) cab = c.map((x) => x.replace(/"/g, "")); return; }
+          linha(t.split(sep).map((x) => x.replace(/"/g, "")), cab);
+        }, () => {});
+      } else if (a.fluxo || a.file.size > XLSX_GRANDE) {
+        await fxLinhas(a, COLS_CAD_SUP, (l, ix, cab) => linha(l, cab), "Buscando os dados do cadastro");
+      } else {
+        const ls = linhasDaAba(leLivro(await a.file.arrayBuffer()), a.aba), c = achaCabecalho(ls, COLS_CAD_SUP);
+        if (c) for (let i = c.i + 1; i < ls.length; i++) if (ls[i]) linha(ls[i], ls[c.i]);
+      }
+    } catch (e) { /* arquivo de cadastro que não abre: segue com os outros */ }
+  }
+  for (const k of falta) D.procuradas.add(k);
+  return D;
+}
+// colunas do cadastro para um analítico: todas, menos as que o analítico já tem (e, com os dados do faturamento, grupo, rota e
+// situação da ligação, que já vêm dele). nome(l): o nome do cadastro (para quem o painel não guardou o nome).
+function cadColunas(D, comFat) {
+  const dup = (k) => CAD_FORA.includes(k) || (comFat && /GRUPO|ROTA|SITLIG|SITUACAOLIGACAO/.test(k));
+  const usar = D.chaves.map((k, i) => [k, D.cols[i]]).filter(([k]) => !dup(k));
+  let achadas = 0;
+  return {
+    cab: usar.map(([, n]) => n),
+    de: (l) => { const o = D.mapa.get(ligStr(l)); if (o) achadas++; return usar.map(([k]) => (o && o[k] != null ? o[k] : "")); },
+    nome: (l) => { const o = D.mapa.get(ligStr(l)); return o ? o.NOMCLIENTE || o.NOMECLIENTE || "" : ""; },
+    achadas: () => achadas,
+  };
+}
+// pedido da página (listas montadas lá: clientes, conferência, Excel das tabelas com matrícula)
+async function respondeCadastro({ ligs }) {
+  const cc = cadColunas(await cadastroDe(ligs), false), linhas = {}, nomes = {};
+  for (const l of ligs) { const k = ligStr(l); if (!k) continue; linhas[k] = cc.de(k); nomes[k] = cc.nome(k); }
+  return { cab: cc.cab, linhas, nomes };
 }
 const nBR = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ",");
 async function linhasDoArquivo(file, aoLinha, aoLer) {

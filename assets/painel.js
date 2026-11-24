@@ -374,6 +374,7 @@
       else if (m.tipo === "negociacao") recebeNegociacao(m);
       else if (m.tipo === "bimatriculas") recebeBIMatriculas(m);
       else if (m.tipo === "semclass") recebeSemClass(m);
+      else if (m.tipo === "cadastro") { const f = pedidosCad.get(m.id); if (f) { pedidosCad.delete(m.id); f(m); } }
       else if (m.tipo === "conferir") recebeConferir(m);
       else if (m.tipo === "conferir-progresso") $("confStatus").textContent = m.texto + "…";
       else if (m.tipo === "comparativo") recebeComparativo(m);
@@ -1023,6 +1024,21 @@
     tabela(ids[1], cab, monta("clientes", fmt, false));
     tabela(ids[2], cab, monta("contas", fmt, false));
   }
+  // ----- dados do cadastro para as listas montadas aqui (o worker procura as matrículas nos arquivos de cadastro) -----
+  const pedidosCad = new Map();
+  let idCad = 0;
+  function cadastroPara(ligs) {
+    const lista = [...new Set(ligs.map((l) => String(l).replace(/\D/g, "")).filter(Boolean))];
+    if (!worker || !lista.length) return Promise.resolve({ cab: [], linhas: {}, nomes: {} });
+    toast("Buscando os dados das matrículas no cadastro…");
+    return new Promise((ok) => {
+      const id = ++idCad;
+      pedidosCad.set(id, (m) => ok(m.erro ? { cab: [], linhas: {}, nomes: {} } : m));
+      worker.postMessage({ tipo: "cadastro", id, ligs: lista });
+    });
+  }
+  const cadDe = (cd, lig) => cd.linhas[String(lig).replace(/\D/g, "")] || cd.cab.map(() => "");
+  const nomeCad = (cd, lig, nome) => nome || cd.nomes[String(lig).replace(/\D/g, "")] || "";
   // ----- matrículas em "Sem classificação" (o worker monta o CSV) -----
   let idSemClass = 0;
   $("semClassBaixar").addEventListener("click", () => {
@@ -1377,11 +1393,11 @@
     // uma coluna de valor por mês de "Pagaram em" e o total; com mais de um mês em "não pagaram em", se pagou em cada um
     const varios = mA.length > 1, colB = mB.length > 1;
     const csv = "\ufeff" + [["Matrícula", "Nome", "Superintendência", "Cidade", "Subcategoria", ...m.cabFat, ...mA.map((x) => `Valor pago em ${C.rotuloMes(x)}`),
-      ...(varios ? ["Total pago nos meses"] : []), `Dias com pagamento em ${lista(mA, "e")}`, ...(colB ? mB.map((x) => `Pagou em ${C.rotuloMes(x)}`) : []), ...m.cabRec].join(";"),
+      ...(varios ? ["Total pago nos meses"] : []), `Dias com pagamento em ${lista(mA, "e")}`, ...(colB ? mB.map((x) => `Pagou em ${C.rotuloMes(x)}`) : []), ...m.cabRec, ...(m.cabCad || [])].join(";"),
       ...l.map((x) => {
         const c = d.combos[x.c] || {};
         return [x.lig, txt(x.nome), nomeSup(c.sup), c.cidade, c.grupo, ...x.fat.map(txt), ...x.vals.map((v) => (v ? n(v) : "")), ...(varios ? [n(x.valor)] : []), x.dias,
-          ...(colB ? x.pagouB.map((p) => (p ? "Sim" : "Não")) : []), ...x.rec.map(txt)].join(";");
+          ...(colB ? x.pagouB.map((p) => (p ? "Sim" : "Não")) : []), ...x.rec.map(txt), ...(x.cad || [])].join(";");
       })].join("\r\n");
     const nome = `Base_oportunidades_pagou_${mA.join("_")}_nao_pagou_${mB.join("_")}.csv`;
     $("opResultado").innerHTML = (cids.length ? `<table class="compacta base-tabela"><thead><tr><th>Cidade</th><th>Matrículas</th><th>Pago em ${lista(mA, "e")} (R$)</th></tr></thead><tbody>`
@@ -1955,8 +1971,10 @@
     buscaMatricula();
     $("clBusca").scrollIntoView({ behavior: "smooth", block: "center" });
   }));
-  document.querySelectorAll("button[data-cl-csv]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("button[data-cl-csv]").forEach((b) => b.addEventListener("click", async () => {
     if (!clRes) return;
+    const tipoL = b.dataset.clCsv, fonte = tipoL === "sem" ? clRes.semPagamento.lista : tipoL === "deixaram" ? clRes.deixaram : tipoL === "receber" ? clRes.receber.lista : clRes.voltaram;
+    const cd = await cadastroPara(fonte.map((x) => x.lig));
     const tipo = b.dataset.clCsv, n = (v) => (Math.round(v * 100) / 100).toFixed(2).replace(".", ","), d = E.res.dados;
     const m3 = [3, 2, 1].map((k) => C.rotuloMes(C.mesAnterior(E.mes, k)));
     const txt = (t) => String(t).replace(/;/g, ",");
@@ -1974,6 +1992,12 @@
       ...clRes.receber.lista.map((x) => [x.lig, txt(x.nome), x.cidade, x.sitLig, x.tipo, x.contato, x.contasV, n(x.vencido), x.contasAV, n(x.aVencer), x.faixaMaxTxt, ult(x.ultimo), x.noMes ? n(x.noMes) : ""].join(";"))];
     else linhas = [["Matrícula", "Nome", "Cidade", "Subcategoria", C.rotuloMes(E.mes)].join(";"),
       ...clRes.voltaram.map((x) => { const c = comboArr(x.c); return [x.lig, txt(x.nome), c.cidade, c.grupo, n(x.valor)].join(";"); })];
+    // nome do cadastro para quem o painel não guardou o nome; as colunas do cadastro no fim
+    linhas = linhas.map((l, i) => {
+      if (!i) return l + (cd.cab.length ? ";" + cd.cab.join(";") : "");
+      const p = l.split(";"); p[1] = nomeCad(cd, p[0], p[1]);
+      return p.join(";") + (cd.cab.length ? ";" + cadDe(cd, p[0]).join(";") : "");
+    });
     baixa("﻿" + linhas.join("\r\n"), `Clientes_${tipo}_${E.mes}.csv`);
   }));
   // Contas a receber: qual base usar ("nfc" = só notas fiscais; "total" = com parcelas e NFA). Um seletor em cada lugar
@@ -2625,7 +2649,7 @@
     $("biBaixar").disabled = true; $("biCompleta").disabled = true; $("biMatResultado").innerHTML = "";
     $("biStatus").textContent = completa ? "Montando a base completa por matrícula (pode levar alguns minutos)…" : "Montando por matrícula…";
     worker.postMessage({ tipo: "bimatriculas", id: ++idBIMat, mis: ms.map(idxMes), misAnt: ms.map((m) => idxMes(C.mesAnterior(m))), meses: ms,
-      marcas: completa ? C.marcaCombos(E.res.dados, {}) : marcas(), sel: completa ? C.mascaraAte(C.MAX_DIA, true) : selCalc(), ligs: ligs.length ? ligs : null, nomesSup: NOME_SUP });
+      marcas: completa ? C.marcaCombos(E.res.dados, {}) : marcas(), sel: completa ? C.mascaraAte(C.MAX_DIA, true) : selCalc(), ligs: ligs.length ? ligs : null, nomesSup: NOME_SUP, completa: !!completa });
   }
   $("biCompleta").addEventListener("click", () => baixaBIMatriculas(true));
   function recebeBIMatriculas(m) {
@@ -2685,10 +2709,13 @@
         + "</tbody></table></div>";
     }
     $("confResultado").innerHTML = h;
-    if ($("confCsv")) $("confCsv").onclick = () => {
+    if ($("confCsv")) $("confCsv").onclick = async () => {
+      const cd = await cadastroPara(L.map((x) => x.lig));
       const c = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " ");
       const cab = ["Matrícula", "Arquivo", "Data Crédito", "Mês", "Data Pagto.", "Vencimento", "Valor", "Tipo Fatura", "Zona", "Utilização", "Cidade", "Superintendência", "Subcategoria", "Dia útil", "Contada na tela", "Situação"];
-      const linhas = L.map((x) => [x.lig, x.arquivo, x.credito ? dataBR(x.credito) : "", x.mes, x.pagto, x.venc, x.valor == null ? "" : fmt(x.valor, 2).replace(/\./g, ""), x.tipo, x.zona, x.util, x.cidade, nomeSup(x.sup), x.grupo, x.dia == null ? "" : x.dia, x.contada ? "Sim" : "Não", x.situacao].map(c).join(";"));
+      cab.push("Nome (cadastro)", ...cd.cab);
+      const linhas = L.map((x) => [x.lig, x.arquivo, x.credito ? dataBR(x.credito) : "", x.mes, x.pagto, x.venc, x.valor == null ? "" : fmt(x.valor, 2).replace(/\./g, ""), x.tipo, x.zona, x.util, x.cidade, nomeSup(x.sup), x.grupo, x.dia == null ? "" : x.dia, x.contada ? "Sim" : "Não", x.situacao,
+        nomeCad(cd, x.lig, ""), ...cadDe(cd, x.lig)].map(c).join(";"));
       baixa(new Blob(["﻿" + cab.join(";") + "\r\n" + linhas.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" }), "Conferencia_matriculas.csv");
     };
   }
@@ -3249,12 +3276,21 @@
     const dec = (txt.split(",")[1] || "").replace(/\D/g, "").length;
     return { v, t: "n", z: pctTxt ? "0.00%" : dec ? "#,##0." + "0".repeat(Math.min(dec, 4)) : Number.isInteger(v) ? "#,##0" : "#,##0.00" };
   }
-  function folhaDaTabela(t) {
+  // coluna "Matrícula" da tabela (na 1ª linha), ou -1
+  const colMatricula = (t) => (t.rows[0] ? [...t.rows[0].cells].findIndex((c) => /^matr[ií]cula/i.test(c.textContent.trim())) : -1);
+  function folhaDaTabela(t, cd) {
     const X = window.XLSX, linhas = [];
     for (const tr of t.rows) linhas.push([...tr.cells].flatMap((c) => {
       const cel = c.tagName === "TH" ? { v: c.textContent.replace(/\s+/g, " ").trim(), t: "s" } : valorCelula(c);
       return [cel, ...Array(Math.max(0, (c.colSpan || 1) - 1)).fill(null)];
     }));
+    const jm = colMatricula(t);
+    if (cd && cd.cab.length && jm >= 0) linhas.forEach((l, i) => {     // dados do cadastro no fim de cada linha com matrícula
+      if (!i) { l.push({ v: "Nome (cadastro)", t: "s" }, ...cd.cab.map((n) => ({ v: n, t: "s" }))); return; }
+      const lig = l[jm] ? String(l[jm].v).replace(/\D/g, "") : "";
+      if (!lig) return;
+      l.push({ v: nomeCad(cd, lig, ""), t: "s" }, ...cadDe(cd, lig).map((v) => ({ v, t: "s" })));
+    });
     const ws = X.utils.aoa_to_sheet(linhas.map((l) => l.map((c) => (c ? c.v : null))));
     linhas.forEach((l, i) => l.forEach((c, j) => { if (c && c.t === "n") { const a = X.utils.encode_cell({ r: i, c: j }); ws[a].t = "n"; ws[a].z = c.z; } }));
     ws["!cols"] = (linhas[0] || []).map((_, j) => ({ wch: Math.min(45, Math.max(10, ...linhas.map((l) => String(l[j] ? l[j].v : "").length + 2))) }));
@@ -3270,6 +3306,9 @@
     const X = window.XLSX, wb = X.utils.book_new(), tabs = [...q.querySelectorAll("table")].filter((t) => t.rows.length), usados = new Set();
     if (!tabs.length) { toast("Esse quadro ainda não tem tabela para baixar.", true); return; }
     const titulo = tituloQuadro(q);
+    // tabelas com matrícula: busca os dados do cadastro dessas matrículas
+    const ligs = tabs.flatMap((t) => { const j = colMatricula(t); return j < 0 ? [] : [...t.rows].slice(1).map((r) => (r.cells[j] ? r.cells[j].textContent : "")); });
+    const cd = ligs.length ? await cadastroPara(ligs) : null;
     tabs.forEach((t, i) => {
       // várias tabelas no quadro: cada aba com o título mais próximo acima da tabela (ou "título 1", "título 2"…)
       const acima = [...q.querySelectorAll("h2, h3, h4, .op-top-tit, summary")].filter((h) => h.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING).pop();
@@ -3277,7 +3316,7 @@
         .replace(/[\\/?*[\]:]/g, " ").slice(0, 31).trim() || `Tabela ${i + 1}`;
       while (usados.has(nome)) nome = nome.slice(0, 28) + " " + (i + 1);
       usados.add(nome);
-      X.utils.book_append_sheet(wb, folhaDaTabela(t), nome);
+      X.utils.book_append_sheet(wb, folhaDaTabela(t, cd), nome);
     });
     const info = X.utils.aoa_to_sheet([["Painel de arrecadação"], ["Quadro", titulo], ["Aba", ABAS[E.aba] || E.aba], ["Filtros", filtroTexto()],
       ["Mês", C.rotuloMes(E.mes)], ["Dias úteis", rotuloDias()], ["Gerado em", new Date().toLocaleString("pt-BR")]]);
