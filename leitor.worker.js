@@ -28,6 +28,7 @@ self.onmessage = async (ev) => {
   if (ev.data.tipo === "comparativo") { responde("comparativo", ev.data.id, () => respondeComparativo(ev.data)); return; }
   if (ev.data.tipo === "conferir") { responde("conferir", ev.data.id, () => conferirMatriculas(ev.data)); return; }
   if (ev.data.tipo === "cadastro") { responde("cadastro", ev.data.id, () => respondeCadastro(ev.data)); return; }
+  if (ev.data.tipo === "confdesc") { responde("confdesc", ev.data.id, () => respondeConfDesconto(ev.data)); return; }
   if (ev.data.tipo === "semclass") { responde("semclass", ev.data.id, () => respondeSemClass(ev.data)); return; }
   if (ev.data.tipo === "bimatriculas") { responde("bimatriculas", ev.data.id, () => respondeBIMatriculas(ev.data)); return; }
   if (ev.data.tipo === "negociacao") { responde("negociacao", ev.data.id, () => respondeNegociacao(ev.data)); return; }
@@ -974,6 +975,38 @@ async function respondeOportunidades({ misA, misB, mesesA, mesesB, marcas, comFa
     x.nome = ex.nome(x.lig); x.lig = ligTxt(x.lig);
   }
   return { lista, mesesA, mesesB, cabFat: ex.cabFat, cabRec: ex.cabRec, cabCad: ex.cabCad, ...ex.info() };
+}
+// Conferência do desconto comercial (aba Dados): para cada matrícula com desconto no mês mi, se pagou, onde o desconto caiu e
+// se entrou no total da tela. Mesma regra do painel (C.porGrupo): o desconto vai para a 1ª linha (combinação) em que a matrícula
+// pagou, entre as marcadas pelos filtros e nos dias úteis marcados; sem pagamento no mês, fica fora do total (como no BI).
+async function respondeConfDesconto({ mi, mes, marcas, sel, nomesSup }) {
+  const dm = analise.descontos[mi] || new Map(), CO = 16384, ent = new Map();
+  for (const { L, mapa } of (mi >= 0 && analise.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
+    const cl = L.k[i] % CO, l = (L.k[i] - cl) / CO;
+    if (!dm.has(l)) continue;
+    let m = ent.get(l);
+    if (!m) { m = new Map(); ent.set(l, m); }
+    const c = mapa[cl];
+    m.set(c, (m.get(c) || 0) | (1 << L.d[i]));
+  }
+  const ligs = [...dm.keys()], cc = cadColunas(await cadastroDe(ligs), false), txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " ");
+  const primeiro = (mask) => { for (let d = 0; d < 32; d++) if (mask & (1 << d)) return d; return 99; };
+  const tot = { entrou: 0, sem: 0, fora: 0, dias: 0 };
+  const linhas = ligs.sort((a, b) => a - b).map((l) => {
+    const v = dm.get(l), m = ent.get(l), lista = m ? [...m.entries()].sort((a, b) => primeiro(a[1]) - primeiro(b[1]) || a[0] - b[0]) : [];
+    const ok = lista.filter(([c, mk]) => marcas[c] && (mk & sel)), cb = combosArr[(ok[0] || lista[0] || [])[0]] || null;
+    let situacao, motivo;
+    if (!lista.length) { situacao = "Fora"; motivo = "Sem pagamento no mês: o desconto não entra no total (como no BI)"; tot.sem += v; }
+    else if (ok.length) { situacao = "Entrou"; motivo = ""; tot.entrou += v; }
+    else if (lista.some(([c]) => marcas[c])) { situacao = "Fora"; motivo = "Pagou só fora dos dias úteis marcados"; tot.dias += v; }
+    else { situacao = "Fora"; motivo = "Pagou, mas fora dos filtros do cabeçalho" + (cb ? ` (${nomesSup[cb.sup] || cb.sup}, ${cb.cidade}, ${cb.grupo})` : ""); tot.fora += v; }
+    const supCad = cadastroSup ? cadastroSup.get(ligStr(l)) || "" : "";
+    return [ligTxt(l), txt(nomeDe(l) || cc.nome(l)), C.rotuloMes(mes), nBR(-v), situacao === "Entrou" ? nBR(-v) : "", lista.length ? "Sim" : "Não", situacao, motivo,
+      cb ? nomesSup[cb.sup] || cb.sup : "", cb ? cb.cidade : "", cb ? cb.grupo : "", cb ? txt(cb.zona) : "", nomesSup[supCad] || supCad, ...cc.de(l)].join(";");
+  });
+  const cab = ["Matrícula", "Nome", "Mês (referência)", "Desconto na planilha", "Desconto no total", "Pagou no mês", "Situação", "Motivo",
+    "Superintendência no painel", "Cidade no painel", "Subcategoria no painel", "Zona", "Superintendência no cadastro", ...cc.cab].join(";");
+  return { n: linhas.length, tot, blob: new Blob(["\ufeff" + cab + "\r\n" + linhas.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" }) };
 }
 // Matrículas em "Sem classificação" (aba Subcategoria): por matrícula × mês × utilização, com o motivo. Nos meses mis, nas
 // combinações marcadas e nos dias úteis sel (como as tabelas da aba). CSV montado aqui.

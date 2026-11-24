@@ -374,6 +374,7 @@
       else if (m.tipo === "negociacao") recebeNegociacao(m);
       else if (m.tipo === "bimatriculas") recebeBIMatriculas(m);
       else if (m.tipo === "semclass") recebeSemClass(m);
+      else if (m.tipo === "confdesc") recebeConfDesc(m);
       else if (m.tipo === "cadastro") { const f = pedidosCad.get(m.id); if (f) { pedidosCad.delete(m.id); f(m); } }
       else if (m.tipo === "conferir") recebeConferir(m);
       else if (m.tipo === "conferir-progresso") $("confStatus").textContent = m.texto + "…";
@@ -1039,6 +1040,22 @@
   }
   const cadDe = (cd, lig) => cd.linhas[String(lig).replace(/\D/g, "")] || cd.cab.map(() => "");
   const nomeCad = (cd, lig, nome) => nome || cd.nomes[String(lig).replace(/\D/g, "")] || "";
+  // ----- conferência do desconto comercial (aba Dados) -----
+  let idConfDesc = 0;
+  $("descBaixar").addEventListener("click", () => {
+    if (!worker || !E.res) return;
+    $("descBaixar").disabled = true; $("descStatus").textContent = "Montando…";
+    worker.postMessage({ tipo: "confdesc", id: ++idConfDesc, mi: idxMes(E.mes), mes: E.mes, marcas: marcas(), sel: selCalc(), nomesSup: NOME_SUP });
+  });
+  function recebeConfDesc(m) {
+    if (m.id !== idConfDesc) return;
+    $("descBaixar").disabled = false;
+    if (m.erro) { $("descStatus").textContent = "Erro: " + m.erro; return; }
+    const t = m.tot, tela = C.totalDoMes(E.res.dados, idxMes(E.mes), marcas(), selCalc()).desconto;
+    $("descStatus").textContent = `${fmt(m.n)} matrículas com desconto em ${C.rotuloMes(E.mes)}: entrou no total ${rs(-t.entrou)} (tela: ${rs(tela)}) · sem pagamento no mês ${rs(-t.sem)}`
+      + ` · fora dos filtros ${rs(-t.fora)} · fora dos dias marcados ${rs(-t.dias)}`;
+    if (m.n) baixa(m.blob, `Conferencia_desconto_${E.mes}_${filtroTexto("_").replace(/[^\wÀ-ú+-]+/g, "_")}.csv`);
+  }
   // ----- matrículas em "Sem classificação" (o worker monta o CSV) -----
   let idSemClass = 0;
   $("semClassBaixar").addEventListener("click", () => {

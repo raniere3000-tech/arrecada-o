@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v104-20261124">
+<link rel="stylesheet" href="assets/painel.css?v=v105-20261124">
 </head>
 <body>
 
@@ -417,6 +417,13 @@
         <div class="wrap" id="biTabela"></div>
       </details>
 
+      <details class="card curva" id="descCard"><summary><h2>Conferir o desconto comercial <small>matrícula a matrícula, o que entrou no total e o que ficou fora</small></h2></summary>
+        <p class="nota">Uma linha por matrícula com desconto comercial no <b>mês do filtro</b> (pela REFERENCIA da planilha de descontos): o desconto, se a matrícula pagou
+          no mês, a superintendência, cidade e subcategoria em que o painel pôs o desconto e se ele <b>entrou no total</b> da tela, com o motivo quando ficou fora
+          (sem pagamento no mês, pagamento fora dos filtros do cabeçalho ou fora dos dias úteis marcados). Somando "Desconto no total", dá o "Desconto comercial" da tela.</p>
+        <div class="base-acoes"><button type="button" class="btn" id="descBaixar">⬇ Baixar conferência do desconto (CSV)</button><span class="salvo" id="descStatus"></span></div>
+      </details>
+
       <details class="card curva" id="confCard"><summary><h2>Conferir matrícula na leitura <small>em que planilha está, em que meses tem valor e se o painel contou</small></h2></summary>
         <p class="nota">Procura a matrícula em <b>todos os arquivos CSV/TXT da pasta</b> (inclusive os que o painel não usa) e mostra cada linha encontrada: arquivo,
           Data Crédito, mês, valor e a <b>situação</b> no painel (contada na tela, fora dos filtros, fora dos dias marcados, mês vindo de outro arquivo,
@@ -621,9 +628,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v104-20261124"></script>
-<script src="assets/calculos.js?v=v104-20261124"></script>
-<script>const VERSAO_SITE = "v104-20261124"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v104-20261124"></script>
+<script src="assets/regras.js?v=v105-20261124"></script>
+<script src="assets/calculos.js?v=v105-20261124"></script>
+<script>const VERSAO_SITE = "v105-20261124"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v105-20261124"></script>
 </body>
 </html>
