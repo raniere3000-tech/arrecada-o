@@ -227,11 +227,11 @@ async function classifica(item) {
   if (!["xlsx", "xlsm", "xls", "xlsb"].includes(e)) return { tipo: "ignorado", motivo: "formato não usado" };
   // planilhas grandes conhecidas pelo nome (desconto, cluster): lidas inteiras uma vez só; as outras, só o começo
   const n = C.chave(file.name), inteira = ["DESCONTO", "CLUSTER", "PERFIL"].some((x) => n.includes(x));
-  if (!inteira && file.size > XLSX_GRANDE && e === "xlsx") {          // grande (ex.: cadastro): reconhece só pelo começo, em fluxo
+  if (file.size > XLSX_GRANDE && e === "xlsx") {          // grande (ex.: cadastro, cluster da Leste): reconhece pelo começo, em fluxo
     const { out } = await fxPrimeiras(file);
     for (const { aba, linhas } of out) {
       if (achaCabecalho(linhas, COLS_DESCONTO)) return { tipo: "desconto", aba };
-      if (achaCabecalho(linhas, COLS_PERFIL)) return { tipo: "perfil", aba };
+      if (achaCabecalho(linhas, COLS_PERFIL)) return { tipo: "perfil", aba, fluxo: true };
       if (achaCabecalho(linhas, COLS_RECEBER)) return { tipo: "receber", aba };
       if (achaCabecalho(linhas, COLS_CAD_SUP)) return { tipo: "cadastro", aba, fluxo: true };
       if (achaCabecalho(linhas, COLS_ORCADO)) return { tipo: "orcado", aba };
@@ -255,6 +255,15 @@ async function classifica(item) {
 
 // ---------- planilhas ----------
 async function lePerfil(arq, mapa) {
+  if (arq.fluxo || (!arq.livro && arq.file.size > XLSX_GRANDE && ext(arq.file.name) === "xlsx")) {   // grande: linha a linha
+    let n = 0;
+    await fxLinhas(arq, COLS_PERFIL, (l, ix) => {
+      if (l[ix.NUMLIGACAO] == null) return;
+      const k = C.ligacao(l[ix.NUMLIGACAO]) + "|" + C.ligacao(l[ix.SEQRESPONSAVEL]), c = l[ix.CLUSTERSALDO];
+      if (!mapa.has(k)) { mapa.set(k, String(c == null ? "" : c).trim() || "Sem perfil"); n++; }
+    }, "Lendo perfil");
+    return n;
+  }
   const linhas = linhasDaAba(arq.livro || leLivro(await arq.file.arrayBuffer()), arq.aba);
   const cab = achaCabecalho(linhas, COLS_PERFIL), { NUMLIGACAO: a, SEQRESPONSAVEL: b, CLUSTERSALDO: c } = cab.idx;
   let n = 0;
@@ -314,22 +323,7 @@ async function leCadastro(arq, mapa) {
     }, () => {});
   } else if (arq.fluxo || arq.file.size > XLSX_GRANDE) {
     // planilha grande: linha a linha, sem montar a planilha na memória
-    const { sst, abas } = await fxAbre(arq.file), aba = abas.find((x) => x.nome === arq.aba) || abas[0];
-    if (!aba) throw new Error("planilha sem abas");
-    const primeiras = [];
-    let cab = null, vistas = 0;
-    await fxBlocos(arq.file, aba.e, "</row>", (b) => {
-      const l = fxCelulas(b.slice(b.lastIndexOf("<row")), sst);
-      if (!cab) {
-        primeiras.push(l); vistas++;
-        cab = achaCabecalho(primeiras, COLS_CAD_SUP);
-        if (!cab && vistas > 15) return false;
-        return;
-      }
-      const { NUMLIGACAO: a, SUPERINTENDENCIA: s } = cab.idx;
-      if (l[a] != null) guarda(l[a], l[s]);
-    }, (f) => avisa("progresso", { pct: 13, texto: `Lendo cadastro (superintendência): ${arq.rel} (${Math.round(f * 100)}%)` }));
-    if (!cab) throw new Error("não achei as colunas NUM_LIGACAO e SUPERINTENDENCIA");
+    await fxLinhas(arq, COLS_CAD_SUP, (l, ix) => { if (l[ix.NUMLIGACAO] != null) guarda(l[ix.NUMLIGACAO], l[ix.SUPERINTENDENCIA]); }, "Lendo cadastro (superintendência)");
   } else {
     const linhas = linhasDaAba(leLivro(await arq.file.arrayBuffer()), arq.aba);
     const cab = achaCabecalho(linhas, COLS_CAD_SUP), { NUMLIGACAO: a, SUPERINTENDENCIA: b } = cab.idx;
@@ -403,7 +397,7 @@ async function leOrcado(file) {
 // O SheetJS monta a planilha inteira na memória: um cadastro de centenas de milhares de linhas passa do limite do navegador
 // (o XML da aba vira um texto grande demais) e a leitura falha. Acima de XLSX_GRANDE, o arquivo é lido por partes: o zip
 // pelo índice central (com zip64), cada aba descompactada em fluxo (DecompressionStream) e cortada em </row>.
-const XLSX_GRANDE = 25 * 1048576;
+const XLSX_GRANDE = 10 * 1048576;
 function fxDec(s) {
   if (s.indexOf("&") < 0) return s;
   return s.replace(/&(amp|lt|gt|quot|apos|#x[0-9a-fA-F]+|#\d+);/g, (x, e) =>
@@ -501,6 +495,19 @@ async function fxAbre(file) {
     }
   }
   return { sst, abas };
+}
+// percorre a aba linha a linha: acha o cabeçalho com as colunas pedidas (nas 15 primeiras) e chama aoLinha(linha, idx)
+async function fxLinhas(arq, colunas, aoLinha, texto) {
+  const { sst, abas } = await fxAbre(arq.file), aba = abas.find((x) => x.nome === arq.aba) || abas[0];
+  if (!aba) throw new Error("planilha sem abas");
+  const primeiras = [];
+  let cab = null;
+  await fxBlocos(arq.file, aba.e, "</row>", (b) => {
+    const l = fxCelulas(b.slice(b.lastIndexOf("<row")), sst);
+    if (!cab) { primeiras.push(l); cab = achaCabecalho(primeiras, colunas); return cab || primeiras.length <= 15 ? undefined : false; }
+    aoLinha(l, cab.idx);
+  }, (f) => avisa("progresso", { pct: 13, texto: `${texto}: ${arq.rel} (${Math.round(f * 100)}%)` }));
+  if (!cab) throw new Error("não achei as colunas " + colunas.join(", "));
 }
 // as primeiras n linhas de cada aba (para reconhecer o tipo da planilha pelo cabeçalho)
 async function fxPrimeiras(file, n = 16) {
