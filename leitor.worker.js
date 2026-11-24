@@ -27,6 +27,7 @@ self.onmessage = async (ev) => {
   if (ev.data.tipo === "matricula") { responde("matricula", ev.data.id, () => respondeMatricula(ev.data)); return; }
   if (ev.data.tipo === "comparativo") { responde("comparativo", ev.data.id, () => respondeComparativo(ev.data)); return; }
   if (ev.data.tipo === "conferir") { responde("conferir", ev.data.id, () => conferirMatriculas(ev.data)); return; }
+  if (ev.data.tipo === "semclass") { responde("semclass", ev.data.id, () => respondeSemClass(ev.data)); return; }
   if (ev.data.tipo === "bimatriculas") { responde("bimatriculas", ev.data.id, () => respondeBIMatriculas(ev.data)); return; }
   if (ev.data.tipo === "negociacao") { responde("negociacao", ev.data.id, () => respondeNegociacao(ev.data)); return; }
   if (ev.data.tipo === "oportunidades") { responde("oportunidades", ev.data.id, () => respondeOportunidades(ev.data)); return; }
@@ -970,6 +971,34 @@ async function respondeOportunidades({ misA, misB, mesesA, mesesB, marcas, comFa
     x.nome = nomeDe(x.lig); x.lig = ligTxt(x.lig);
   }
   return { lista, mesesA, mesesB, cabFat: ex.cabFat, cabRec: ex.cabRec, ...ex.info() };
+}
+// Matrículas em "Sem classificação" (aba Subcategoria): por matrícula × mês × utilização, com o motivo. Nos meses mis, nas
+// combinações marcadas e nos dias úteis sel (como as tabelas da aba). CSV montado aqui.
+function respondeSemClass({ mis, meses, marcas, sel, nomesSup }) {
+  const txt = (t) => String(t == null ? "" : t).replace(/[;\r\n]/g, " "), por = new Map(), CO = 16384;
+  mis.forEach((mi, j) => {
+    for (const { L, mapa } of (mi >= 0 && analise.entradas[mi]) || []) for (let i = 0; i < L.k.length; i++) {
+      if (!(sel & (1 << L.d[i]))) continue;
+      const cl = L.k[i] % CO, c = mapa[cl], cb = combosArr[c];
+      if (!marcas[c] || !cb || cb.grupo !== R.SEM_CLASSIFICACAO) continue;
+      const l = (L.k[i] - cl) / CO, k = l + "|" + j + "|" + c;
+      let x = por.get(k);
+      if (!x) { x = { l, j, c, valor: 0, mask: 0, contas: 0 }; por.set(k, x); }
+      x.valor += L.v[i]; x.mask |= 1 << L.d[i]; if (L.n) x.contas += L.n[i];
+    }
+  });
+  const lista = [...por.values()].sort((a, b) => a.l - b.l || a.j - b.j), ligs = new Set(lista.map((x) => x.l));
+  const linhas = lista.map((x) => {
+    const cb = combosArr[x.c], util = String(cb.util || "").trim();
+    let dias = 0; for (let d = 0; d < 32; d++) if (x.mask & (1 << d)) dias++;
+    const motivo = !util ? "Utilização (Sub. Categ.) em branco no arquivo" : "Código de utilização fora da relação de subcategorias do painel";
+    return [ligTxt(x.l), txt(nomeDe(x.l)), nomesSup[cb.sup] || cb.sup || "", cb.cidade || "", txt(cb.zona), txt(util || "(em branco)"), motivo, txt(cb.perfil),
+      C.rotuloMes(meses[x.j]), nBR(x.valor), x.contas, dias].join(";");
+  });
+  const cab = ["Matrícula", "Nome", "Superintendência", "Cidade", "Zona (Localidade)", "Utilização (Sub. Categ.) no arquivo", "Motivo", "Perfil", "Mês", "Valor pago", "Contas pagas", "Dias com pagamento"].join(";");
+  const porUtil = {};
+  for (const x of lista) { const u = String(combosArr[x.c].util || "").trim() || "(em branco)"; porUtil[u] = (porUtil[u] || 0) + x.valor; }
+  return { linhas: lista.length, matriculas: ligs.size, porUtil, blob: new Blob(["\ufeff" + cab + "\r\n" + linhas.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" }) };
 }
 // Tabela do BI por matrícula (aba Dados): CSV em blocos (pode ter centenas de milhares de linhas)
 function respondeBIMatriculas({ mis, misAnt, meses, marcas, sel, ligs, nomesSup }) {

@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v102-20261124">
+<link rel="stylesheet" href="assets/painel.css?v=v103-20261124">
 </head>
 <body>
 
@@ -137,6 +137,12 @@
       <div class="card"><h2>Valor arrecadado <small class="ate-dia"></small></h2><div class="wrap"><table id="tSubValor" class="compacta categorias"></table></div></div>
       <div class="card"><h2>Clientes pagantes <small class="ate-dia"></small></h2><div class="wrap"><table id="tSubCli" class="categorias"></table></div></div>
       <div class="card"><h2>Contas pagas <small class="ate-dia"></small></h2><div class="wrap"><table id="tSubCon" class="categorias"></table></div></div>
+      <div class="card sem-pdf"><h2>Matrículas sem classificação</h2>
+        <p class="nota">Uma linha por matrícula, mês e Utilização (Sub. Categ.) que caiu em <b>Sem classificação</b>, com a utilização exatamente como veio no
+          arquivo de arrecadação, o motivo (em branco ou código fora da relação de subcategorias), o valor pago, as contas e os dias com pagamento (para ver em que arquivo cada uma está, use Dados → Conferir matrícula). Mesmos meses, filtros
+          do cabeçalho e dias úteis marcados das tabelas acima.</p>
+        <div class="base-acoes"><button type="button" class="btn" id="semClassBaixar">⬇ Baixar matrículas sem classificação (CSV)</button><span class="salvo" id="semClassStatus"></span></div>
+      </div>
     </section>
 
     <section class="painel-aba" data-painel="perfil" hidden>
@@ -615,9 +621,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v102-20261124"></script>
-<script src="assets/calculos.js?v=v102-20261124"></script>
-<script>const VERSAO_SITE = "v102-20261124"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v102-20261124"></script>
+<script src="assets/regras.js?v=v103-20261124"></script>
+<script src="assets/calculos.js?v=v103-20261124"></script>
+<script>const VERSAO_SITE = "v103-20261124"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v103-20261124"></script>
 </body>
 </html>

@@ -373,6 +373,7 @@
       else if (m.tipo === "oportunidades") recebeOportunidades(m);
       else if (m.tipo === "negociacao") recebeNegociacao(m);
       else if (m.tipo === "bimatriculas") recebeBIMatriculas(m);
+      else if (m.tipo === "semclass") recebeSemClass(m);
       else if (m.tipo === "conferir") recebeConferir(m);
       else if (m.tipo === "conferir-progresso") $("confStatus").textContent = m.texto + "…";
       else if (m.tipo === "comparativo") recebeComparativo(m);
@@ -1021,6 +1022,22 @@
     tabela(ids[0], [opcoes.titulo + " (R$)", ...cab.slice(1)], monta("valor", fmt, true));
     tabela(ids[1], cab, monta("clientes", fmt, false));
     tabela(ids[2], cab, monta("contas", fmt, false));
+  }
+  // ----- matrículas em "Sem classificação" (o worker monta o CSV) -----
+  let idSemClass = 0;
+  $("semClassBaixar").addEventListener("click", () => {
+    if (!worker || !E.res) return;
+    const meses = mesesDaComparacao();
+    $("semClassBaixar").disabled = true; $("semClassStatus").textContent = "Montando…";
+    worker.postMessage({ tipo: "semclass", id: ++idSemClass, mis: meses.map(idxMes), meses, marcas: marcas(), sel: selCalc(), nomesSup: NOME_SUP });
+  });
+  function recebeSemClass(m) {
+    if (m.id !== idSemClass) return;
+    $("semClassBaixar").disabled = false;
+    if (m.erro) { $("semClassStatus").textContent = "Erro: " + m.erro; return; }
+    const utils = Object.entries(m.porUtil).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([u, v]) => `${u} (${rs(v)})`).join(", ");
+    $("semClassStatus").textContent = m.linhas ? `${fmt(m.matriculas)} matrícula(s), ${fmt(m.linhas)} linha(s). Utilizações: ${utils}` : "Nenhuma matrícula sem classificação nos meses e filtros atuais.";
+    if (m.linhas) baixa(m.blob, `Matriculas_sem_classificacao_${filtroTexto("_").replace(/[^\wÀ-ú+-]+/g, "_")}.csv`);
   }
   ["tSubValor"].forEach((id) => $(id).addEventListener("click", (e) => {
     const tr = e.target.closest("tr.grupo");
