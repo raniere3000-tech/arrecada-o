@@ -637,6 +637,11 @@ body.sup-leste td, body.sup-leste .kpi b, body.sup-leste .op-hero-val, body.sup-
 body.sup-leste td.rot, body.sup-leste table.explica td, body.sup-leste .leitura td, body.sup-leste .arquivos-dados td { color: #000; }
 body.sup-leste td.neg, body.sup-leste .kpi .neg { color: var(--laranja-texto); }
 body.sup-leste .dias button.sel, body.sup-leste #dias button.extra.sel { background: #16a5b8; border-color: #16a5b8; color: #fff; }
+/* Seletor de dias úteis (v111, modelo 1): marcados como antes; dias que existem no mês e não estão marcados em azul-claro; dias
+   que não existem no mês (depois do último dia útil) em cinza bem clarinho, sem borda */
+#dias > button:not(.sel):not(.zero):not(.extra) { background: #dbeaf4; color: #176b9c; border-color: #dbeaf4; }
+#dias > button.futuro { opacity: 1; }
+#dias button.extra:not(.sel):not(.auto) { background: #f1f5f9; color: #cbd5e1; border: 1px solid #f1f5f9; }
 /* faixa das páginas do PDF com a cor da superintendência */
 .pdf-selo.interior { background: #1A2740; }
 .pdf-selo.leste { background: #16a5b8; }
