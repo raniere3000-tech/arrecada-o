@@ -3140,6 +3140,7 @@
       cols.append(col);
     }
     document.body.append(capa);
+    document.body.classList.remove("sup-leste");      // cada quadro da capa usa a cor dele (.cap-interior / .cap-leste), não a da última tela desenhada
     await quadro();
     return capa;
   }
