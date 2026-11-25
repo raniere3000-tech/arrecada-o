@@ -674,7 +674,9 @@
       `Mês: ${C.rotuloMes(E.mes)}`, E.aba === "perfil" || E.aba === "analise" ? `Perfil: ${nomePerfil()}` : "", E.verOrcado ? `Orçado: ${fonteAtiva(E.mes) === DIGITADO ? "digitado" : fonteAtiva(E.mes)}` : "",
       `dias úteis: ${rotuloDias()}`].filter(Boolean).join(" · ");
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
-    $("cabecalhoPdf").innerHTML = `<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
+    const selo = E.pdfRotulo ? `<div class="pdf-selo ${E.pdfRotulo.tipo === "Fechamento" ? "fechamento" : "parcial"}"><span>${esc(E.pdfRotulo.tipo.toUpperCase())} · ${esc(supsTexto().toUpperCase())}</span>`
+      + `<small>${esc(E.pdfRotulo.detalhe)}</small></div>` : "";
+    $("cabecalhoPdf").innerHTML = `${selo}<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloDias()} de cada mês`; });
     $("diasCard").hidden = E.aba === "dados" || E.aba === "base" || (!!AREA_DA_ABA[E.aba] && !["localidade", "analise", "clientes", "negociacao"].includes(E.aba));   // Diagnóstico, Ranking e Clientes usam os dias marcados
     ({ resumo: desenhaResumo, subcategoria: desenhaSubcategoria, perfil: desenhaPerfil, cidades: desenhaCidades, escada: desenhaEscada, onepage: desenhaOnePage, analise: desenhaAnalise, base: desenhaBase, dados: desenhaDados, fxa: desenhaFxa, fxv: desenhaFxv,
@@ -3108,18 +3110,44 @@
     if (E.res) { opChaveTop = ""; desenha(); }
   });
 
-  $("btnPdf").addEventListener("click", async () => {
+  // PDF: "tela" = como está; "fp" = fechamento (até o dia útil anterior ao último com dados) + parcial (até o último dia com
+  // dados) da superintendência do filtro; "fp2" = os dois para o Interior e para a Leste (4 partes: fechamento Interior,
+  // fechamento Leste, parcial Interior, parcial Leste). Cada página leva a faixa com o tipo e a superintendência.
+  const menuPdf = $("menuPdf");
+  const fechaMenuPdf = () => { menuPdf.hidden = true; $("btnPdf").setAttribute("aria-expanded", "false"); };
+  $("btnPdf").addEventListener("click", (e) => { e.stopPropagation(); menuPdf.hidden = !menuPdf.hidden; $("btnPdf").setAttribute("aria-expanded", String(!menuPdf.hidden)); });
+  document.addEventListener("click", (e) => { if (!menuPdf.hidden && !e.target.closest("#menuPdfWrap")) fechaMenuPdf(); });
+  menuPdf.querySelectorAll("button[data-pdf]").forEach((b) => b.addEventListener("click", () => { fechaMenuPdf(); geraPdf(b.dataset.pdf); }));
+  async function geraPdf(modo) {
     if (!window.jspdf || !window.html2canvas) { toast("As bibliotecas do PDF ainda estão carregando; tente de novo.", true); return; }
-    const btn = $("btnPdf"), abaAntes = E.aba;
+    const btn = $("btnPdf"), abaAntes = E.aba, antes = { sel: E.sel, sups: E.sups, cidades: E.cidades };
+    // partes do arquivo: [tipo, superintendências, máscara dos dias]
+    const N = ultimoDiaComDados(E.mes), cal = C.calendario(E.mes), dataDia = (k) => (cal.dataDoDia[k] ? dataBR(cal.dataDoDia[k]) : "");
+    const fech = { tipo: "Fechamento", sel: C.mascaraAte(N - 1), detalhe: `dias úteis 1 a ${N - 1} · até ${dataDia(N - 1)} · ${C.rotuloMes(E.mes)}` };
+    const parc = { tipo: "Parcial", sel: C.mascaraAte(N), detalhe: `dias úteis 1 a ${N} · até ${dataDia(N)} · ${C.rotuloMes(E.mes)}` };
+    let partes = [{ tipo: null }];
+    if (modo !== "tela") {
+      if (N < 2) { toast("Ainda não há dois dias úteis com dados neste mês para separar fechamento e parcial.", true); return; }
+      partes = modo === "fp" ? [fech, parc].map((p) => ({ ...p, sups: E.sups }))
+        : [fech, parc].flatMap((p) => ["INTERIOR", "LESTE"].map((s) => ({ ...p, sups: [s], cidades: [] })));
+    }
     btn.disabled = true;
     btn.textContent = "Gerando…";
     document.body.classList.add("gerando-pdf");
     try {
       // cada aba numa folha A4 só: a imagem (em alta resolução, PNG) é reduzida para caber inteira; a folha fica deitada
       // ou em pé, a que deixar o conteúdo maior
-      let pdf = null;
+      let pdf = null, pag = 0;
       const M = 7;
+      for (const parte of partes) {
+      if (parte.tipo) {
+        E.pdfRotulo = { tipo: parte.tipo, detalhe: parte.detalhe };
+        E.sel = parte.sel; E.sups = parte.sups;
+        if (parte.cidades) E.cidades = parte.cidades;
+        montaFiltros();
+      }
       for (const aba of ABAS_PDF) {
+        btn.textContent = `Gerando… ${++pag}/${partes.length * ABAS_PDF.length}`;
         mostraAba(aba);
         await quadro();
         const fundo = document.body.classList.contains("bi") ? "#ffffff" : "#f3f6f9";
@@ -3136,17 +3164,22 @@
         pdf.setFillColor(fundo);
         pdf.rect(0, 0, W, H, "F");
         pdf.addImage(cv.toDataURL("image/png"), "PNG", (W - w) / 2, M, w, h, undefined, "FAST");
+        if (parte.tipo && aba === ABAS_PDF[0]) pdf.outline.add(null, `${parte.tipo} — ${supsTexto()}`, { pageNumber: pdf.getNumberOfPages() });   // marcador no leitor de PDF
       }
-      pdf.save(`Arrecadacao_${E.mes}_${(E.sups.join("_") || "todas").toLowerCase()}.pdf`);
+      }
+      const sufixo = modo === "tela" ? (E.sups.join("_") || "todas").toLowerCase() : modo === "fp" ? `fechamento_e_parcial_${(antes.sups.join("_") || "todas").toLowerCase()}` : "fechamento_e_parcial_interior_e_leste";
+      pdf.save(`Arrecadacao_${E.mes}_${sufixo}.pdf`);
     } catch (e) {
       toast("Não foi possível gerar o PDF: " + esc(e.message || e), true);
     } finally {
       document.body.classList.remove("gerando-pdf");
+      E.pdfRotulo = null; E.sel = antes.sel; E.sups = antes.sups; E.cidades = antes.cidades;
+      if (modo !== "tela") montaFiltros();
       mostraAba(abaAntes);
       btn.disabled = false;
-      btn.textContent = "📄 PDF";
+      btn.textContent = "📄 PDF ▾";
     }
-  });
+  }
 
   // ===== Prints para a apresentação (mesma ideia do painel de faturamento água e esgoto): cada aba do Executivo (Resumo a
   // Escada) vira uma imagem do tamanho exato de um slide 16:9, em alta resolução. A largura da página é escolhida para a

@@ -574,7 +574,7 @@ body.bi .btn-excel { color: #1f6f43; }
 
 /* painel de Duplicidades (botões Arrecadação / Duplicidades no lugar de Painel / Power BI) */
 body.modo-dup #filtros, body.modo-dup #abas, body.modo-dup #area, body.modo-dup #vazio, body.modo-dup #leitura,
-body.modo-dup #btnOrcado, body.modo-dup #btnPdf, body.modo-dup #btnMensal, body.modo-dup #menuPrintWrap { display: none !important; }
+body.modo-dup #btnOrcado, body.modo-dup #menuPdfWrap, body.modo-dup #btnPdf, body.modo-dup #btnMensal, body.modo-dup #menuPrintWrap { display: none !important; }
 #dupArea { margin-top: 14px; }
 #dupArea .dup-nota { margin: 0 0 8px; }
 #dupFrame { display: block; width: 100%; min-height: 400px; border: 0; background: transparent; }
@@ -617,3 +617,10 @@ body.print-conteudo .cabecalho-pdf, body.print-conteudo #diasCard, body.print-co
 body.print-conteudo .painel-aba:not([hidden]) > .card:first-of-type { margin-top: 0; }
 body.gerando-print [data-print-oculto] { display: none !important; }   /* print de uma tabela só (Cidades) */
 .kpi-proj .proj-nota { display: block; margin-top: 4px; font-size: 11px; font-style: normal; text-transform: none; letter-spacing: 0; color: var(--muted, #64748b); }
+/* PDF com várias partes: faixa no topo de cada página dizendo se é Fechamento ou Parcial e de qual superintendência */
+.pdf-selo { display: none; }
+body.gerando-pdf .pdf-selo { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 6px; padding: 8px 14px; border-radius: 8px;
+  color: #fff; font-weight: 700; font-size: 18px; letter-spacing: .02em; }
+.pdf-selo.fechamento { background: #1A2740; }
+.pdf-selo.parcial { background: #176b9c; }
+.pdf-selo small { font-weight: 500; font-size: 13px; letter-spacing: 0; opacity: .92; }

@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23102840'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' fill='none' stroke='%239FD3FF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/painel.css?v=v105-20261124">
+<link rel="stylesheet" href="assets/painel.css?v=v106-20261125">
 </head>
 <body>
 
@@ -28,7 +28,12 @@
       <button type="button" class="btn-top" id="btnPasta">📁 Conectar pasta</button>
       <button type="button" class="btn-top" id="btnAtualizar" hidden>↻ Atualizar</button>
       <button type="button" class="btn-top" id="btnOrcado" aria-pressed="true" title="Mostrar ou esconder o orçado no painel (cartões, tabelas, curva, Diagnóstico e One page): sem ele, fica só o realizado">👁 Orçado</button>
-      <button type="button" class="btn-top" id="btnPdf" disabled>📄 PDF</button>
+      <span class="menu-print" id="menuPdfWrap"><button type="button" class="btn-top" id="btnPdf" disabled aria-haspopup="true" aria-expanded="false" aria-controls="menuPdf" title="PDF das abas do Executivo (Resumo a Escada)">📄 PDF ▾</button>
+        <span class="menu-print-lista" id="menuPdf" role="menu" hidden>
+          <button type="button" role="menuitem" data-pdf="tela">Como está na tela<small>superintendência, filtros e dias úteis marcados agora</small></button>
+          <button type="button" role="menuitem" data-pdf="fp">Fechamento + parcial<small>a superintendência do filtro: fechamento até o dia útil anterior e parcial até o último dia com dados, no mesmo arquivo</small></button>
+          <button type="button" role="menuitem" data-pdf="fp2" class="menu-print-todas">Fechamento + parcial — Interior e Leste<small>4 partes no mesmo arquivo: fechamento Interior, fechamento Leste, parcial Interior e parcial Leste</small></button>
+        </span></span>
       <button type="button" class="btn-top" id="btnMensal" disabled title="Planilha do relatório diário do mês escolhido: arrecadação por subcategoria e utilização, clientes pagantes e contas pagas, dia a dia">📅 Mensal</button>
       <span class="menu-print" id="menuPrintWrap"><button type="button" class="btn-top" id="btnPrint" disabled aria-haspopup="true" aria-expanded="false" aria-controls="menuPrint" title="Imagens em alta resolução das abas do Executivo, do tamanho de um slide (16:9), para a apresentação">🖼 Prints ▾</button>
         <span class="menu-print-lista" id="menuPrint" role="menu" hidden>
@@ -628,9 +633,9 @@
 
 <script src="lib/html2canvas.min.js" defer></script>
 <script src="lib/jspdf.umd.min.js" defer></script>
-<script src="assets/regras.js?v=v105-20261124"></script>
-<script src="assets/calculos.js?v=v105-20261124"></script>
-<script>const VERSAO_SITE = "v105-20261124"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
-<script src="assets/painel.js?v=v105-20261124"></script>
+<script src="assets/regras.js?v=v106-20261125"></script>
+<script src="assets/calculos.js?v=v106-20261125"></script>
+<script>const VERSAO_SITE = "v106-20261125"; // muda a cada alteração: o selo do cabeçalho é derivado daqui</script>
+<script src="assets/painel.js?v=v106-20261125"></script>
 </body>
 </html>
