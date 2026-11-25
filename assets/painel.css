@@ -625,16 +625,31 @@ body.gerando-pdf .pdf-selo { display: flex; justify-content: space-between; alig
 .pdf-selo.parcial { background: #176b9c; }
 .pdf-selo small { font-weight: 500; font-size: 13px; letter-spacing: 0; opacity: .92; }
 
-/* Números em cinza no Interior e em ciano na Leste (pedido do usuário, v108/v109): tabelas, números grandes dos cartões, dias marcados no seletor e One page.
-   Os negativos continuam em laranja (td.neg, .kpi .neg, .op-neg) e os rótulos das linhas continuam em preto.
-   Para voltar como antes, basta apagar este bloco. Cinza = --muted da paleta (#64748b). */
-td { color: #64748b; }
+/* Cor dos números por superintendência (pedido do usuário, v110): Interior #1A2740 e Leste #16a5b8 (tabelas, números grandes dos
+   cartões, dias marcados e One page). Os negativos continuam em laranja e os rótulos das linhas em preto. Só a Leste no filtro =
+   ciano; Interior, as duas juntas ou Todas = #1A2740. */
+td { color: #1A2740; }
 td.rot, table.explica td, .leitura td, .arquivos-dados td { color: #000; }
-.kpi b { color: #64748b; }
-.dias button.sel, #dias button.extra.sel { background: #64748b; border-color: #64748b; color: #fff; }
-.op-hero-val, .op-card b, .op-vol b, .op-top-lin b { color: #64748b; }
-/* Leste (só a Leste no filtro): os mesmos números em ciano (--cyan da paleta, #16a5b8) */
+.kpi b { color: #1A2740; }
+.dias button.sel, #dias button.extra.sel { background: #1A2740; border-color: #1A2740; color: #fff; }
+.op-hero-val, .op-card b, .op-vol b, .op-top-lin b { color: #1A2740; }
 body.sup-leste td, body.sup-leste .kpi b, body.sup-leste .op-hero-val, body.sup-leste .op-card b, body.sup-leste .op-vol b, body.sup-leste .op-top-lin b { color: #16a5b8; }
 body.sup-leste td.rot, body.sup-leste table.explica td, body.sup-leste .leitura td, body.sup-leste .arquivos-dados td { color: #000; }
 body.sup-leste td.neg, body.sup-leste .kpi .neg { color: var(--laranja-texto); }
 body.sup-leste .dias button.sel, body.sup-leste #dias button.extra.sel { background: #16a5b8; border-color: #16a5b8; color: #fff; }
+/* faixa das páginas do PDF com a cor da superintendência */
+.pdf-selo.interior { background: #1A2740; }
+.pdf-selo.leste { background: #16a5b8; }
+/* página inicial do PDF unificado: Interior e Leste lado a lado (os nomes são links para o começo de cada parte) */
+.pdf-capa { position: absolute; left: 0; top: 0; width: 1500px; padding: 24px; background: #f3f6f9; z-index: -1; }
+.pdf-capa-tit { font-size: 22px; font-weight: 700; color: #1A2740; margin: 0 0 14px; }
+.pdf-capa-tit small { display: block; font-size: 13px; font-weight: 500; color: #64748b; margin-top: 2px; }
+.pdf-capa-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+.pdf-capa-tag { display: inline-block; padding: 6px 14px; color: #fff; font-weight: 700; font-size: 18px; letter-spacing: .04em; border-radius: 4px; margin-bottom: 10px; }
+.cap-interior .pdf-capa-tag { background: #1A2740; } .cap-leste .pdf-capa-tag { background: #16a5b8; }
+.pdf-capa .kpis { grid-template-columns: 1fr 1fr; margin-top: 0; }
+.pdf-capa .card { margin-top: 12px; }
+.pdf-capa .sem-pdf { display: none !important; }
+.pdf-capa .cap-interior td, .pdf-capa .cap-interior .kpi b { color: #1A2740; }
+.pdf-capa .cap-leste td, .pdf-capa .cap-leste .kpi b { color: #16a5b8; }
+.pdf-capa .pdf-capa-col td.rot { color: #000; } .pdf-capa .pdf-capa-col td.neg, .pdf-capa .pdf-capa-col .kpi .neg { color: var(--laranja-texto); }

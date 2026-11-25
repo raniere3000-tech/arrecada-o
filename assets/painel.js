@@ -676,7 +676,7 @@
       `Mês: ${C.rotuloMes(E.mes)}`, E.aba === "perfil" || E.aba === "analise" ? `Perfil: ${nomePerfil()}` : "", E.verOrcado ? `Orçado: ${fonteAtiva(E.mes) === DIGITADO ? "digitado" : fonteAtiva(E.mes)}` : "",
       `dias úteis: ${rotuloDias()}`].filter(Boolean).join(" · ");
     // no PDF, só a 1ª folha (Resumo) leva "Arrecadação Diária" no título
-    const selo = E.pdfRotulo ? `<div class="pdf-selo ${E.pdfRotulo.tipo === "Fechamento" ? "fechamento" : "parcial"}"><span>${esc(E.pdfRotulo.tipo.toUpperCase())} · ${esc(supsTexto().toUpperCase())}</span>`
+    const selo = E.pdfRotulo ? `<div class="pdf-selo ${E.sups.length === 1 && E.sups[0] === "LESTE" ? "leste" : "interior"}"><span>${esc(E.pdfRotulo.tipo.toUpperCase())} · ${esc(supsTexto().toUpperCase())}</span>`
       + `<small>${esc(E.pdfRotulo.detalhe)}</small></div>` : "";
     $("cabecalhoPdf").innerHTML = `${selo}<h1>${E.aba === "resumo" ? "Arrecadação Diária — " : ""}${ABAS[E.aba]}</h1><p>${esc(filtros)}</p>`;
     document.querySelectorAll(".ate-dia").forEach((s) => { s.textContent = `dias úteis ${rotuloDias()} de cada mês`; });
@@ -3120,6 +3120,29 @@
   $("btnPdf").addEventListener("click", (e) => { e.stopPropagation(); menuPdf.hidden = !menuPdf.hidden; $("btnPdf").setAttribute("aria-expanded", String(!menuPdf.hidden)); });
   document.addEventListener("click", (e) => { if (!menuPdf.hidden && !e.target.closest("#menuPdfWrap")) fechaMenuPdf(); });
   menuPdf.querySelectorAll("button[data-pdf]").forEach((b) => b.addEventListener("click", () => { fechaMenuPdf(); geraPdf(b.dataset.pdf); }));
+  // página inicial do PDF unificado: para cada parte (Interior, Leste), os dois primeiros cartões do Resumo (orçado mensal e
+  // orçado nos dias) e o quadro Orçado × Realizado, copiados da tela já desenhada com aquela superintendência e dias
+  async function montaCapa(partes, detalhe) {
+    const capa = document.createElement("div");
+    capa.className = "pdf-capa";
+    capa.innerHTML = `<div class="pdf-capa-tit">Arrecadação Diária — Fechamento<small>${esc(detalhe)}</small></div><div class="pdf-capa-cols"></div>`;
+    const cols = capa.querySelector(".pdf-capa-cols");
+    for (const pt of partes) {
+      E.pdfRotulo = { tipo: pt.tipo, detalhe: pt.detalhe }; E.sel = pt.sel; E.sups = pt.sups; E.cidades = pt.cidades || E.cidades;
+      montaFiltros(); mostraAba("resumo"); await quadro();
+      const s = pt.sups[0], col = document.createElement("div");
+      col.className = "pdf-capa-col " + (s === "LESTE" ? "cap-leste" : "cap-interior");
+      col.innerHTML = `<div class="pdf-capa-tag">${esc(nomeSup(s).toUpperCase())}</div>`;
+      const kp = document.createElement("div"); kp.className = "kpis";
+      [...$("kpis").children].slice(0, 2).forEach((k) => kp.append(k.cloneNode(true)));
+      col.append(kp, $("tOrc").closest(".card").cloneNode(true));
+      col.querySelectorAll("[id]").forEach((x) => x.removeAttribute("id"));
+      cols.append(col);
+    }
+    document.body.append(capa);
+    await quadro();
+    return capa;
+  }
   async function geraPdf(modo) {
     if (!window.jspdf || !window.html2canvas) { toast("As bibliotecas do PDF ainda estão carregando; tente de novo.", true); return; }
     const btn = $("btnPdf"), abaAntes = E.aba, antes = { sel: E.sel, sups: E.sups, cidades: E.cidades };
@@ -3133,7 +3156,7 @@
     if (modo !== "tela") {
       if (N < 2) { toast("Marque no seletor de dias úteis até o dia útil atual (pelo menos o 2º): o parcial vai até ele e o fechamento até o dia anterior.", true); return; }
       partes = modo === "fp" ? [fech, parc].map((p) => ({ ...p, sups: E.sups }))
-        : [fech, parc].flatMap((p) => ["INTERIOR", "LESTE"].map((s) => ({ ...p, sups: [s], cidades: [] })));
+        : ["INTERIOR", "LESTE"].map((s) => ({ ...fech, sups: [s], cidades: [] }));          // unificado: só o fechamento
     }
     btn.disabled = true;
     btn.textContent = "Gerando…";
@@ -3141,8 +3164,24 @@
     try {
       // cada aba numa folha A4 só: a imagem (em alta resolução, PNG) é reduzida para caber inteira; a folha fica deitada
       // ou em pé, a que deixar o conteúdo maior
-      let pdf = null, pag = 0;
+      let pdf = null, pag = 0, links = [];
       const M = 7;
+      if (modo === "fp2") {
+        // página inicial: Interior e Leste lado a lado (cartões de orçado e o Orçado × Realizado do Resumo); os nomes são links
+        const capa = await montaCapa(partes, fech.detalhe);
+        const fundo = "#f3f6f9", cv = await window.html2canvas(capa, { scale: 3, backgroundColor: fundo, windowWidth: 1540, width: capa.scrollWidth, height: capa.scrollHeight });
+        const W = 297, H = 210, k = Math.min((W - 2 * M) / cv.width, (H - 2 * M) / cv.height), w = cv.width * k, h = cv.height * k, x0 = (W - w) / 2;
+        pdf = new window.jspdf.jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
+        pdf.setFillColor(fundo); pdf.rect(0, 0, W, H, "F");
+        pdf.addImage(cv.toDataURL("image/png"), "PNG", x0, M, w, h, undefined, "FAST");
+        const cb = capa.getBoundingClientRect(), mm = w / capa.scrollWidth;
+        capa.querySelectorAll(".pdf-capa-tag").forEach((t, i) => {
+          const r = t.getBoundingClientRect();
+          links.push({ x: x0 + (r.left - cb.left) * mm, y: M + (r.top - cb.top) * mm, w: r.width * mm, h: r.height * mm, pagina: 2 + i * ABAS_PDF.length });
+        });
+        pdf.outline.add(null, "Página inicial — Interior e Leste", { pageNumber: 1 });
+        capa.remove();
+      }
       for (const parte of partes) {
       if (parte.tipo) {
         E.pdfRotulo = { tipo: parte.tipo, detalhe: parte.detalhe };
@@ -3171,7 +3210,8 @@
         if (parte.tipo && aba === ABAS_PDF[0]) pdf.outline.add(null, `${parte.tipo} — ${supsTexto()}`, { pageNumber: pdf.getNumberOfPages() });   // marcador no leitor de PDF
       }
       }
-      const sufixo = modo === "tela" ? (E.sups.join("_") || "todas").toLowerCase() : modo === "fp" ? `fechamento_e_parcial_${(antes.sups.join("_") || "todas").toLowerCase()}` : "fechamento_e_parcial_interior_e_leste";
+      if (links.length) { pdf.setPage(1); for (const l of links) pdf.link(l.x, l.y, l.w, l.h, { pageNumber: l.pagina }); }   // nome → começo da parte
+      const sufixo = modo === "tela" ? (E.sups.join("_") || "todas").toLowerCase() : modo === "fp" ? `fechamento_e_parcial_${(antes.sups.join("_") || "todas").toLowerCase()}` : "fechamento_interior_e_leste";
       pdf.save(`Arrecadacao_${E.mes}_${sufixo}.pdf`);
     } catch (e) {
       toast("Não foi possível gerar o PDF: " + esc(e.message || e), true);
