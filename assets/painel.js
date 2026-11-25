@@ -3110,8 +3110,8 @@
     if (E.res) { opChaveTop = ""; desenha(); }
   });
 
-  // PDF: "tela" = como está; "fp" = fechamento (até o dia útil anterior ao último com dados) + parcial (até o último dia com
-  // dados) da superintendência do filtro; "fp2" = os dois para o Interior e para a Leste (4 partes: fechamento Interior,
+  // PDF: "tela" = como está; "fp" = fechamento (até o dia útil anterior ao maior dia marcado) + parcial (os dias marcados, com
+  // o maior deles = o dia útil atual) da superintendência do filtro (pagamentos de dias posteriores na pasta não entram); "fp2" = os dois para o Interior e para a Leste (4 partes: fechamento Interior,
   // fechamento Leste, parcial Interior, parcial Leste). Cada página leva a faixa com o tipo e a superintendência.
   const menuPdf = $("menuPdf");
   const fechaMenuPdf = () => { menuPdf.hidden = true; $("btnPdf").setAttribute("aria-expanded", "false"); };
@@ -3122,12 +3122,14 @@
     if (!window.jspdf || !window.html2canvas) { toast("As bibliotecas do PDF ainda estão carregando; tente de novo.", true); return; }
     const btn = $("btnPdf"), abaAntes = E.aba, antes = { sel: E.sel, sups: E.sups, cidades: E.cidades };
     // partes do arquivo: [tipo, superintendências, máscara dos dias]
-    const N = ultimoDiaComDados(E.mes), cal = C.calendario(E.mes), dataDia = (k) => (cal.dataDoDia[k] ? dataBR(cal.dataDoDia[k]) : "");
-    const fech = { tipo: "Fechamento", sel: C.mascaraAte(N - 1), detalhe: `dias úteis 1 a ${N - 1} · até ${dataDia(N - 1)} · ${C.rotuloMes(E.mes)}` };
-    const parc = { tipo: "Parcial", sel: C.mascaraAte(N), detalhe: `dias úteis 1 a ${N} · até ${dataDia(N)} · ${C.rotuloMes(E.mes)}` };
+    // o dia útil atual é o maior dia útil marcado no seletor; o fechamento é o mesmo sem ele (e sem os dias depois dele)
+    const cal = C.calendario(E.mes), N = C.diasDaMascara(E.sel).filter((k) => k > 0 && k <= cal.uteis).reduce((a, k) => Math.max(a, k), 0);
+    const dataDia = (k) => (cal.dataDoDia[k] ? dataBR(cal.dataDoDia[k]) : "");
+    const fech = { tipo: "Fechamento", sel: (E.sel & C.mascaraAte(N - 1, true)) >>> 0, detalhe: `dias úteis até o ${N - 1}º · até ${dataDia(N - 1)} · ${C.rotuloMes(E.mes)}` };
+    const parc = { tipo: "Parcial", sel: (E.sel & C.mascaraAte(N, true)) >>> 0, detalhe: `dias úteis até o ${N}º · até ${dataDia(N)} · ${C.rotuloMes(E.mes)}` };
     let partes = [{ tipo: null }];
     if (modo !== "tela") {
-      if (N < 2) { toast("Ainda não há dois dias úteis com dados neste mês para separar fechamento e parcial.", true); return; }
+      if (N < 2) { toast("Marque no seletor de dias úteis até o dia útil atual (pelo menos o 2º): o parcial vai até ele e o fechamento até o dia anterior.", true); return; }
       partes = modo === "fp" ? [fech, parc].map((p) => ({ ...p, sups: E.sups }))
         : [fech, parc].flatMap((p) => ["INTERIOR", "LESTE"].map((s) => ({ ...p, sups: [s], cidades: [] })));
     }
