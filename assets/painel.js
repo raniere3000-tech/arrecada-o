@@ -669,6 +669,8 @@
   // ===== desenho =====
   function desenha() {
     if (!E.res) return;
+    // cor dos números pela superintendência: só a Leste marcada = ciano; Interior (e as duas juntas, ou Todas) = cinza
+    document.body.classList.toggle("sup-leste", E.sups.length === 1 && E.sups[0] === "LESTE");
     desenhaDias();
     const filtros = [`Superintendência: ${supsTexto()}`, E.cidades.length ? `Cidade: ${E.cidades.join(", ")}` : "", E.grupos.length ? `Subcategoria: ${E.grupos.join(", ")}` : "",
       `Mês: ${C.rotuloMes(E.mes)}`, E.aba === "perfil" || E.aba === "analise" ? `Perfil: ${nomePerfil()}` : "", E.verOrcado ? `Orçado: ${fonteAtiva(E.mes) === DIGITADO ? "digitado" : fonteAtiva(E.mes)}` : "",
