@@ -624,3 +624,12 @@ body.gerando-pdf .pdf-selo { display: flex; justify-content: space-between; alig
 .pdf-selo.fechamento { background: #1A2740; }
 .pdf-selo.parcial { background: #176b9c; }
 .pdf-selo small { font-weight: 500; font-size: 13px; letter-spacing: 0; opacity: .92; }
+
+/* Números em cinza (pedido do usuário, v108): tabelas, números grandes dos cartões, dias marcados no seletor e One page.
+   Os negativos continuam em laranja (td.neg, .kpi .neg, .op-neg) e os rótulos das linhas continuam em preto.
+   Para voltar como antes, basta apagar este bloco. Cinza = --muted da paleta (#64748b). */
+td { color: #64748b; }
+td.rot, table.explica td, .leitura td, .arquivos-dados td { color: #000; }
+.kpi b { color: #64748b; }
+.dias button.sel, #dias button.extra.sel { background: #64748b; border-color: #64748b; color: #fff; }
+.op-hero-val, .op-card b, .op-vol b, .op-top-lin b { color: #64748b; }
