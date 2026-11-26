@@ -2136,9 +2136,12 @@
   let dgOrdem = ["dv", 1], dgLinhas = [], dgCab = null, dgSub = null;
   const dgAbertos = new Set();                          // cidades (e cidade + subcategoria) abertas na tabela do Diagnóstico
   const NIVEIS_DG = { cidade: ["Cidade", (c) => c.cidade], grupo: ["Subcategoria", (c) => c.grupo], sup: ["Superintendência", (c) => nomeSup(c.sup)],
-    cidgrupo: ["Cidade × subcategoria", (c) => `${c.cidade} · ${c.grupo}`] };
+    // Cidade × subcategoria: uma linha por cidade (como no nível Cidade), já aberta nas subcategorias (seta para fechar/abrir)
+    cidgrupo: ["Cidade", (c) => c.cidade] };
+  let dgNivelAnt = "";
   function desenhaLocalidade() {
-    const d = E.res.dados, mi = idxMes(E.mes), mk = marcas(), sel = selCalc(), nivel = $("dgNivel").value, [titulo, grupoDe] = NIVEIS_DG[nivel];
+    const d = E.res.dados, mi = idxMes(E.mes), mk = marcas(), sel = selCalc(), nivelSel = $("dgNivel").value, [titulo, grupoDe] = NIVEIS_DG[nivelSel];
+    const nivel = nivelSel === "cidgrupo" ? "cidade" : nivelSel;       // por cidade, com as subcategorias abertas
     const baseSel = $("dgBase").value, metodo = $("dgMetodo").value;
     const mesesBase = baseSel === "ant" ? [C.mesAnterior(E.mes)] : baseSel === "ano" ? [C.mesAnterior(E.mes, 12)] : [1, 2, 3].map((n) => C.mesAnterior(E.mes, n));
     const comDados = mesesBase.filter((m) => idxMes(m) >= 0);
@@ -2216,6 +2219,11 @@
     dgCab = [["nome", titulo], ["v", "Arrecadado (R$)"], ["b", `${rotBase} (R$)`], ["dv", "Variação (R$)"], ["dp", "Variação %"], ["cli", "Clientes"], ["dcli", "Var. clientes"],
       ["contas", "Contas"], ["ticket", "Ticket (R$)"], ["proj", "Projeção do mês (R$)"],
       ...(comOrc ? [["orc", "Orçado (R$)"], ["po", "Projeção ÷ orçado"]] : []), ...(comFat ? [["fat", `Faturado ${C.rotuloMes(E.mes)} (R$)`], ["mat", "Matrículas faturadas"]] : [])];
+    if (nivelSel !== dgNivelAnt) {                      // ao escolher Cidade × subcategoria, abre todas as cidades
+      if (nivelSel === "cidgrupo") dgLinhas.forEach((x) => dgAbertos.add(x.nome));
+      else if (dgNivelAnt === "cidgrupo") dgLinhas.forEach((x) => dgAbertos.delete(x.nome));
+      dgNivelAnt = nivelSel;
+    }
     desenhaTabelaDg(total, projT, orc);
     $("dgNotaTab").textContent = `Variação = arrecadado nos dias marcados − ${rotBase} nos mesmos dias. Projeção do mês (cada localidade com os seus próprios números) pelo método ${NOMES_PROJ[metodo]}, explicado no cartão destacado acima.`
       + ((nivel === "cidade" || nivel === "sup") && !fatRef.length ? ` Faturamento da referência ${C.rotuloMes(E.mes)} não está na pasta.` : "");
