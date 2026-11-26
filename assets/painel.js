@@ -3212,6 +3212,16 @@
         if (parte.tipo && aba === ABAS_PDF[0]) pdf.outline.add(null, `${parte.tipo} — ${supsTexto()}`, { pageNumber: pdf.getNumberOfPages() });   // marcador no leitor de PDF
       }
       }
+      // rodapé de cada página (como no Relatório Executivo do painel de faturamento): "página X de N" à direita e, nos arquivos
+      // com página inicial (Interior e Leste), o link "« Página inicial (Interior e Leste)" à esquerda
+      const total = pdf.getNumberOfPages(), comCapa = links.length > 0;
+      for (let i = 1; i <= total; i++) {
+        pdf.setPage(i);
+        const { width: W, height: H } = pdf.internal.pageSize;
+        pdf.setFontSize(8); pdf.setTextColor(73, 102, 140);
+        pdf.text(`Águas do Rio · Arrecadação Diária · página ${i} de ${total}`, W - 7, H - 3.5, { align: "right" });
+        if (comCapa && i > 1) pdf.textWithLink("« Página inicial (Interior e Leste)", 7, H - 3.5, { pageNumber: 1 });
+      }
       if (links.length) { pdf.setPage(1); for (const l of links) pdf.link(l.x, l.y, l.w, l.h, { pageNumber: l.pagina }); }   // nome → começo da parte
       const sufixo = modo === "tela" ? (E.sups.join("_") || "todas").toLowerCase() : modo === "fp" ? `fechamento_e_parcial_${(antes.sups.join("_") || "todas").toLowerCase()}` : modo === "pp2" ? "parcial_interior_e_leste" : "fechamento_interior_e_leste";
       pdf.save(`Arrecadacao_${E.mes}_${sufixo}.pdf`);
