@@ -3122,10 +3122,10 @@
   menuPdf.querySelectorAll("button[data-pdf]").forEach((b) => b.addEventListener("click", () => { fechaMenuPdf(); geraPdf(b.dataset.pdf); }));
   // página inicial do PDF unificado: para cada parte (Interior, Leste), os dois primeiros cartões do Resumo (orçado mensal e
   // orçado nos dias) e o quadro Orçado × Realizado, copiados da tela já desenhada com aquela superintendência e dias
-  async function montaCapa(partes, detalhe) {
+  async function montaCapa(partes, detalhe, tipo) {
     const capa = document.createElement("div");
     capa.className = "pdf-capa";
-    capa.innerHTML = `<div class="pdf-capa-tit">Arrecadação Diária — Fechamento<small>${esc(detalhe)}</small></div><div class="pdf-capa-cols"></div>`;
+    capa.innerHTML = `<div class="pdf-capa-tit">Arrecadação Diária — ${esc(tipo)}<small>${esc(detalhe)}</small></div><div class="pdf-capa-cols"></div>`;
     const cols = capa.querySelector(".pdf-capa-cols");
     for (const pt of partes) {
       E.pdfRotulo = { tipo: pt.tipo, detalhe: pt.detalhe }; E.sel = pt.sel; E.sups = pt.sups; E.cidades = pt.cidades || E.cidades;
@@ -3156,8 +3156,9 @@
     let partes = [{ tipo: null }];
     if (modo !== "tela") {
       if (N < 2) { toast("Marque no seletor de dias úteis até o dia útil atual (pelo menos o 2º): o parcial vai até ele e o fechamento até o dia anterior.", true); return; }
+      // unificados (Interior + Leste): "fp2" só o fechamento; "pp2" só o parcial (o dia útil marcado), em arquivo separado
       partes = modo === "fp" ? [fech, parc].map((p) => ({ ...p, sups: E.sups }))
-        : ["INTERIOR", "LESTE"].map((s) => ({ ...fech, sups: [s], cidades: [] }));          // unificado: só o fechamento
+        : ["INTERIOR", "LESTE"].map((s) => ({ ...(modo === "pp2" ? parc : fech), sups: [s], cidades: [] }));
     }
     btn.disabled = true;
     btn.textContent = "Gerando…";
@@ -3167,9 +3168,9 @@
       // ou em pé, a que deixar o conteúdo maior
       let pdf = null, pag = 0, links = [];
       const M = 7;
-      if (modo === "fp2") {
+      if (modo === "fp2" || modo === "pp2") {
         // página inicial: Interior e Leste lado a lado (cartões de orçado e o Orçado × Realizado do Resumo); os nomes são links
-        const capa = await montaCapa(partes, fech.detalhe);
+        const capa = await montaCapa(partes, partes[0].detalhe, partes[0].tipo);
         const fundo = "#f3f6f9", cv = await window.html2canvas(capa, { scale: 3, backgroundColor: fundo, windowWidth: 1540, width: capa.scrollWidth, height: capa.scrollHeight });
         const W = 297, H = 210, k = Math.min((W - 2 * M) / cv.width, (H - 2 * M) / cv.height), w = cv.width * k, h = cv.height * k, x0 = (W - w) / 2;
         pdf = new window.jspdf.jsPDF({ orientation: "landscape", unit: "mm", format: "a4", compress: true });
@@ -3180,7 +3181,7 @@
           const r = t.getBoundingClientRect();
           links.push({ x: x0 + (r.left - cb.left) * mm, y: M + (r.top - cb.top) * mm, w: r.width * mm, h: r.height * mm, pagina: 2 + i * ABAS_PDF.length });
         });
-        pdf.outline.add(null, "Página inicial — Interior e Leste", { pageNumber: 1 });
+        pdf.outline.add(null, `Página inicial — ${partes[0].tipo} Interior e Leste`, { pageNumber: 1 });
         capa.remove();
       }
       for (const parte of partes) {
@@ -3212,7 +3213,7 @@
       }
       }
       if (links.length) { pdf.setPage(1); for (const l of links) pdf.link(l.x, l.y, l.w, l.h, { pageNumber: l.pagina }); }   // nome → começo da parte
-      const sufixo = modo === "tela" ? (E.sups.join("_") || "todas").toLowerCase() : modo === "fp" ? `fechamento_e_parcial_${(antes.sups.join("_") || "todas").toLowerCase()}` : "fechamento_interior_e_leste";
+      const sufixo = modo === "tela" ? (E.sups.join("_") || "todas").toLowerCase() : modo === "fp" ? `fechamento_e_parcial_${(antes.sups.join("_") || "todas").toLowerCase()}` : modo === "pp2" ? "parcial_interior_e_leste" : "fechamento_interior_e_leste";
       pdf.save(`Arrecadacao_${E.mes}_${sufixo}.pdf`);
     } catch (e) {
       toast("Não foi possível gerar o PDF: " + esc(e.message || e), true);
